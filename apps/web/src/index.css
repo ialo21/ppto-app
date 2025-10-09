@@ -1,0 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: light dark; }
+body { @apply bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-50; }
+.container-page { @apply max-w-[1200px] mx-auto p-4 md:p-6; }

@@ -1,0 +1,17 @@
+{
+  "name": "@ppto/db",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prisma:generate": "prisma generate --schema=./schema.prisma",
+    "prisma:migrate": "prisma migrate dev --schema=./schema.prisma",
+    "seed": "tsx ./seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.19.1"
+  },
+  "devDependencies": {
+    "prisma": "^5.19.1",
+    "tsx": "^4.19.1"
+  }
+}

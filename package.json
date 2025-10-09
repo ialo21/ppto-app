@@ -1,0 +1,20 @@
+{
+  "name": "ppto-app",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -r \"pnpm -C apps/api dev\" \"pnpm -C apps/web dev\"",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down -v",
+    "db:migrate": "pnpm -C packages/db prisma migrate dev --name safe_update",
+    "db:seed": "pnpm -C packages/db seed",
+    "build": "pnpm -C apps/api build && pnpm -C apps/web build",
+    "start": "concurrently -r \"pnpm -C apps/api start\" \"pnpm -C apps/web preview\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

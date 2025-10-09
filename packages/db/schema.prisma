@@ -1,0 +1,182 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ClType { 
+  PPTO 
+  RPPTO 
+  GASTO 
+  PROVISION 
+}
+
+enum ClState { 
+  NO_PROCESADO 
+  PROCESADO 
+  PROVISIONADO 
+}
+
+enum InvStatus {
+  INGRESADO 
+  EN_APROBACION 
+  EN_CONTABILIDAD 
+  EN_TESORERIA 
+  EN_ESPERA_DE_PAGO 
+  PAGADO 
+  RECHAZADO
+}
+
+enum InvDocType { 
+  FACTURA 
+  NOTA_CREDITO 
+}
+
+model Period {
+  id      Int     @id @default(autoincrement())
+  year    Int
+  month   Int
+  label   String?
+  // relaciones
+  controlLines_period        ControlLine[] @relation("CL_PERIOD")
+  controlLines_accountPeriod ControlLine[] @relation("CL_ACCOUNTING_PERIOD")
+  closures AccountingClosure?
+  budgetAllocations BudgetAllocation[]
+}
+
+model AccountingClosure {
+  id         Int     @id @default(autoincrement())
+  periodId   Int     @unique
+  period     Period  @relation(fields: [periodId], references: [id])
+  receivedAt DateTime?
+  sourceRef  String?
+}
+
+model FxReference {
+  id            Int      @id @default(autoincrement())
+  currency      String   // 'PEN' | 'USD'
+  rate          Decimal
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+}
+
+model Support {
+  id           Int     @id @default(autoincrement())
+  code         String? @unique
+  name         String
+  costCenterId Int?
+  category     String?
+  subcategory  String?
+  vendorId     Int?
+  active       Boolean @default(true)
+  // relaciones
+  budgetAllocations BudgetAllocation[]
+  controlLines      ControlLine[]
+}
+
+model BudgetVersion {
+  id     Int     @id @default(autoincrement())
+  name   String
+  status String   // 'ACTIVE' | 'DRAFT' | 'ARCHIVED'
+  allocs BudgetAllocation[]
+}
+
+model BudgetAllocation {
+  id           Int     @id @default(autoincrement())
+  versionId    Int
+  version      BudgetVersion @relation(fields: [versionId], references: [id])
+  supportId    Int
+  support      Support @relation(fields: [supportId], references: [id])
+  periodId     Int
+  period       Period  @relation(fields: [periodId], references: [id])
+  amountLocal  Decimal
+  currency     String  @default("PEN")
+
+  @@unique([versionId, periodId, supportId], name: "ux_alloc_version_period_support")
+}
+
+model Vendor {
+  id        Int     @id @default(autoincrement())
+  legalName String
+  taxId     String? @unique
+  // relaciones
+  purchaseOrders PurchaseOrder[]
+  invoices       Invoice[]
+}
+
+model PurchaseOrder {
+  id       Int     @id @default(autoincrement())
+  number   String  @unique
+  vendorId Int?
+  vendor   Vendor? @relation(fields: [vendorId], references: [id])
+  incCode  String?
+  // relaciones
+  controlLines ControlLine[]
+}
+
+model Invoice {
+  id             Int        @id @default(autoincrement())
+  vendorId       Int?
+  vendor         Vendor?    @relation(fields: [vendorId], references: [id])
+  docType        InvDocType @default(FACTURA)
+  numberNorm     String?
+  currency       String     @default("PEN")  // 'PEN' | 'USD'
+  totalForeign   Decimal?   // negativo si NOTA_CREDITO
+  totalLocal     Decimal?   // negativo si NOTA_CREDITO
+  statusCurrent  InvStatus  @default(INGRESADO)
+  ultimusIncident String?
+  approvedAt     DateTime?
+  statusHistory  InvoiceStatusHistory[]
+  controlLines   ControlLine[]
+}
+
+model InvoiceStatusHistory {
+  id        Int       @id @default(autoincrement())
+  invoiceId Int
+  invoice   Invoice   @relation(fields: [invoiceId], references: [id])
+  status    InvStatus
+  changedAt DateTime  @default(now())
+  changedBy Int?
+  note      String?
+}
+
+model ControlLine {
+  id        Int      @id @default(autoincrement())
+  supportId Int
+  support   Support  @relation(fields: [supportId], references: [id])
+
+  type  ClType
+  state ClState @default(NO_PROCESADO)
+
+  periodId Int
+  period   Period @relation("CL_PERIOD", fields: [periodId], references: [id])
+
+  accountingPeriodId Int?
+  accountingPeriod   Period? @relation("CL_ACCOUNTING_PERIOD", fields: [accountingPeriodId], references: [id])
+
+  invoiceId Int?
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id])
+
+  poId Int?
+  po   PurchaseOrder? @relation(fields: [poId], references: [id])
+
+  description   String?
+
+  // Moneda y TC
+  currency          String?      // 'PEN' | 'USD'
+  amountForeign     Decimal?
+  fxRateProvisional Decimal? @default(1.0) // asignada al crear (USD usa FxReference; PEN=1)
+  fxRateFinal       Decimal?               // se fija al PROCESAR
+  amountLocal       Decimal                // positivo; en PROVISION: + provisión / - liberación
+
+  createdBy   Int?
+  createdAt   DateTime @default(now())
+
+  @@index([periodId], name: "ix_cl_period")
+  @@index([accountingPeriodId], name: "ix_cl_accounting_period")
+  @@index([type, state], name: "ix_cl_type_state")
+  @@index([supportId, accountingPeriodId], name: "ix_cl_support_accounting_period")
+}

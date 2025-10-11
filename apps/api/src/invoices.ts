@@ -145,7 +145,7 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
       header.join(","),
       ...rows.map(r => [
         r.id, r.docType, `"${fmt(r.numberNorm)}"`, r.currency, r.totalForeign??"", r.totalLocal??"",
-        r.statusCurrent, r.vendorId??"", `"${fmt(r.vendor?.name)}"`, `"${fmt(r.ultimusIncident)}"`,
+        r.statusCurrent, r.vendorId??"", `"${fmt(r.vendor?.legalName)}"`, `"${fmt(r.ultimusIncident)}"`,
         `"${fmt(r.statusHistory.map(h=>`${h.status}@${h.changedAt.toISOString()}`).join(" | "))}"`
       ].join(","))
     ];

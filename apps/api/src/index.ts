@@ -7,6 +7,7 @@ import { registerControlLineRoutes } from "./controlLines";
 import { registerReportRoutes } from "./reports";
 import { registerSupportRoutes } from "./supports";
 import { registerBudgetRoutes } from "./budgets";
+import { registerMasterRoutes } from "./masters";
 
 const app = Fastify({ logger: true });
 await app.register(cors, { origin: true });
@@ -41,6 +42,7 @@ await registerBudgetRoutes(app);
 await registerControlLineRoutes(app);
 await registerInvoiceRoutes(app);
 await registerReportRoutes(app);
+await registerMasterRoutes(app);
 
 const port = Number(process.env.API_PORT || 3001);
 app.listen({ port, host: "0.0.0.0" });

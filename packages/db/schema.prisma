@@ -35,6 +35,12 @@ enum InvDocType {
   NOTA_CREDITO 
 }
 
+enum ExpenseType {
+  ADMINISTRATIVO
+  PRODUCTO
+  DISTRIBUIBLE
+}
+
 model Period {
   id      Int     @id @default(autoincrement())
   year    Int
@@ -64,17 +70,51 @@ model FxReference {
 }
 
 model Support {
-  id           Int     @id @default(autoincrement())
-  code         String? @unique
-  name         String
-  costCenterId Int?
-  category     String?
-  subcategory  String?
-  vendorId     Int?
-  active       Boolean @default(true)
+  id               Int      @id @default(autoincrement())
+  code             String?  @unique
+  name             String   @unique
+  management       String?
+  area             String?
+  active           Boolean  @default(true)
+
+  costCenterId     Int?
+  costCenter       CostCenter?        @relation(fields: [costCenterId], references: [id])
+
+  expensePackageId Int?
+  expensePackage   ExpensePackage?    @relation(fields: [expensePackageId], references: [id])
+
+  expenseConceptId Int?
+  expenseConcept   ExpenseConcept?    @relation(fields: [expenseConceptId], references: [id])
+
+  expenseType      ExpenseType @default(ADMINISTRATIVO)
+
+  vendorId         Int?
+
   // relaciones
   budgetAllocations BudgetAllocation[]
   controlLines      ControlLine[]
+}
+
+model CostCenter {
+  id       Int       @id @default(autoincrement())
+  code     String    @unique
+  name     String
+  supports Support[]
+}
+
+model ExpensePackage {
+  id        Int              @id @default(autoincrement())
+  name      String
+  supports  Support[]
+  concepts  ExpenseConcept[]
+}
+
+model ExpenseConcept {
+  id        Int             @id @default(autoincrement())
+  name      String
+  packageId Int
+  package   ExpensePackage  @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  supports  Support[]
 }
 
 model BudgetVersion {

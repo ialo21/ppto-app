@@ -86,9 +86,15 @@ model Support {
   id               Int      @id @default(autoincrement())
   code             String?  @unique
   name             String   @unique
-  management       String?
-  area             String?
+  management       String?  // DEPRECATED: usar managementId
+  area             String?  // DEPRECATED: usar areaId
   active           Boolean  @default(true)
+
+  managementId     Int?
+  managementRef    Management?        @relation(fields: [managementId], references: [id])
+
+  areaId           Int?
+  areaRef          Area?              @relation(fields: [areaId], references: [id])
 
   costCenterId     Int?
   costCenter       CostCenter?        @relation(fields: [costCenterId], references: [id])
@@ -122,6 +128,25 @@ model Articulo {
   code String @unique
   name String
   ocs  OC[]
+}
+
+model Management {
+  id       Int       @id @default(autoincrement())
+  code     String    @unique
+  name     String
+  active   Boolean   @default(true)
+  supports Support[]
+  areas    Area[]
+}
+
+model Area {
+  id           Int         @id @default(autoincrement())
+  code         String      @unique
+  name         String
+  managementId Int
+  management   Management  @relation(fields: [managementId], references: [id], onDelete: Cascade)
+  active       Boolean     @default(true)
+  supports     Support[]
 }
 
 model ExpensePackage {

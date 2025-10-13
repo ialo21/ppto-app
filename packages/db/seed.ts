@@ -13,6 +13,8 @@ async function main() {
   await prisma.support.deleteMany();
   await prisma.expenseConcept.deleteMany();
   await prisma.expensePackage.deleteMany();
+  await prisma.area.deleteMany();
+  await prisma.management.deleteMany();
   await prisma.articulo.deleteMany();
   await prisma.costCenter.deleteMany();
   await prisma.accountingClosure.deleteMany();
@@ -39,6 +41,40 @@ async function main() {
   const version = await prisma.budgetVersion.create({
     data: { name: "Original 2026", status: "ACTIVE" }
   });
+
+  // Gerencias y Áreas
+  const gerenciaTI = await prisma.management.create({
+    data: {
+      code: "GER-TI",
+      name: "Gerencia TI",
+      areas: {
+        create: [
+          { code: "AREA-TI-CAL", name: "Calidad" },
+          { code: "AREA-TI-INF", name: "Infraestructura" },
+          { code: "AREA-TI-DEV", name: "Desarrollo" }
+        ]
+      }
+    },
+    include: { areas: true }
+  });
+
+  const gerenciaComercial = await prisma.management.create({
+    data: {
+      code: "GER-COM",
+      name: "Gerencia Comercial",
+      areas: {
+        create: [
+          { code: "AREA-COM-MKT", name: "Marketing" },
+          { code: "AREA-COM-VTA", name: "Ventas" }
+        ]
+      }
+    },
+    include: { areas: true }
+  });
+
+  const areaCalidad = gerenciaTI.areas.find(a => a.name === "Calidad");
+  const areaInfraestructura = gerenciaTI.areas.find(a => a.name === "Infraestructura");
+  const areaMarketing = gerenciaComercial.areas.find(a => a.name === "Marketing");
 
   // Datos maestros
   const [ccTi, ccMarketing] = await Promise.all([
@@ -75,8 +111,10 @@ async function main() {
       data: {
         code: "S-0001",
         name: "Servicios Externos QA",
-        management: "Gerencia TI",
-        area: "Calidad",
+        management: "Gerencia TI",  // legacy
+        area: "Calidad",  // legacy
+        managementId: gerenciaTI.id,
+        areaId: areaCalidad?.id,
         costCenterId: ccTi.id,
         expensePackageId: pkgServicios.id,
         expenseConceptId: conceptQa?.id,
@@ -87,8 +125,10 @@ async function main() {
       data: {
         code: "S-0002",
         name: "Marketing Digital",
-        management: "Gerencia Comercial",
-        area: "Marketing",
+        management: "Gerencia Comercial",  // legacy
+        area: "Marketing",  // legacy
+        managementId: gerenciaComercial.id,
+        areaId: areaMarketing?.id,
         costCenterId: ccMarketing.id,
         expensePackageId: pkgServicios.id,
         expenseConceptId: conceptMarketing?.id,
@@ -99,8 +139,10 @@ async function main() {
       data: {
         code: "S-0003",
         name: "Servicios Cloud",
-        management: "Gerencia TI",
-        area: "Infraestructura",
+        management: "Gerencia TI",  // legacy
+        area: "Infraestructura",  // legacy
+        managementId: gerenciaTI.id,
+        areaId: areaInfraestructura?.id,
         costCenterId: ccTi.id,
         expensePackageId: pkgOperacion.id,
         expenseConceptId: conceptCloud?.id,

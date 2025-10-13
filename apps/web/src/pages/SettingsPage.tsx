@@ -12,6 +12,8 @@ type ExpenseConcept = { id: number; name: string; packageId: number };
 type ExpensePackage = { id: number; name: string; concepts: ExpenseConcept[] };
 type CostCenter = { id: number; code: string; name: string };
 type Articulo = { id: number; code: string; name: string };
+type Management = { id: number; code: string; name: string; active: boolean; areas: Area[] };
+type Area = { id: number; code: string; name: string; managementId: number; active: boolean; management?: Management };
 type Support = {
   id: number;
   code: string | null;
@@ -33,13 +35,13 @@ const expenseTypes = [
   { label: "Distribuible", value: "DISTRIBUIBLE" }
 ];
 
-type SectionKey = "packages" | "concepts" | "costCenters" | "articulos" | "supports";
+type SectionKey = "packages" | "costCenters" | "articulos" | "managements" | "supports";
 
 const sections: Array<{ key: SectionKey; label: string; description: string }> = [
-  { key: "packages", label: "Paquetes", description: "Agrupa conceptos de gasto de forma lógica." },
-  { key: "concepts", label: "Conceptos", description: "Define los conceptos que se asignan dentro de cada paquete." },
+  { key: "packages", label: "Paquetes & Conceptos", description: "Gestiona paquetes y sus conceptos de gasto asociados." },
   { key: "costCenters", label: "Centros de costo", description: "Gestiona los centros de costo disponibles para los sustentos." },
   { key: "articulos", label: "Artículos", description: "Gestiona el catálogo de artículos para las órdenes de compra." },
+  { key: "managements", label: "Gerencias & Áreas", description: "Gestiona gerencias y sus áreas organizacionales." },
   { key: "supports", label: "Sustentos", description: "Administra el catálogo completo de sustentos." }
 ];
 
@@ -73,6 +75,20 @@ function useArticulos() {
   });
 }
 
+function useManagements() {
+  return useQuery({
+    queryKey: ["managements"],
+    queryFn: async () => (await api.get("/managements")).data as Management[]
+  });
+}
+
+function useAreas() {
+  return useQuery({
+    queryKey: ["areas"],
+    queryFn: async () => (await api.get("/areas")).data as Area[]
+  });
+}
+
 export default function CatalogsPage() {
   const queryClient = useQueryClient();
 
@@ -80,13 +96,19 @@ export default function CatalogsPage() {
   const costCentersQuery = useCostCenters();
   const supportsQuery = useSupports();
   const articulosQuery = useArticulos();
+  const managementsQuery = useManagements();
+  const areasQuery = useAreas();
 
   const [section, setSection] = useState<SectionKey>("packages");
+  const [selectedPackageId, setSelectedPackageId] = useState<number | null>(null);
+  const [selectedManagementId, setSelectedManagementId] = useState<number | null>(null);
 
   const [packageForm, setPackageForm] = useState({ id: "", name: "" });
   const [conceptForm, setConceptForm] = useState({ id: "", packageId: "", name: "" });
   const [costCenterForm, setCostCenterForm] = useState({ id: "", code: "", name: "" });
   const [articuloForm, setArticuloForm] = useState({ id: "", code: "", name: "" });
+  const [managementForm, setManagementForm] = useState({ id: "", code: "", name: "" });
+  const [areaForm, setAreaForm] = useState({ id: "", code: "", name: "", managementId: "" });
   const [supportForm, setSupportForm] = useState({
     id: "",
     name: "",
@@ -267,6 +289,74 @@ export default function CatalogsPage() {
     onError: () => toast.error("No se pudo eliminar el artículo")
   });
 
+  const saveManagement = useMutation({
+    mutationFn: async () => {
+      const code = managementForm.code.trim();
+      const name = managementForm.name.trim();
+      if (!code || !name) throw new Error("Completa los campos requeridos");
+      const payload: { id?: number; code: string; name: string } = { code, name };
+      if (managementForm.id) payload.id = Number(managementForm.id);
+      return (await api.post("/managements", payload)).data;
+    },
+    onSuccess: () => {
+      toast.success("Gerencia guardada");
+      setManagementForm({ id: "", code: "", name: "" });
+      queryClient.invalidateQueries({ queryKey: ["managements"] });
+      queryClient.invalidateQueries({ queryKey: ["areas"] });
+      queryClient.invalidateQueries({ queryKey: ["supports"] });
+    },
+    onError: () => toast.error("No se pudo guardar la gerencia")
+  });
+
+  const deleteManagement = useMutation({
+    mutationFn: async (id: number) => (await api.delete(`/managements/${id}`)).data,
+    onSuccess: () => {
+      toast.success("Gerencia eliminada");
+      if (managementForm.id) setManagementForm({ id: "", code: "", name: "" });
+      if (selectedManagementId) setSelectedManagementId(null);
+      queryClient.invalidateQueries({ queryKey: ["managements"] });
+      queryClient.invalidateQueries({ queryKey: ["areas"] });
+      queryClient.invalidateQueries({ queryKey: ["supports"] });
+    },
+    onError: () => toast.error("No se pudo eliminar la gerencia")
+  });
+
+  const saveArea = useMutation({
+    mutationFn: async () => {
+      const code = areaForm.code.trim();
+      const name = areaForm.name.trim();
+      const managementId = areaForm.managementId || (selectedManagementId ? String(selectedManagementId) : "");
+      if (!code || !name || !managementId) throw new Error("Completa los campos requeridos");
+      const payload: { id?: number; code: string; name: string; managementId: number } = { 
+        code, 
+        name, 
+        managementId: Number(managementId) 
+      };
+      if (areaForm.id) payload.id = Number(areaForm.id);
+      return (await api.post("/areas", payload)).data;
+    },
+    onSuccess: () => {
+      toast.success("Área guardada");
+      setAreaForm({ id: "", code: "", name: "", managementId: "" });
+      queryClient.invalidateQueries({ queryKey: ["areas"] });
+      queryClient.invalidateQueries({ queryKey: ["managements"] });
+      queryClient.invalidateQueries({ queryKey: ["supports"] });
+    },
+    onError: () => toast.error("No se pudo guardar el área")
+  });
+
+  const deleteArea = useMutation({
+    mutationFn: async (id: number) => (await api.delete(`/areas/${id}`)).data,
+    onSuccess: () => {
+      toast.success("Área eliminada");
+      if (areaForm.id) setAreaForm({ id: "", code: "", name: "", managementId: "" });
+      queryClient.invalidateQueries({ queryKey: ["areas"] });
+      queryClient.invalidateQueries({ queryKey: ["managements"] });
+      queryClient.invalidateQueries({ queryKey: ["supports"] });
+    },
+    onError: () => toast.error("No se pudo eliminar el área")
+  });
+
   const saveSupport = useMutation({
     mutationFn: async () => {
       const name = supportForm.name.trim();
@@ -330,12 +420,24 @@ export default function CatalogsPage() {
 
   const selectedSection = sections.find(s => s.key === section);
 
+  // Filtrar conceptos por paquete seleccionado
+  const filteredConcepts = useMemo(() => {
+    if (!selectedPackageId) return conceptRows;
+    return conceptRows.filter(c => c.packageId === selectedPackageId);
+  }, [conceptRows, selectedPackageId]);
+
+  // Filtrar áreas por gerencia seleccionada
+  const filteredAreas = useMemo(() => {
+    if (!selectedManagementId) return areasQuery.data || [];
+    return (areasQuery.data || []).filter(a => a.managementId === selectedManagementId);
+  }, [areasQuery.data, selectedManagementId]);
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Catálogos maestros</h1>
+        <h1 className="text-2xl font-semibold">Catálogos</h1>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-          Administra los paquetes, conceptos, centros de costo y sustentos que utiliza la aplicación.
+          Administra los catálogos maestros que utiliza la aplicación.
         </p>
       </div>
 
@@ -358,165 +460,173 @@ export default function CatalogsPage() {
       )}
 
       {section === "packages" && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Paquetes de gasto</h2>
-              {packageForm.id && (
-                <Button variant="ghost" size="sm" onClick={() => setPackageForm({ id: "", name: "" })}>
-                  Cancelar
+        <div className="grid gap-4 md:grid-cols-2">
+          {/* Paquetes */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Paquetes</h2>
+                {packageForm.id && (
+                  <Button variant="ghost" size="sm" onClick={() => setPackageForm({ id: "", name: "" })}>
+                    Cancelar
+                  </Button>
+                )}
+              </div>
+              <div className="mt-4 space-y-3">
+                <Input
+                  placeholder="Nombre del paquete"
+                  value={packageForm.name}
+                  onChange={e => setPackageForm(f => ({ ...f, name: e.target.value }))}
+                />
+                <Button onClick={() => savePackage.mutate()} disabled={savePackage.isPending || !packageForm.name.trim()}>
+                  {packageForm.id ? "Actualizar Paquete" : "Crear Paquete"}
                 </Button>
-              )}
-            </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <Input
-                placeholder="ID (para editar)"
-                value={packageForm.id}
-                onChange={e => setPackageForm(f => ({ ...f, id: e.target.value }))}
-              />
-              <Input
-                placeholder="Nombre del paquete"
-                value={packageForm.name}
-                onChange={e => setPackageForm(f => ({ ...f, name: e.target.value }))}
-              />
-            </div>
-            <div className="mt-3">
-              <Button onClick={() => savePackage.mutate()} disabled={savePackage.isPending || !packageForm.name.trim()}>
-                {packageForm.id ? "Actualizar" : "Crear"}
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {packagesQuery.isLoading ? (
-              "Cargando..."
-            ) : (
-              <Table>
-                <thead>
-                  <tr>
-                    <Th>ID</Th>
-                    <Th>Nombre</Th>
-                    <Th>Conceptos</Th>
-                    <Th>Acciones</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(packagesQuery.data || []).map(pkg => (
-                    <tr key={pkg.id}>
-                      <Td>{pkg.id}</Td>
-                      <Td>{pkg.name}</Td>
-                      <Td>{pkg.concepts.length}</Td>
-                      <Td>
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setPackageForm({ id: String(pkg.id), name: pkg.name })}
-                          >
-                            Editar
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => deletePackage.mutate(pkg.id)}>
-                            Eliminar
-                          </Button>
-                        </div>
-                      </Td>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {packagesQuery.isLoading ? (
+                "Cargando..."
+              ) : (
+                <Table>
+                  <thead>
+                    <tr>
+                      <Th>Paquete</Th>
+                      <Th>Conceptos</Th>
+                      <Th>Acciones</Th>
                     </tr>
-                  ))}
-                </tbody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-      )}
+                  </thead>
+                  <tbody>
+                    {(packagesQuery.data || []).map(pkg => (
+                      <tr 
+                        key={pkg.id}
+                        className={selectedPackageId === pkg.id ? "bg-brand-50 dark:bg-brand-950" : ""}
+                      >
+                        <Td 
+                          className="cursor-pointer hover:text-brand-600"
+                          onClick={() => setSelectedPackageId(pkg.id === selectedPackageId ? null : pkg.id)}
+                        >
+                          {pkg.name}
+                        </Td>
+                        <Td>{pkg.concepts.length}</Td>
+                        <Td>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setPackageForm({ id: String(pkg.id), name: pkg.name })}
+                            >
+                              Editar
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => deletePackage.mutate(pkg.id)}>
+                              Eliminar
+                            </Button>
+                          </div>
+                        </Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
 
-      {section === "concepts" && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Conceptos de gasto</h2>
-              {conceptForm.id && (
-                <Button variant="ghost" size="sm" onClick={() => setConceptForm({ id: "", name: "", packageId: "" })}>
-                  Cancelar
-                </Button>
-              )}
-            </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <Input
-                placeholder="ID (para editar)"
-                value={conceptForm.id}
-                onChange={e => setConceptForm(f => ({ ...f, id: e.target.value }))}
-              />
-              <Select
-                value={conceptForm.packageId}
-                onChange={e => setConceptForm(f => ({ ...f, packageId: e.target.value }))}
-              >
-                <option value="">Selecciona un paquete</option>
-                {(packagesQuery.data || []).map(pkg => (
-                  <option key={pkg.id} value={pkg.id}>
-                    {pkg.name}
-                  </option>
-                ))}
-              </Select>
-              <Input
-                placeholder="Nombre del concepto"
-                value={conceptForm.name}
-                onChange={e => setConceptForm(f => ({ ...f, name: e.target.value }))}
-              />
-            </div>
-            <div className="mt-3">
-              <Button
-                onClick={() => saveConcept.mutate()}
-                disabled={saveConcept.isPending || !conceptForm.name.trim() || !conceptForm.packageId}
-              >
-                {conceptForm.id ? "Actualizar" : "Crear"}
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {packagesQuery.isLoading ? (
-              "Cargando..."
-            ) : (
-              <Table>
-                <thead>
-                  <tr>
-                    <Th>ID</Th>
-                    <Th>Concepto</Th>
-                    <Th>Paquete</Th>
-                    <Th>Acciones</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {conceptRows.map(concept => (
-                    <tr key={concept.id}>
-                      <Td>{concept.id}</Td>
-                      <Td>{concept.name}</Td>
-                      <Td>{concept.packageName}</Td>
-                      <Td>
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              setConceptForm({
-                                id: String(concept.id),
-                                name: concept.name,
-                                packageId: String(concept.packageId)
-                              })
-                            }
-                          >
-                            Editar
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => deleteConcept.mutate(concept.id)}>
-                            Eliminar
-                          </Button>
-                        </div>
-                      </Td>
-                    </tr>
+          {/* Conceptos */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">
+                  Conceptos
+                  {selectedPackageId && (
+                    <span className="ml-2 text-sm font-normal text-slate-500">
+                      ({(packagesQuery.data || []).find(p => p.id === selectedPackageId)?.name})
+                    </span>
+                  )}
+                </h2>
+                {conceptForm.id && (
+                  <Button variant="ghost" size="sm" onClick={() => setConceptForm({ id: "", name: "", packageId: "" })}>
+                    Cancelar
+                  </Button>
+                )}
+              </div>
+              <div className="mt-4 space-y-3">
+                <Select
+                  value={conceptForm.packageId || (selectedPackageId ? String(selectedPackageId) : "")}
+                  onChange={e => setConceptForm(f => ({ ...f, packageId: e.target.value }))}
+                >
+                  <option value="">Selecciona un paquete</option>
+                  {(packagesQuery.data || []).map(pkg => (
+                    <option key={pkg.id} value={pkg.id}>
+                      {pkg.name}
+                    </option>
                   ))}
-                </tbody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+                </Select>
+                <Input
+                  placeholder="Nombre del concepto"
+                  value={conceptForm.name}
+                  onChange={e => setConceptForm(f => ({ ...f, name: e.target.value }))}
+                />
+                <Button
+                  onClick={() => saveConcept.mutate()}
+                  disabled={saveConcept.isPending || !conceptForm.name.trim() || !conceptForm.packageId}
+                >
+                  {conceptForm.id ? "Actualizar Concepto" : "Crear Concepto"}
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {packagesQuery.isLoading ? (
+                "Cargando..."
+              ) : (
+                <>
+                  {selectedPackageId && filteredConcepts.length === 0 && (
+                    <p className="text-center text-sm text-slate-500 py-4">
+                      Este paquete no tiene conceptos. Crea uno arriba.
+                    </p>
+                  )}
+                  {filteredConcepts.length > 0 && (
+                    <Table>
+                      <thead>
+                        <tr>
+                          <Th>Concepto</Th>
+                          {!selectedPackageId && <Th>Paquete</Th>}
+                          <Th>Acciones</Th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredConcepts.map(concept => (
+                          <tr key={concept.id}>
+                            <Td>{concept.name}</Td>
+                            {!selectedPackageId && <Td>{concept.packageName}</Td>}
+                            <Td>
+                              <div className="flex flex-wrap gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    setConceptForm({
+                                      id: String(concept.id),
+                                      name: concept.name,
+                                      packageId: String(concept.packageId)
+                                    })
+                                  }
+                                >
+                                  Editar
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => deleteConcept.mutate(concept.id)}>
+                                  Eliminar
+                                </Button>
+                              </div>
+                            </Td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </Table>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {section === "costCenters" && (
@@ -675,6 +785,198 @@ export default function CatalogsPage() {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {section === "managements" && (
+        <div className="grid gap-4 md:grid-cols-2">
+          {/* Gerencias */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Gerencias</h2>
+                {managementForm.id && (
+                  <Button variant="ghost" size="sm" onClick={() => setManagementForm({ id: "", code: "", name: "" })}>
+                    Cancelar
+                  </Button>
+                )}
+              </div>
+              <div className="mt-4 space-y-3">
+                <Input
+                  placeholder="Código"
+                  value={managementForm.code}
+                  onChange={e => setManagementForm(f => ({ ...f, code: e.target.value }))}
+                />
+                <Input
+                  placeholder="Nombre"
+                  value={managementForm.name}
+                  onChange={e => setManagementForm(f => ({ ...f, name: e.target.value }))}
+                />
+                <Button 
+                  onClick={() => saveManagement.mutate()} 
+                  disabled={saveManagement.isPending || !managementForm.code.trim() || !managementForm.name.trim()}
+                >
+                  {managementForm.id ? "Actualizar Gerencia" : "Crear Gerencia"}
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {managementsQuery.isLoading ? (
+                "Cargando..."
+              ) : (
+                <Table>
+                  <thead>
+                    <tr>
+                      <Th>Gerencia</Th>
+                      <Th>Áreas</Th>
+                      <Th>Acciones</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(managementsQuery.data || []).map(mgmt => (
+                      <tr 
+                        key={mgmt.id}
+                        className={selectedManagementId === mgmt.id ? "bg-brand-50 dark:bg-brand-950" : ""}
+                      >
+                        <Td 
+                          className="cursor-pointer hover:text-brand-600"
+                          onClick={() => setSelectedManagementId(mgmt.id === selectedManagementId ? null : mgmt.id)}
+                        >
+                          <div>
+                            <div className="font-medium">{mgmt.name}</div>
+                            <div className="text-xs text-slate-500">{mgmt.code}</div>
+                          </div>
+                        </Td>
+                        <Td>{mgmt.areas?.length || 0}</Td>
+                        <Td>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setManagementForm({ id: String(mgmt.id), code: mgmt.code, name: mgmt.name })}
+                            >
+                              Editar
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => deleteManagement.mutate(mgmt.id)}>
+                              Eliminar
+                            </Button>
+                          </div>
+                        </Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Áreas */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">
+                  Áreas
+                  {selectedManagementId && (
+                    <span className="ml-2 text-sm font-normal text-slate-500">
+                      ({(managementsQuery.data || []).find(m => m.id === selectedManagementId)?.name})
+                    </span>
+                  )}
+                </h2>
+                {areaForm.id && (
+                  <Button variant="ghost" size="sm" onClick={() => setAreaForm({ id: "", code: "", name: "", managementId: "" })}>
+                    Cancelar
+                  </Button>
+                )}
+              </div>
+              <div className="mt-4 space-y-3">
+                <Select
+                  value={areaForm.managementId || (selectedManagementId ? String(selectedManagementId) : "")}
+                  onChange={e => setAreaForm(f => ({ ...f, managementId: e.target.value }))}
+                >
+                  <option value="">Selecciona una gerencia</option>
+                  {(managementsQuery.data || []).map(mgmt => (
+                    <option key={mgmt.id} value={mgmt.id}>
+                      {mgmt.name}
+                    </option>
+                  ))}
+                </Select>
+                <Input
+                  placeholder="Código"
+                  value={areaForm.code}
+                  onChange={e => setAreaForm(f => ({ ...f, code: e.target.value }))}
+                />
+                <Input
+                  placeholder="Nombre"
+                  value={areaForm.name}
+                  onChange={e => setAreaForm(f => ({ ...f, name: e.target.value }))}
+                />
+                <Button
+                  onClick={() => saveArea.mutate()}
+                  disabled={saveArea.isPending || !areaForm.code.trim() || !areaForm.name.trim() || !(areaForm.managementId || selectedManagementId)}
+                >
+                  {areaForm.id ? "Actualizar Área" : "Crear Área"}
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {areasQuery.isLoading ? (
+                "Cargando..."
+              ) : (
+                <>
+                  {selectedManagementId && filteredAreas.length === 0 && (
+                    <p className="text-center text-sm text-slate-500 py-4">
+                      Esta gerencia no tiene áreas. Crea una arriba.
+                    </p>
+                  )}
+                  {filteredAreas.length > 0 && (
+                    <Table>
+                      <thead>
+                        <tr>
+                          <Th>Área</Th>
+                          {!selectedManagementId && <Th>Gerencia</Th>}
+                          <Th>Acciones</Th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredAreas.map(area => (
+                          <tr key={area.id}>
+                            <Td>
+                              <div>
+                                <div className="font-medium">{area.name}</div>
+                                <div className="text-xs text-slate-500">{area.code}</div>
+                              </div>
+                            </Td>
+                            {!selectedManagementId && <Td>{area.management?.name}</Td>}
+                            <Td>
+                              <div className="flex flex-wrap gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    setAreaForm({
+                                      id: String(area.id),
+                                      code: area.code,
+                                      name: area.name,
+                                      managementId: String(area.managementId)
+                                    })
+                                  }
+                                >
+                                  Editar
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => deleteArea.mutate(area.id)}>
+                                  Eliminar
+                                </Button>
+                              </div>
+                            </Td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </Table>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {section === "supports" && (

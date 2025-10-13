@@ -22,7 +22,7 @@ function Sidebar(){
         <NavLink to="/purchase-orders" className={({isActive})=>`${link} ${isActive?active:""}`}><ShoppingCart size={18}/>Órdenes de Compra</NavLink>
         <NavLink to="/invoices" className={({isActive})=>`${link} ${isActive?active:""}`}><FileText size={18}/>Facturas</NavLink>
         <NavLink to="/reports" className={({isActive})=>`${link} ${isActive?active:""}`}><BarChart3 size={18}/>Reportes</NavLink>
-        <NavLink to="/settings" className={({isActive})=>`${link} ${isActive?active:""}`}><Archive size={18}/>Catalogos</NavLink>
+        <NavLink to="/settings" className={({isActive})=>`${link} ${isActive?active:""}`}><Archive size={18}/>Catálogos</NavLink>
       </nav>
     </aside>
   );

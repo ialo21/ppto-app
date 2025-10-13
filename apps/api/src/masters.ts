@@ -21,6 +21,12 @@ const expenseConceptSchema = z.object({
   name: z.string().min(1)
 });
 
+const articuloSchema = z.object({
+  id: z.number().int().positive().optional(),
+  code: z.string().min(1),
+  name: z.string().min(1)
+});
+
 export async function registerMasterRoutes(app: FastifyInstance) {
   // Cost centers
   app.get("/cost-centers", async () => prisma.costCenter.findMany({ orderBy: { code: "asc" } }));
@@ -110,6 +116,34 @@ export async function registerMasterRoutes(app: FastifyInstance) {
       return { ok: true };
     } catch {
       return reply.code(400).send({ error: "no se pudo eliminar el concepto (en uso?)" });
+    }
+  });
+
+  // Articulos
+  app.get("/articulos", async () => prisma.articulo.findMany({ orderBy: { code: "asc" } }));
+
+  app.post("/articulos", async (req, reply) => {
+    const parsed = articuloSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send(parsed.error);
+    const { id, ...data } = parsed.data;
+    try {
+      if (id) {
+        return await prisma.articulo.update({ where: { id }, data });
+      }
+      return await prisma.articulo.create({ data });
+    } catch (err) {
+      return reply.code(400).send({ error: "no se pudo guardar el artículo", details: err });
+    }
+  });
+
+  app.delete("/articulos/:id", async (req, reply) => {
+    const id = Number((req.params as any).id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "id invalido" });
+    try {
+      await prisma.articulo.delete({ where: { id } });
+      return { ok: true };
+    } catch {
+      return reply.code(400).send({ error: "no se pudo eliminar el artículo (en uso?)" });
     }
   });
 }

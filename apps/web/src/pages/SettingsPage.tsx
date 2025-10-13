@@ -11,6 +11,7 @@ import { Table, Th, Td } from "../components/ui/Table";
 type ExpenseConcept = { id: number; name: string; packageId: number };
 type ExpensePackage = { id: number; name: string; concepts: ExpenseConcept[] };
 type CostCenter = { id: number; code: string; name: string };
+type Articulo = { id: number; code: string; name: string };
 type Support = {
   id: number;
   code: string | null;
@@ -32,12 +33,13 @@ const expenseTypes = [
   { label: "Distribuible", value: "DISTRIBUIBLE" }
 ];
 
-type SectionKey = "packages" | "concepts" | "costCenters" | "supports";
+type SectionKey = "packages" | "concepts" | "costCenters" | "articulos" | "supports";
 
 const sections: Array<{ key: SectionKey; label: string; description: string }> = [
   { key: "packages", label: "Paquetes", description: "Agrupa conceptos de gasto de forma lógica." },
   { key: "concepts", label: "Conceptos", description: "Define los conceptos que se asignan dentro de cada paquete." },
   { key: "costCenters", label: "Centros de costo", description: "Gestiona los centros de costo disponibles para los sustentos." },
+  { key: "articulos", label: "Artículos", description: "Gestiona el catálogo de artículos para las órdenes de compra." },
   { key: "supports", label: "Sustentos", description: "Administra el catálogo completo de sustentos." }
 ];
 
@@ -64,18 +66,27 @@ function useSupports() {
   });
 }
 
+function useArticulos() {
+  return useQuery({
+    queryKey: ["articulos"],
+    queryFn: async () => (await api.get("/articulos")).data as Articulo[]
+  });
+}
+
 export default function CatalogsPage() {
   const queryClient = useQueryClient();
 
   const packagesQuery = useExpensePackages();
   const costCentersQuery = useCostCenters();
   const supportsQuery = useSupports();
+  const articulosQuery = useArticulos();
 
   const [section, setSection] = useState<SectionKey>("packages");
 
   const [packageForm, setPackageForm] = useState({ id: "", name: "" });
   const [conceptForm, setConceptForm] = useState({ id: "", packageId: "", name: "" });
   const [costCenterForm, setCostCenterForm] = useState({ id: "", code: "", name: "" });
+  const [articuloForm, setArticuloForm] = useState({ id: "", code: "", name: "" });
   const [supportForm, setSupportForm] = useState({
     id: "",
     name: "",
@@ -227,6 +238,33 @@ export default function CatalogsPage() {
       queryClient.invalidateQueries({ queryKey: ["supports"] });
     },
     onError: () => toast.error("No se pudo eliminar el centro de costo")
+  });
+
+  const saveArticulo = useMutation({
+    mutationFn: async () => {
+      const code = articuloForm.code.trim();
+      const name = articuloForm.name.trim();
+      if (!code || !name) throw new Error("Completa los campos requeridos");
+      const payload: { id?: number; code: string; name: string } = { code, name };
+      if (articuloForm.id) payload.id = Number(articuloForm.id);
+      return (await api.post("/articulos", payload)).data;
+    },
+    onSuccess: () => {
+      toast.success("Artículo guardado");
+      setArticuloForm({ id: "", code: "", name: "" });
+      queryClient.invalidateQueries({ queryKey: ["articulos"] });
+    },
+    onError: () => toast.error("No se pudo guardar el artículo")
+  });
+
+  const deleteArticulo = useMutation({
+    mutationFn: async (id: number) => (await api.delete(`/articulos/${id}`)).data,
+    onSuccess: () => {
+      toast.success("Artículo eliminado");
+      if (articuloForm.id) setArticuloForm({ id: "", code: "", name: "" });
+      queryClient.invalidateQueries({ queryKey: ["articulos"] });
+    },
+    onError: () => toast.error("No se pudo eliminar el artículo")
   });
 
   const saveSupport = useMutation({
@@ -547,6 +585,85 @@ export default function CatalogsPage() {
                             Editar
                           </Button>
                           <Button variant="ghost" size="sm" onClick={() => deleteCostCenter.mutate(cc.id)}>
+                            Eliminar
+                          </Button>
+                        </div>
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {section === "articulos" && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Artículos</h2>
+              {articuloForm.id && (
+                <Button variant="ghost" size="sm" onClick={() => setArticuloForm({ id: "", code: "", name: "" })}>
+                  Cancelar
+                </Button>
+              )}
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <Input
+                placeholder="ID (para editar)"
+                value={articuloForm.id}
+                onChange={e => setArticuloForm(f => ({ ...f, id: e.target.value }))}
+              />
+              <Input
+                placeholder="Código"
+                value={articuloForm.code}
+                onChange={e => setArticuloForm(f => ({ ...f, code: e.target.value }))}
+              />
+              <Input
+                placeholder="Nombre"
+                value={articuloForm.name}
+                onChange={e => setArticuloForm(f => ({ ...f, name: e.target.value }))}
+              />
+            </div>
+            <div className="mt-3">
+              <Button
+                onClick={() => saveArticulo.mutate()}
+                disabled={saveArticulo.isPending || !articuloForm.code.trim() || !articuloForm.name.trim()}
+              >
+                {articuloForm.id ? "Actualizar" : "Crear"}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {articulosQuery.isLoading ? (
+              "Cargando..."
+            ) : (
+              <Table>
+                <thead>
+                  <tr>
+                    <Th>ID</Th>
+                    <Th>Código</Th>
+                    <Th>Nombre</Th>
+                    <Th>Acciones</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(articulosQuery.data || []).map(art => (
+                    <tr key={art.id}>
+                      <Td>{art.id}</Td>
+                      <Td>{art.code}</Td>
+                      <Td>{art.name}</Td>
+                      <Td>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setArticuloForm({ id: String(art.id), code: art.code, name: art.name })}
+                          >
+                            Editar
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => deleteArticulo.mutate(art.id)}>
                             Eliminar
                           </Button>
                         </div>

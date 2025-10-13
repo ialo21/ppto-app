@@ -41,6 +41,17 @@ enum ExpenseType {
   DISTRIBUIBLE
 }
 
+enum OcStatus {
+  PENDIENTE
+  PROCESAR
+  PROCESADO
+  APROBACION_VP
+  ANULAR
+  ANULADO
+  ATENDER_COMPRAS
+  ATENDIDO
+}
+
 model Period {
   id      Int     @id @default(autoincrement())
   year    Int
@@ -51,6 +62,8 @@ model Period {
   controlLines_accountPeriod ControlLine[] @relation("CL_ACCOUNTING_PERIOD")
   closures AccountingClosure?
   budgetAllocations BudgetAllocation[]
+  oc_periodFrom OC[] @relation("OC_PERIOD_FROM")
+  oc_periodTo   OC[] @relation("OC_PERIOD_TO")
 }
 
 model AccountingClosure {
@@ -93,6 +106,7 @@ model Support {
   // relaciones
   budgetAllocations BudgetAllocation[]
   controlLines      ControlLine[]
+  ocs               OC[]
 }
 
 model CostCenter {
@@ -100,6 +114,14 @@ model CostCenter {
   code     String    @unique
   name     String
   supports Support[]
+  ocs      OC[]
+}
+
+model Articulo {
+  id   Int    @id @default(autoincrement())
+  code String @unique
+  name String
+  ocs  OC[]
 }
 
 model ExpensePackage {
@@ -219,4 +241,51 @@ model ControlLine {
   @@index([accountingPeriodId], name: "ix_cl_accounting_period")
   @@index([type, state], name: "ix_cl_type_state")
   @@index([supportId, accountingPeriodId], name: "ix_cl_support_accounting_period")
+}
+
+model OC {
+  id                     Int       @id @default(autoincrement())
+  
+  budgetPeriodFromId     Int
+  budgetPeriodFrom       Period    @relation("OC_PERIOD_FROM", fields: [budgetPeriodFromId], references: [id])
+  
+  budgetPeriodToId       Int
+  budgetPeriodTo         Period    @relation("OC_PERIOD_TO", fields: [budgetPeriodToId], references: [id])
+  
+  incidenteOc            String?
+  solicitudOc            String?
+  fechaRegistro          DateTime  @default(now())
+  
+  supportId              Int
+  support                Support   @relation(fields: [supportId], references: [id])
+  
+  periodoEnFechasText    String?
+  descripcion            String?   @db.Text
+  nombreSolicitante      String
+  correoSolicitante      String
+  
+  proveedor              String
+  ruc                    String
+  
+  moneda                 String    // PEN | USD
+  importeSinIgv          Decimal
+  
+  estado                 OcStatus  @default(PENDIENTE)
+  numeroOc               String?   @unique
+  comentario             String?   @db.Text
+  
+  articuloId             Int?
+  articulo               Articulo? @relation(fields: [articuloId], references: [id])
+  
+  cecoId                 Int?
+  ceco                   CostCenter? @relation(fields: [cecoId], references: [id])
+  
+  linkCotizacion         String?
+  
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  
+  @@index([supportId], name: "ix_oc_support")
+  @@index([estado], name: "ix_oc_estado")
+  @@index([fechaRegistro], name: "ix_oc_fecha_registro")
 }

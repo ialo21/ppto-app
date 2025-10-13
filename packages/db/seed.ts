@@ -7,11 +7,13 @@ async function main() {
   await prisma.invoiceStatusHistory.deleteMany();
   await prisma.invoice.deleteMany();
   await prisma.controlLine.deleteMany();
+  await prisma.oC.deleteMany();
   await prisma.budgetAllocation.deleteMany();
   await prisma.budgetVersion.deleteMany();
   await prisma.support.deleteMany();
   await prisma.expenseConcept.deleteMany();
   await prisma.expensePackage.deleteMany();
+  await prisma.articulo.deleteMany();
   await prisma.costCenter.deleteMany();
   await prisma.accountingClosure.deleteMany();
   await prisma.fxReference.deleteMany();
@@ -132,6 +134,66 @@ async function main() {
           periodId: periodEne.id,
           amountLocal: new Prisma.Decimal(15000),
           currency: "PEN"
+        }
+      ]
+    });
+  }
+
+  // Artículos
+  const [artServicios, artLicencias, artHardware] = await Promise.all([
+    prisma.articulo.create({ data: { code: "ART-001", name: "Servicios Profesionales" } }),
+    prisma.articulo.create({ data: { code: "ART-002", name: "Licencias de Software" } }),
+    prisma.articulo.create({ data: { code: "ART-003", name: "Hardware y Equipos" } })
+  ]);
+
+  // Órdenes de Compra de ejemplo
+  const periodFeb = await prisma.period.findFirst({ where: { year: 2026, month: 2 } });
+  if (periodEne && periodFeb) {
+    await prisma.oC.createMany({
+      data: [
+        {
+          budgetPeriodFromId: periodEne.id,
+          budgetPeriodToId: periodFeb.id,
+          incidenteOc: "INC-2026-001",
+          solicitudOc: "SOL-2026-001",
+          fechaRegistro: new Date("2026-01-15"),
+          supportId: supportQa.id,
+          periodoEnFechasText: "Enero - Febrero 2026",
+          descripcion: "Contratación de servicios de QA externos para proyecto crítico",
+          nombreSolicitante: "Juan Pérez",
+          correoSolicitante: "juan.perez@empresa.com",
+          proveedor: "QA Solutions SAC",
+          ruc: "20123456789",
+          moneda: "PEN",
+          importeSinIgv: new Prisma.Decimal(8500),
+          estado: "PENDIENTE",
+          numeroOc: "OC-2026-0001",
+          comentario: "Requiere aprobación urgente",
+          articuloId: artServicios.id,
+          cecoId: ccTi.id,
+          linkCotizacion: "https://ejemplo.com/cotizacion/001"
+        },
+        {
+          budgetPeriodFromId: periodEne.id,
+          budgetPeriodToId: periodEne.id,
+          incidenteOc: "INC-2026-002",
+          solicitudOc: "SOL-2026-002",
+          fechaRegistro: new Date("2026-01-20"),
+          supportId: supportCloud.id,
+          periodoEnFechasText: "Enero 2026",
+          descripcion: "Renovación de servicios cloud AWS",
+          nombreSolicitante: "María García",
+          correoSolicitante: "maria.garcia@empresa.com",
+          proveedor: "Amazon Web Services",
+          ruc: "20987654321",
+          moneda: "USD",
+          importeSinIgv: new Prisma.Decimal(3200),
+          estado: "PROCESADO",
+          numeroOc: "OC-2026-0002",
+          comentario: null,
+          articuloId: artLicencias.id,
+          cecoId: ccTi.id,
+          linkCotizacion: "https://aws.amazon.com/pricing"
         }
       ]
     });

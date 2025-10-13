@@ -8,6 +8,7 @@ import { registerReportRoutes } from "./reports";
 import { registerSupportRoutes } from "./supports";
 import { registerBudgetRoutes } from "./budgets";
 import { registerMasterRoutes } from "./masters";
+import { registerOcRoutes } from "./oc";
 
 const app = Fastify({ logger: true });
 await app.register(cors, { origin: true });
@@ -41,6 +42,7 @@ await registerSupportRoutes(app);
 await registerBudgetRoutes(app);
 await registerControlLineRoutes(app);
 await registerInvoiceRoutes(app);
+await registerOcRoutes(app);
 await registerReportRoutes(app);
 await registerMasterRoutes(app);
 

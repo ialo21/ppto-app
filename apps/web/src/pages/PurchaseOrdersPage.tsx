@@ -13,6 +13,116 @@ const ESTADOS_OC = [
   "ANULAR", "ANULADO", "ATENDER_COMPRAS", "ATENDIDO"
 ];
 
+// Normalización de fechas
+const normalizeDateToISO = (dateInput: string): string | null => {
+  if (!dateInput || !dateInput.trim()) return null;
+
+  const input = dateInput.trim();
+  
+  // Si ya está en formato YYYY-MM-DD (del input type="date")
+  if (/^\d{4}-\d{2}-\d{2}$/.test(input)) {
+    const date = new Date(input + 'T00:00:00');
+    if (isNaN(date.getTime())) return null;
+    return date.toISOString();
+  }
+
+  // Formato DD/MM/YYYY
+  const ddmmyyyyMatch = input.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (ddmmyyyyMatch) {
+    const [, day, month, year] = ddmmyyyyMatch;
+    const date = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00`);
+    if (isNaN(date.getTime())) return null;
+    // Validar que la fecha es real (no 31/02)
+    if (date.getDate() !== parseInt(day) || date.getMonth() + 1 !== parseInt(month)) {
+      return null;
+    }
+    return date.toISOString();
+  }
+
+  // Formato MM/DD/YYYY (americano)
+  const mmddyyyyMatch = input.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (mmddyyyyMatch) {
+    const [, month, day, year] = mmddyyyyMatch;
+    const date = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00`);
+    if (isNaN(date.getTime())) return null;
+    return date.toISOString();
+  }
+
+  // Intentar parsear como Date si es otro formato
+  try {
+    const date = new Date(input);
+    if (!isNaN(date.getTime())) {
+      return date.toISOString();
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+};
+
+// Validar que una fecha sea válida
+const isValidDate = (dateString: string): boolean => {
+  if (!dateString || !dateString.trim()) return false;
+  
+  // Si está en formato YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    const date = new Date(dateString + 'T00:00:00');
+    return !isNaN(date.getTime());
+  }
+
+  // Si está en formato DD/MM/YYYY
+  const ddmmyyyyMatch = dateString.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (ddmmyyyyMatch) {
+    const [, day, month, year] = ddmmyyyyMatch;
+    const date = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00`);
+    // Validar que la fecha es real
+    if (isNaN(date.getTime())) return false;
+    if (date.getDate() !== parseInt(day) || date.getMonth() + 1 !== parseInt(month)) {
+      return false;
+    }
+    return true;
+  }
+
+  return false;
+};
+
+// Componente para mostrar errores de campo
+const FieldError = ({ error }: { error?: string }) => {
+  if (!error) return null;
+  return <p className="text-xs text-red-600 mt-1">{error}</p>;
+};
+
+// Wrapper para inputs con errores
+const InputWithError = ({ error, ...props }: any) => {
+  const hasError = !!error;
+  return (
+    <div>
+      <Input 
+        {...props} 
+        className={hasError ? "border-red-500 focus:ring-red-500" : ""} 
+      />
+      <FieldError error={error} />
+    </div>
+  );
+};
+
+// Wrapper para selects con errores
+const SelectWithError = ({ error, children, ...props }: any) => {
+  const hasError = !!error;
+  return (
+    <div>
+      <Select 
+        {...props} 
+        className={hasError ? "border-red-500 focus:ring-red-500" : ""}
+      >
+        {children}
+      </Select>
+      <FieldError error={error} />
+    </div>
+  );
+};
+
 export default function PurchaseOrdersPage() {
   const queryClient = useQueryClient();
   const { data: ocs, refetch, isLoading } = useQuery({
@@ -74,6 +184,8 @@ export default function PurchaseOrdersPage() {
     search: ""
   });
 
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
   const resetForm = () => {
     setForm({
       budgetPeriodFromId: "",
@@ -99,32 +211,104 @@ export default function PurchaseOrdersPage() {
     });
     setEditingId(null);
     setShowForm(false);
+    setFieldErrors({});
+  };
+
+  // Validación frontend
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    if (!form.budgetPeriodFromId) errors.budgetPeriodFromId = "Periodo desde es requerido";
+    if (!form.budgetPeriodToId) errors.budgetPeriodToId = "Periodo hasta es requerido";
+    if (!form.supportId) errors.supportId = "Sustento es requerido";
+    if (!form.nombreSolicitante.trim()) errors.nombreSolicitante = "Nombre solicitante es requerido";
+    
+    // Fecha de registro
+    if (!form.fechaRegistro || !form.fechaRegistro.trim()) {
+      errors.fechaRegistro = "Fecha de registro es requerida";
+    } else if (!isValidDate(form.fechaRegistro)) {
+      errors.fechaRegistro = "Fecha inválida. Usa formato DD/MM/YYYY o YYYY-MM-DD";
+    }
+    
+    // Email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!form.correoSolicitante.trim()) {
+      errors.correoSolicitante = "Correo es requerido";
+    } else if (!emailRegex.test(form.correoSolicitante)) {
+      errors.correoSolicitante = "Correo inválido";
+    }
+
+    if (!form.proveedor.trim()) errors.proveedor = "Proveedor es requerido";
+    
+    // RUC - exactamente 11 dígitos
+    if (!form.ruc.trim()) {
+      errors.ruc = "RUC es requerido";
+    } else if (!/^\d{11}$/.test(form.ruc)) {
+      errors.ruc = "RUC debe tener exactamente 11 dígitos";
+    }
+
+    // Importe
+    const importe = parseFloat(form.importeSinIgv);
+    if (!form.importeSinIgv) {
+      errors.importeSinIgv = "Importe es requerido";
+    } else if (isNaN(importe) || importe < 0) {
+      errors.importeSinIgv = "Importe debe ser mayor o igual a 0";
+    }
+
+    // URL de cotización (opcional pero si tiene valor debe ser válida)
+    if (form.linkCotizacion && form.linkCotizacion.trim()) {
+      try {
+        new URL(form.linkCotizacion);
+      } catch {
+        errors.linkCotizacion = "URL inválida";
+      }
+    }
+
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const createMutation = useMutation({
     mutationFn: async () => {
+      // Validar en frontend primero
+      if (!validateForm()) {
+        throw new Error("FRONTEND_VALIDATION_ERROR");
+      }
+
+      // Normalizar payload
+      const fechaISO = normalizeDateToISO(form.fechaRegistro);
+      if (!fechaISO) {
+        setFieldErrors({ fechaRegistro: "Fecha inválida" });
+        throw new Error("FRONTEND_VALIDATION_ERROR");
+      }
+
       const payload: any = {
         budgetPeriodFromId: Number(form.budgetPeriodFromId),
         budgetPeriodToId: Number(form.budgetPeriodToId),
-        incidenteOc: form.incidenteOc || undefined,
-        solicitudOc: form.solicitudOc || undefined,
-        fechaRegistro: form.fechaRegistro,
+        incidenteOc: form.incidenteOc.trim() || undefined,
+        solicitudOc: form.solicitudOc.trim() || undefined,
+        fechaRegistro: fechaISO, // Convertido a ISO completo
         supportId: Number(form.supportId),
-        periodoEnFechasText: form.periodoEnFechasText || undefined,
-        descripcion: form.descripcion || undefined,
-        nombreSolicitante: form.nombreSolicitante,
-        correoSolicitante: form.correoSolicitante,
-        proveedor: form.proveedor,
-        ruc: form.ruc,
+        periodoEnFechasText: form.periodoEnFechasText.trim() || undefined,
+        descripcion: form.descripcion.trim() || undefined,
+        nombreSolicitante: form.nombreSolicitante.trim(),
+        correoSolicitante: form.correoSolicitante.trim(),
+        proveedor: form.proveedor.trim(),
+        ruc: form.ruc.trim(),
         moneda: form.moneda,
-        importeSinIgv: Number(form.importeSinIgv),
+        importeSinIgv: parseFloat(form.importeSinIgv),
         estado: form.estado,
-        numeroOc: form.numeroOc || undefined,
-        comentario: form.comentario || undefined,
+        numeroOc: form.numeroOc.trim() || undefined,
+        comentario: form.comentario.trim() || undefined,
         articuloId: form.articuloId ? Number(form.articuloId) : null,
         cecoId: form.cecoId ? Number(form.cecoId) : null,
-        linkCotizacion: form.linkCotizacion || undefined
+        linkCotizacion: form.linkCotizacion.trim() || undefined
       };
+
+      // Debug en desarrollo
+      if (import.meta.env.DEV) {
+        console.log("📤 Payload OC:", payload);
+      }
 
       if (editingId) {
         return (await api.patch(`/ocs/${editingId}`, payload)).data;
@@ -133,12 +317,39 @@ export default function PurchaseOrdersPage() {
       }
     },
     onSuccess: () => {
-      toast.success(editingId ? "OC actualizada" : "OC creada");
+      toast.success(editingId ? "OC actualizada exitosamente" : "OC creada exitosamente");
       refetch();
       resetForm();
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.error || "Error al guardar OC");
+      if (error.message === "FRONTEND_VALIDATION_ERROR") {
+        toast.error("Revisa los campos resaltados");
+        return;
+      }
+
+      // Manejar errores 422 del backend con issues por campo
+      if (error.response?.status === 422 && error.response?.data?.issues) {
+        const backendErrors: Record<string, string> = {};
+        error.response.data.issues.forEach((issue: any) => {
+          const field = issue.path.join(".");
+          backendErrors[field] = issue.message;
+        });
+        setFieldErrors(backendErrors);
+        toast.error("Revisa los campos resaltados");
+
+        // Debug en desarrollo
+        if (import.meta.env.DEV) {
+          console.error("❌ Errores de validación backend:", backendErrors);
+        }
+      } else {
+        const errorMsg = error.response?.data?.error || "Error al guardar OC";
+        toast.error(errorMsg);
+
+        // Debug en desarrollo
+        if (import.meta.env.DEV) {
+          console.error("❌ Error completo:", error.response?.data || error);
+        }
+      }
     }
   });
 
@@ -222,134 +433,233 @@ export default function PurchaseOrdersPage() {
             <div className="grid md:grid-cols-3 gap-3">
               <div>
                 <label className="block text-sm font-medium mb-1">Periodo PPTO Desde *</label>
-                <Select value={form.budgetPeriodFromId} onChange={e => setForm(f => ({ ...f, budgetPeriodFromId: e.target.value }))}>
+                <SelectWithError 
+                  value={form.budgetPeriodFromId} 
+                  onChange={(e: any) => setForm(f => ({ ...f, budgetPeriodFromId: e.target.value }))}
+                  error={fieldErrors.budgetPeriodFromId}
+                >
                   <option value="">Seleccionar...</option>
                   {periods?.map((p: any) => (
                     <option key={p.id} value={p.id}>{p.year}-{String(p.month).padStart(2, "0")} {p.label || ""}</option>
                   ))}
-                </Select>
+                </SelectWithError>
               </div>
 
               <div>
                 <label className="block text-sm font-medium mb-1">Periodo PPTO Hasta *</label>
-                <Select value={form.budgetPeriodToId} onChange={e => setForm(f => ({ ...f, budgetPeriodToId: e.target.value }))}>
+                <SelectWithError 
+                  value={form.budgetPeriodToId} 
+                  onChange={(e: any) => setForm(f => ({ ...f, budgetPeriodToId: e.target.value }))}
+                  error={fieldErrors.budgetPeriodToId}
+                >
                   <option value="">Seleccionar...</option>
                   {periods?.map((p: any) => (
                     <option key={p.id} value={p.id}>{p.year}-{String(p.month).padStart(2, "0")} {p.label || ""}</option>
                   ))}
-                </Select>
+                </SelectWithError>
               </div>
 
               <div>
                 <label className="block text-sm font-medium mb-1">Fecha Registro *</label>
-                <Input type="date" value={form.fechaRegistro} onChange={e => setForm(f => ({ ...f, fechaRegistro: e.target.value }))} />
+                <InputWithError 
+                  type="date" 
+                  value={form.fechaRegistro} 
+                  onChange={(e: any) => setForm(f => ({ ...f, fechaRegistro: e.target.value }))}
+                  error={fieldErrors.fechaRegistro}
+                />
               </div>
 
               <div>
                 <label className="block text-sm font-medium mb-1">INC de OC</label>
-                <Input placeholder="INC-2026-001" value={form.incidenteOc} onChange={e => setForm(f => ({ ...f, incidenteOc: e.target.value }))} />
+                <InputWithError 
+                  placeholder="INC-2026-001" 
+                  value={form.incidenteOc} 
+                  onChange={(e: any) => setForm(f => ({ ...f, incidenteOc: e.target.value }))}
+                  error={fieldErrors.incidenteOc}
+                />
               </div>
 
               <div>
                 <label className="block text-sm font-medium mb-1">Solicitud OC</label>
-                <Input placeholder="SOL-2026-001" value={form.solicitudOc} onChange={e => setForm(f => ({ ...f, solicitudOc: e.target.value }))} />
+                <InputWithError 
+                  placeholder="SOL-2026-001" 
+                  value={form.solicitudOc} 
+                  onChange={(e: any) => setForm(f => ({ ...f, solicitudOc: e.target.value }))}
+                  error={fieldErrors.solicitudOc}
+                />
               </div>
 
               <div>
                 <label className="block text-sm font-medium mb-1">Número de OC</label>
-                <Input placeholder="OC-2026-0001" value={form.numeroOc} onChange={e => setForm(f => ({ ...f, numeroOc: e.target.value }))} />
+                <InputWithError 
+                  placeholder="OC-2026-0001" 
+                  value={form.numeroOc} 
+                  onChange={(e: any) => setForm(f => ({ ...f, numeroOc: e.target.value }))}
+                  error={fieldErrors.numeroOc}
+                />
               </div>
 
               <div className="md:col-span-3">
                 <label className="block text-sm font-medium mb-1">Sustento *</label>
-                <Select value={form.supportId} onChange={e => setForm(f => ({ ...f, supportId: e.target.value }))}>
+                <SelectWithError 
+                  value={form.supportId} 
+                  onChange={(e: any) => setForm(f => ({ ...f, supportId: e.target.value }))}
+                  error={fieldErrors.supportId}
+                >
                   <option value="">Seleccionar sustento...</option>
                   {supports?.map((s: any) => (
                     <option key={s.id} value={s.id}>{s.code} - {s.name}</option>
                   ))}
-                </Select>
+                </SelectWithError>
               </div>
 
               <div className="md:col-span-3">
                 <label className="block text-sm font-medium mb-1">Periodo en Fechas (texto libre)</label>
-                <Input placeholder="Enero - Febrero 2026" value={form.periodoEnFechasText} onChange={e => setForm(f => ({ ...f, periodoEnFechasText: e.target.value }))} />
+                <InputWithError 
+                  placeholder="Enero - Febrero 2026" 
+                  value={form.periodoEnFechasText} 
+                  onChange={(e: any) => setForm(f => ({ ...f, periodoEnFechasText: e.target.value }))}
+                  error={fieldErrors.periodoEnFechasText}
+                />
               </div>
 
               <div className="md:col-span-3">
                 <label className="block text-sm font-medium mb-1">Descripción</label>
-                <Input placeholder="Descripción del servicio o producto" value={form.descripcion} onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))} />
+                <InputWithError 
+                  placeholder="Descripción del servicio o producto" 
+                  value={form.descripcion} 
+                  onChange={(e: any) => setForm(f => ({ ...f, descripcion: e.target.value }))}
+                  error={fieldErrors.descripcion}
+                />
               </div>
 
               <div>
                 <label className="block text-sm font-medium mb-1">Nombre Solicitante *</label>
-                <Input placeholder="Juan Pérez" value={form.nombreSolicitante} onChange={e => setForm(f => ({ ...f, nombreSolicitante: e.target.value }))} />
+                <InputWithError 
+                  placeholder="Juan Pérez" 
+                  value={form.nombreSolicitante} 
+                  onChange={(e: any) => setForm(f => ({ ...f, nombreSolicitante: e.target.value }))}
+                  error={fieldErrors.nombreSolicitante}
+                />
               </div>
 
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium mb-1">Correo Solicitante *</label>
-                <Input type="email" placeholder="juan.perez@empresa.com" value={form.correoSolicitante} onChange={e => setForm(f => ({ ...f, correoSolicitante: e.target.value }))} />
+                <InputWithError 
+                  type="email" 
+                  placeholder="juan.perez@empresa.com" 
+                  value={form.correoSolicitante} 
+                  onChange={(e: any) => setForm(f => ({ ...f, correoSolicitante: e.target.value }))}
+                  error={fieldErrors.correoSolicitante}
+                />
               </div>
 
               <div>
                 <label className="block text-sm font-medium mb-1">Proveedor *</label>
-                <Input placeholder="Nombre del proveedor" value={form.proveedor} onChange={e => setForm(f => ({ ...f, proveedor: e.target.value }))} />
+                <InputWithError 
+                  placeholder="Nombre del proveedor" 
+                  value={form.proveedor} 
+                  onChange={(e: any) => setForm(f => ({ ...f, proveedor: e.target.value }))}
+                  error={fieldErrors.proveedor}
+                />
               </div>
 
               <div>
                 <label className="block text-sm font-medium mb-1">RUC (11 dígitos) *</label>
-                <Input placeholder="20123456789" maxLength={11} value={form.ruc} onChange={e => setForm(f => ({ ...f, ruc: e.target.value.replace(/\D/g, "") }))} />
+                <InputWithError 
+                  placeholder="20123456789" 
+                  maxLength={11} 
+                  value={form.ruc} 
+                  onChange={(e: any) => setForm(f => ({ ...f, ruc: e.target.value.replace(/\D/g, "") }))}
+                  error={fieldErrors.ruc}
+                />
               </div>
 
               <div>
                 <label className="block text-sm font-medium mb-1">Moneda *</label>
-                <Select value={form.moneda} onChange={e => setForm(f => ({ ...f, moneda: e.target.value }))}>
+                <SelectWithError 
+                  value={form.moneda} 
+                  onChange={(e: any) => setForm(f => ({ ...f, moneda: e.target.value }))}
+                  error={fieldErrors.moneda}
+                >
                   <option value="PEN">Soles (PEN)</option>
                   <option value="USD">Dólares (USD)</option>
-                </Select>
+                </SelectWithError>
               </div>
 
               <div>
                 <label className="block text-sm font-medium mb-1">Importe sin IGV *</label>
-                <Input type="number" step="0.01" min="0" placeholder="0.00" value={form.importeSinIgv} onChange={e => setForm(f => ({ ...f, importeSinIgv: e.target.value }))} />
+                <InputWithError 
+                  type="number" 
+                  step="0.01" 
+                  min="0" 
+                  placeholder="0.00" 
+                  value={form.importeSinIgv} 
+                  onChange={(e: any) => setForm(f => ({ ...f, importeSinIgv: e.target.value }))}
+                  error={fieldErrors.importeSinIgv}
+                />
               </div>
 
               <div>
                 <label className="block text-sm font-medium mb-1">Estado *</label>
-                <Select value={form.estado} onChange={e => setForm(f => ({ ...f, estado: e.target.value }))}>
+                <SelectWithError 
+                  value={form.estado} 
+                  onChange={(e: any) => setForm(f => ({ ...f, estado: e.target.value }))}
+                  error={fieldErrors.estado}
+                >
                   {ESTADOS_OC.map(estado => (
                     <option key={estado} value={estado}>{estado.replace(/_/g, " ")}</option>
                   ))}
-                </Select>
+                </SelectWithError>
               </div>
 
               <div>
                 <label className="block text-sm font-medium mb-1">Artículo</label>
-                <Select value={form.articuloId} onChange={e => setForm(f => ({ ...f, articuloId: e.target.value }))}>
+                <SelectWithError 
+                  value={form.articuloId} 
+                  onChange={(e: any) => setForm(f => ({ ...f, articuloId: e.target.value }))}
+                  error={fieldErrors.articuloId}
+                >
                   <option value="">Sin artículo</option>
                   {articulos?.map((a: any) => (
                     <option key={a.id} value={a.id}>{a.code} - {a.name}</option>
                   ))}
-                </Select>
+                </SelectWithError>
               </div>
 
               <div>
                 <label className="block text-sm font-medium mb-1">Centro de Costo (CECO)</label>
-                <Select value={form.cecoId} onChange={e => setForm(f => ({ ...f, cecoId: e.target.value }))}>
+                <SelectWithError 
+                  value={form.cecoId} 
+                  onChange={(e: any) => setForm(f => ({ ...f, cecoId: e.target.value }))}
+                  error={fieldErrors.cecoId}
+                >
                   <option value="">Sin CECO</option>
                   {costCenters?.map((cc: any) => (
                     <option key={cc.id} value={cc.id}>{cc.code} - {cc.name}</option>
                   ))}
-                </Select>
+                </SelectWithError>
               </div>
 
               <div className="md:col-span-3">
                 <label className="block text-sm font-medium mb-1">Link de Cotización (URL)</label>
-                <Input type="url" placeholder="https://ejemplo.com/cotizacion" value={form.linkCotizacion} onChange={e => setForm(f => ({ ...f, linkCotizacion: e.target.value }))} />
+                <InputWithError 
+                  type="url" 
+                  placeholder="https://ejemplo.com/cotizacion" 
+                  value={form.linkCotizacion} 
+                  onChange={(e: any) => setForm(f => ({ ...f, linkCotizacion: e.target.value }))}
+                  error={fieldErrors.linkCotizacion}
+                />
               </div>
 
               <div className="md:col-span-3">
                 <label className="block text-sm font-medium mb-1">Comentario</label>
-                <Input placeholder="Comentarios adicionales" value={form.comentario} onChange={e => setForm(f => ({ ...f, comentario: e.target.value }))} />
+                <InputWithError 
+                  placeholder="Comentarios adicionales" 
+                  value={form.comentario} 
+                  onChange={(e: any) => setForm(f => ({ ...f, comentario: e.target.value }))}
+                  error={fieldErrors.comentario}
+                />
               </div>
 
               <div className="md:col-span-3 flex gap-2">
@@ -410,7 +720,6 @@ export default function PurchaseOrdersPage() {
               <Table>
                 <thead>
                   <tr>
-                    <Th>ID</Th>
                     <Th>Número OC</Th>
                     <Th>Proveedor</Th>
                     <Th>Moneda</Th>
@@ -425,7 +734,6 @@ export default function PurchaseOrdersPage() {
                 <tbody>
                   {filteredOcs.map((oc: any) => (
                     <tr key={oc.id}>
-                      <Td>{oc.id}</Td>
                       <Td>{oc.numeroOc || "-"}</Td>
                       <Td>{oc.proveedor}</Td>
                       <Td>{oc.moneda}</Td>

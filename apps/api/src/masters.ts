@@ -29,15 +29,15 @@ const articuloSchema = z.object({
 
 const managementSchema = z.object({
   id: z.number().int().positive().optional(),
-  code: z.string().min(1),
-  name: z.string().min(1),
+  code: z.string().min(1).optional(), // DEPRECATED
+  name: z.string().min(1).trim(),
   active: z.boolean().optional()
 });
 
 const areaSchema = z.object({
   id: z.number().int().positive().optional(),
-  code: z.string().min(1),
-  name: z.string().min(1),
+  code: z.string().min(1).optional(), // DEPRECATED
+  name: z.string().min(1).trim(),
   managementId: z.number().int().positive(),
   active: z.boolean().optional()
 });
@@ -165,22 +165,55 @@ export async function registerMasterRoutes(app: FastifyInstance) {
   // Managements (Gerencias)
   app.get("/managements", async () => 
     prisma.management.findMany({ 
-      orderBy: { code: "asc" },
-      include: { areas: { orderBy: { code: "asc" } } }
+      orderBy: { name: "asc" },
+      include: { areas: { orderBy: { name: "asc" } } }
     })
   );
 
   app.post("/managements", async (req, reply) => {
     const parsed = managementSchema.safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send(parsed.error);
-    const { id, active = true, ...data } = parsed.data;
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: "VALIDATION_ERROR",
+        issues: parsed.error.errors.map(err => ({
+          path: err.path,
+          message: err.message
+        }))
+      });
+    }
+    
+    const { id, active = true, name, code } = parsed.data;
+    
+    // Verificar unicidad de nombre (case-insensitive)
+    const existing = await prisma.management.findFirst({
+      where: {
+        name: { equals: name, mode: "insensitive" },
+        ...(id ? { id: { not: id } } : {})
+      }
+    });
+    
+    if (existing) {
+      return reply.code(422).send({
+        error: "VALIDATION_ERROR",
+        issues: [{ path: ["name"], message: "El nombre ya existe" }]
+      });
+    }
+    
     try {
       if (id) {
-        return await prisma.management.update({ where: { id }, data: { ...data, active } });
+        return await prisma.management.update({ 
+          where: { id }, 
+          data: { name, code: code || null, active },
+          include: { areas: true }
+        });
       }
-      return await prisma.management.create({ data: { ...data, active } });
-    } catch (err) {
-      return reply.code(400).send({ error: "no se pudo guardar la gerencia", details: err });
+      return await prisma.management.create({ 
+        data: { name, code: code || null, active },
+        include: { areas: true }
+      });
+    } catch (err: any) {
+      console.error("Error saving management:", err);
+      return reply.code(500).send({ error: "Error al guardar la gerencia" });
     }
   });
 
@@ -198,36 +231,64 @@ export async function registerMasterRoutes(app: FastifyInstance) {
   // Areas
   app.get("/areas", async () => 
     prisma.area.findMany({ 
-      orderBy: { code: "asc" },
+      orderBy: { name: "asc" },
       include: { management: true }
     })
   );
 
   app.post("/areas", async (req, reply) => {
     const parsed = areaSchema.safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send(parsed.error);
-    const { id, active = true, managementId, ...data } = parsed.data;
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: "VALIDATION_ERROR",
+        issues: parsed.error.errors.map(err => ({
+          path: err.path,
+          message: err.message
+        }))
+      });
+    }
+    
+    const { id, active = true, managementId, name, code } = parsed.data;
     
     // Verificar que la gerencia existe
     const management = await prisma.management.findUnique({ where: { id: managementId } });
     if (!management) {
-      return reply.code(400).send({ error: "gerencia no encontrada" });
+      return reply.code(422).send({
+        error: "VALIDATION_ERROR",
+        issues: [{ path: ["managementId"], message: "Gerencia no encontrada" }]
+      });
+    }
+    
+    // Verificar unicidad de nombre (case-insensitive)
+    const existing = await prisma.area.findFirst({
+      where: {
+        name: { equals: name, mode: "insensitive" },
+        ...(id ? { id: { not: id } } : {})
+      }
+    });
+    
+    if (existing) {
+      return reply.code(422).send({
+        error: "VALIDATION_ERROR",
+        issues: [{ path: ["name"], message: "El nombre ya existe" }]
+      });
     }
 
     try {
       if (id) {
         return await prisma.area.update({ 
           where: { id }, 
-          data: { ...data, managementId, active },
+          data: { name, code: code || null, managementId, active },
           include: { management: true }
         });
       }
       return await prisma.area.create({ 
-        data: { ...data, managementId, active },
+        data: { name, code: code || null, managementId, active },
         include: { management: true }
       });
-    } catch (err) {
-      return reply.code(400).send({ error: "no se pudo guardar el área", details: err });
+    } catch (err: any) {
+      console.error("Error saving area:", err);
+      return reply.code(500).send({ error: "Error al guardar el área" });
     }
   });
 

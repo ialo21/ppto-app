@@ -12,14 +12,18 @@ type ExpenseConcept = { id: number; name: string; packageId: number };
 type ExpensePackage = { id: number; name: string; concepts: ExpenseConcept[] };
 type CostCenter = { id: number; code: string; name: string };
 type Articulo = { id: number; code: string; name: string };
-type Management = { id: number; code: string; name: string; active: boolean; areas: Area[] };
-type Area = { id: number; code: string; name: string; managementId: number; active: boolean; management?: Management };
+type Management = { id: number; code?: string | null; name: string; active: boolean; areas: Area[] };
+type Area = { id: number; code?: string | null; name: string; managementId: number; active: boolean; management?: Management };
 type Support = {
   id: number;
   code: string | null;
   name: string;
-  management: string | null;
-  area: string | null;
+  managementId?: number | null;
+  areaId?: number | null;
+  managementRef?: Management | null;
+  areaRef?: Area | null;
+  management: string | null;  // DEPRECATED: legacy
+  area: string | null;  // DEPRECATED: legacy
   expenseType: string | null;
   costCenter: CostCenter | null;
   expensePackage: { id: number; name: string } | null;
@@ -107,14 +111,14 @@ export default function CatalogsPage() {
   const [conceptForm, setConceptForm] = useState({ id: "", packageId: "", name: "" });
   const [costCenterForm, setCostCenterForm] = useState({ id: "", code: "", name: "" });
   const [articuloForm, setArticuloForm] = useState({ id: "", code: "", name: "" });
-  const [managementForm, setManagementForm] = useState({ id: "", code: "", name: "" });
-  const [areaForm, setAreaForm] = useState({ id: "", code: "", name: "", managementId: "" });
+  const [managementForm, setManagementForm] = useState({ id: "", name: "" });
+  const [areaForm, setAreaForm] = useState({ id: "", name: "", managementId: "" });
   const [supportForm, setSupportForm] = useState({
     id: "",
     name: "",
     code: "",
-    management: "",
-    area: "",
+    managementId: "",  // Cambiado de string "management" a ID
+    areaId: "",  // Cambiado de string "area" a ID
     costCenterId: "",
     packageId: "",
     conceptId: "",
@@ -139,40 +143,14 @@ export default function CatalogsPage() {
     return conceptRows;
   }, [packagesQuery.data, conceptRows, supportForm.packageId]);
 
-  const managementOptions = useMemo<ManagementOption[]>(() => {
-    const map = new Map<string, Set<string>>();
-    (supportsQuery.data || []).forEach(support => {
-      if (!support.management) return;
-      if (!map.has(support.management)) {
-        map.set(support.management, new Set<string>());
-      }
-      if (support.area) {
-        map.get(support.management)!.add(support.area);
-      }
-    });
-    return Array.from(map.entries())
-      .map(([management, areas]) => ({
-        management,
-        areas: Array.from(areas).sort((a, b) => a.localeCompare(b))
-      }))
-      .sort((a, b) => a.management.localeCompare(b.management));
-  }, [supportsQuery.data]);
-
-  const allAreas = useMemo<string[]>(() => {
-    const set = new Set<string>();
-    (supportsQuery.data || []).forEach(({ area }) => {
-      if (area) set.add(area);
-    });
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [supportsQuery.data]);
-
-  const areaOptions = useMemo<string[]>(() => {
-    if (supportForm.management) {
-      const match = managementOptions.find(option => option.management === supportForm.management);
-      if (match) return match.areas;
+  // Áreas disponibles según la Gerencia seleccionada
+  const availableAreas = useMemo(() => {
+    if (supportForm.managementId) {
+      const mgmt = (managementsQuery.data || []).find(m => m.id === Number(supportForm.managementId));
+      return mgmt?.areas || [];
     }
-    return allAreas;
-  }, [supportForm.management, managementOptions, allAreas]);
+    return areasQuery.data || [];
+  }, [supportForm.managementId, managementsQuery.data, areasQuery.data]);
 
   const savePackage = useMutation({
     mutationFn: async () => {
@@ -289,31 +267,46 @@ export default function CatalogsPage() {
     onError: () => toast.error("No se pudo eliminar el artículo")
   });
 
+  const [managementErrors, setManagementErrors] = useState<Record<string, string>>({});
+
   const saveManagement = useMutation({
     mutationFn: async () => {
-      const code = managementForm.code.trim();
       const name = managementForm.name.trim();
-      if (!code || !name) throw new Error("Completa los campos requeridos");
-      const payload: { id?: number; code: string; name: string } = { code, name };
+      if (!name) throw new Error("El nombre es obligatorio");
+      const payload: { id?: number; name: string } = { name };
       if (managementForm.id) payload.id = Number(managementForm.id);
       return (await api.post("/managements", payload)).data;
     },
     onSuccess: () => {
       toast.success("Gerencia guardada");
-      setManagementForm({ id: "", code: "", name: "" });
+      setManagementForm({ id: "", name: "" });
+      setManagementErrors({});
       queryClient.invalidateQueries({ queryKey: ["managements"] });
       queryClient.invalidateQueries({ queryKey: ["areas"] });
       queryClient.invalidateQueries({ queryKey: ["supports"] });
     },
-    onError: () => toast.error("No se pudo guardar la gerencia")
+    onError: (error: any) => {
+      if (error.response?.status === 422 && error.response?.data?.issues) {
+        const errors: Record<string, string> = {};
+        error.response.data.issues.forEach((issue: any) => {
+          const field = issue.path.join(".");
+          errors[field] = issue.message;
+        });
+        setManagementErrors(errors);
+        toast.error("Revisa los campos resaltados");
+      } else {
+        toast.error("No se pudo guardar la gerencia");
+      }
+    }
   });
 
   const deleteManagement = useMutation({
     mutationFn: async (id: number) => (await api.delete(`/managements/${id}`)).data,
     onSuccess: () => {
       toast.success("Gerencia eliminada");
-      if (managementForm.id) setManagementForm({ id: "", code: "", name: "" });
+      if (managementForm.id) setManagementForm({ id: "", name: "" });
       if (selectedManagementId) setSelectedManagementId(null);
+      setManagementErrors({});
       queryClient.invalidateQueries({ queryKey: ["managements"] });
       queryClient.invalidateQueries({ queryKey: ["areas"] });
       queryClient.invalidateQueries({ queryKey: ["supports"] });
@@ -321,14 +314,14 @@ export default function CatalogsPage() {
     onError: () => toast.error("No se pudo eliminar la gerencia")
   });
 
+  const [areaErrors, setAreaErrors] = useState<Record<string, string>>({});
+
   const saveArea = useMutation({
     mutationFn: async () => {
-      const code = areaForm.code.trim();
       const name = areaForm.name.trim();
       const managementId = areaForm.managementId || (selectedManagementId ? String(selectedManagementId) : "");
-      if (!code || !name || !managementId) throw new Error("Completa los campos requeridos");
-      const payload: { id?: number; code: string; name: string; managementId: number } = { 
-        code, 
+      if (!name || !managementId) throw new Error("Completa los campos requeridos");
+      const payload: { id?: number; name: string; managementId: number } = { 
         name, 
         managementId: Number(managementId) 
       };
@@ -337,25 +330,41 @@ export default function CatalogsPage() {
     },
     onSuccess: () => {
       toast.success("Área guardada");
-      setAreaForm({ id: "", code: "", name: "", managementId: "" });
+      setAreaForm({ id: "", name: "", managementId: "" });
+      setAreaErrors({});
       queryClient.invalidateQueries({ queryKey: ["areas"] });
       queryClient.invalidateQueries({ queryKey: ["managements"] });
       queryClient.invalidateQueries({ queryKey: ["supports"] });
     },
-    onError: () => toast.error("No se pudo guardar el área")
+    onError: (error: any) => {
+      if (error.response?.status === 422 && error.response?.data?.issues) {
+        const errors: Record<string, string> = {};
+        error.response.data.issues.forEach((issue: any) => {
+          const field = issue.path.join(".");
+          errors[field] = issue.message;
+        });
+        setAreaErrors(errors);
+        toast.error("Revisa los campos resaltados");
+      } else {
+        toast.error("No se pudo guardar el área");
+      }
+    }
   });
 
   const deleteArea = useMutation({
     mutationFn: async (id: number) => (await api.delete(`/areas/${id}`)).data,
     onSuccess: () => {
       toast.success("Área eliminada");
-      if (areaForm.id) setAreaForm({ id: "", code: "", name: "", managementId: "" });
+      if (areaForm.id) setAreaForm({ id: "", name: "", managementId: "" });
+      setAreaErrors({});
       queryClient.invalidateQueries({ queryKey: ["areas"] });
       queryClient.invalidateQueries({ queryKey: ["managements"] });
       queryClient.invalidateQueries({ queryKey: ["supports"] });
     },
     onError: () => toast.error("No se pudo eliminar el área")
   });
+
+  const [supportErrors, setSupportErrors] = useState<Record<string, string>>({});
 
   const saveSupport = useMutation({
     mutationFn: async () => {
@@ -365,8 +374,8 @@ export default function CatalogsPage() {
         id: supportForm.id ? Number(supportForm.id) : undefined,
         name,
         code: supportForm.code.trim() || undefined,
-        management: supportForm.management.trim() || undefined,
-        area: supportForm.area.trim() || undefined,
+        managementId: supportForm.managementId ? Number(supportForm.managementId) : undefined,
+        areaId: supportForm.areaId ? Number(supportForm.areaId) : undefined,
         expenseType: supportForm.expenseType || undefined,
         active: true
       };
@@ -384,16 +393,29 @@ export default function CatalogsPage() {
         id: "",
         name: "",
         code: "",
-        management: "",
-        area: "",
+        managementId: "",
+        areaId: "",
         costCenterId: "",
         packageId: "",
         conceptId: "",
         expenseType: ""
       });
+      setSupportErrors({});
       queryClient.invalidateQueries({ queryKey: ["supports"] });
     },
-    onError: () => toast.error("No se pudo guardar el sustento")
+    onError: (error: any) => {
+      if (error.response?.status === 422 && error.response?.data?.issues) {
+        const errors: Record<string, string> = {};
+        error.response.data.issues.forEach((issue: any) => {
+          const field = issue.path.join(".");
+          errors[field] = issue.message;
+        });
+        setSupportErrors(errors);
+        toast.error("Revisa los campos resaltados");
+      } else {
+        toast.error("No se pudo guardar el sustento");
+      }
+    }
   });
 
   const deleteSupport = useMutation({
@@ -405,14 +427,15 @@ export default function CatalogsPage() {
           id: "",
           name: "",
           code: "",
-          management: "",
-          area: "",
+          managementId: "",
+          areaId: "",
           costCenterId: "",
           packageId: "",
           conceptId: "",
           expenseType: ""
         });
       }
+      setSupportErrors({});
       queryClient.invalidateQueries({ queryKey: ["supports"] });
     },
     onError: () => toast.error("No se pudo eliminar el sustento")
@@ -673,7 +696,6 @@ export default function CatalogsPage() {
               <Table>
                 <thead>
                   <tr>
-                    <Th>ID</Th>
                     <Th>Código</Th>
                     <Th>Nombre</Th>
                     <Th>Acciones</Th>
@@ -682,7 +704,6 @@ export default function CatalogsPage() {
                 <tbody>
                   {(costCentersQuery.data || []).map(cc => (
                     <tr key={cc.id}>
-                      <Td>{cc.id}</Td>
                       <Td>{cc.code}</Td>
                       <Td>{cc.name}</Td>
                       <Td>
@@ -752,7 +773,6 @@ export default function CatalogsPage() {
               <Table>
                 <thead>
                   <tr>
-                    <Th>ID</Th>
                     <Th>Código</Th>
                     <Th>Nombre</Th>
                     <Th>Acciones</Th>
@@ -761,7 +781,6 @@ export default function CatalogsPage() {
                 <tbody>
                   {(articulosQuery.data || []).map(art => (
                     <tr key={art.id}>
-                      <Td>{art.id}</Td>
                       <Td>{art.code}</Td>
                       <Td>{art.name}</Td>
                       <Td>
@@ -801,19 +820,18 @@ export default function CatalogsPage() {
                 )}
               </div>
               <div className="mt-4 space-y-3">
-                <Input
-                  placeholder="Código"
-                  value={managementForm.code}
-                  onChange={e => setManagementForm(f => ({ ...f, code: e.target.value }))}
-                />
-                <Input
-                  placeholder="Nombre"
-                  value={managementForm.name}
-                  onChange={e => setManagementForm(f => ({ ...f, name: e.target.value }))}
-                />
+                <div>
+                  <Input
+                    placeholder="Nombre"
+                    value={managementForm.name}
+                    onChange={e => setManagementForm(f => ({ ...f, name: e.target.value }))}
+                    className={managementErrors.name ? "border-red-500" : ""}
+                  />
+                  {managementErrors.name && <p className="text-xs text-red-600 mt-1">{managementErrors.name}</p>}
+                </div>
                 <Button 
                   onClick={() => saveManagement.mutate()} 
-                  disabled={saveManagement.isPending || !managementForm.code.trim() || !managementForm.name.trim()}
+                  disabled={saveManagement.isPending || !managementForm.name.trim()}
                 >
                   {managementForm.id ? "Actualizar Gerencia" : "Crear Gerencia"}
                 </Button>
@@ -888,30 +906,33 @@ export default function CatalogsPage() {
                 )}
               </div>
               <div className="mt-4 space-y-3">
-                <Select
-                  value={areaForm.managementId || (selectedManagementId ? String(selectedManagementId) : "")}
-                  onChange={e => setAreaForm(f => ({ ...f, managementId: e.target.value }))}
-                >
-                  <option value="">Selecciona una gerencia</option>
-                  {(managementsQuery.data || []).map(mgmt => (
-                    <option key={mgmt.id} value={mgmt.id}>
-                      {mgmt.name}
-                    </option>
-                  ))}
-                </Select>
-                <Input
-                  placeholder="Código"
-                  value={areaForm.code}
-                  onChange={e => setAreaForm(f => ({ ...f, code: e.target.value }))}
-                />
-                <Input
-                  placeholder="Nombre"
-                  value={areaForm.name}
-                  onChange={e => setAreaForm(f => ({ ...f, name: e.target.value }))}
-                />
+                <div>
+                  <Select
+                    value={areaForm.managementId || (selectedManagementId ? String(selectedManagementId) : "")}
+                    onChange={e => setAreaForm(f => ({ ...f, managementId: e.target.value }))}
+                    className={areaErrors.managementId ? "border-red-500" : ""}
+                  >
+                    <option value="">Selecciona una gerencia</option>
+                    {(managementsQuery.data || []).map(mgmt => (
+                      <option key={mgmt.id} value={mgmt.id}>
+                        {mgmt.name}
+                      </option>
+                    ))}
+                  </Select>
+                  {areaErrors.managementId && <p className="text-xs text-red-600 mt-1">{areaErrors.managementId}</p>}
+                </div>
+                <div>
+                  <Input
+                    placeholder="Nombre"
+                    value={areaForm.name}
+                    onChange={e => setAreaForm(f => ({ ...f, name: e.target.value }))}
+                    className={areaErrors.name ? "border-red-500" : ""}
+                  />
+                  {areaErrors.name && <p className="text-xs text-red-600 mt-1">{areaErrors.name}</p>}
+                </div>
                 <Button
                   onClick={() => saveArea.mutate()}
-                  disabled={saveArea.isPending || !areaForm.code.trim() || !areaForm.name.trim() || !(areaForm.managementId || selectedManagementId)}
+                  disabled={saveArea.isPending || !areaForm.name.trim() || !(areaForm.managementId || selectedManagementId)}
                 >
                   {areaForm.id ? "Actualizar Área" : "Crear Área"}
                 </Button>
@@ -1018,34 +1039,42 @@ export default function CatalogsPage() {
                 value={supportForm.name}
                 onChange={e => setSupportForm(f => ({ ...f, name: e.target.value }))}
               />
-              <Select
-                value={supportForm.management}
-                onChange={e =>
-                  setSupportForm(f => ({
-                    ...f,
-                    management: e.target.value,
-                    area: ""
-                  }))
-                }
-              >
-                <option value="">Sin gerencia</option>
-                {managementOptions.map(option => (
-                  <option key={option.management} value={option.management}>
-                    {option.management}
-                  </option>
-                ))}
-              </Select>
-              <Select
-                value={supportForm.area}
-                onChange={e => setSupportForm(f => ({ ...f, area: e.target.value }))}
-              >
-                <option value="">Sin área</option>
-                {areaOptions.map(area => (
-                  <option key={area} value={area}>
-                    {area}
-                  </option>
-                ))}
-              </Select>
+              <div>
+                <Select
+                  value={supportForm.managementId}
+                  onChange={e =>
+                    setSupportForm(f => ({
+                      ...f,
+                      managementId: e.target.value,
+                      areaId: ""
+                    }))
+                  }
+                  className={supportErrors.managementId ? "border-red-500" : ""}
+                >
+                  <option value="">Sin gerencia</option>
+                  {(managementsQuery.data || []).map(mgmt => (
+                    <option key={mgmt.id} value={mgmt.id}>
+                      {mgmt.name}
+                    </option>
+                  ))}
+                </Select>
+                {supportErrors.managementId && <p className="text-xs text-red-600 mt-1">{supportErrors.managementId}</p>}
+              </div>
+              <div>
+                <Select
+                  value={supportForm.areaId}
+                  onChange={e => setSupportForm(f => ({ ...f, areaId: e.target.value }))}
+                  className={supportErrors.areaId ? "border-red-500" : ""}
+                >
+                  <option value="">Sin área</option>
+                  {availableAreas.map(area => (
+                    <option key={area.id} value={area.id}>
+                      {area.name}
+                    </option>
+                  ))}
+                </Select>
+                {supportErrors.areaId && <p className="text-xs text-red-600 mt-1">{supportErrors.areaId}</p>}
+              </div>
               <Select
                 value={supportForm.costCenterId}
                 onChange={e => setSupportForm(f => ({ ...f, costCenterId: e.target.value }))}
@@ -1118,7 +1147,6 @@ export default function CatalogsPage() {
               <Table>
                 <thead>
                   <tr>
-                    <Th>ID</Th>
                     <Th>Nombre</Th>
                     <Th>Código</Th>
                     <Th>Gerencia</Th>
@@ -1133,11 +1161,10 @@ export default function CatalogsPage() {
                 <tbody>
                   {(supportsQuery.data || []).map(support => (
                     <tr key={support.id}>
-                      <Td>{support.id}</Td>
                       <Td>{support.name}</Td>
                       <Td>{support.code || ""}</Td>
-                      <Td>{support.management || ""}</Td>
-                      <Td>{support.area || ""}</Td>
+                      <Td>{support.managementRef?.name || support.management || ""}</Td>
+                      <Td>{support.areaRef?.name || support.area || ""}</Td>
                       <Td>
                         {support.costCenter ? `${support.costCenter.code} — ${support.costCenter.name}` : ""}
                       </Td>
@@ -1154,8 +1181,8 @@ export default function CatalogsPage() {
                                 id: String(support.id),
                                 name: support.name,
                                 code: support.code ?? "",
-                                management: support.management ?? "",
-                                area: support.area ?? "",
+                                managementId: support.managementRef?.id ? String(support.managementRef.id) : "",
+                                areaId: support.areaRef?.id ? String(support.areaRef.id) : "",
                                 costCenterId: support.costCenter ? String(support.costCenter.id) : "",
                                 packageId: support.expensePackage ? String(support.expensePackage.id) : "",
                                 conceptId: support.expenseConcept ? String(support.expenseConcept.id) : "",

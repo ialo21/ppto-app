@@ -132,8 +132,8 @@ model Articulo {
 
 model Management {
   id       Int       @id @default(autoincrement())
-  code     String    @unique
-  name     String
+  code     String?   // DEPRECATED: usar name directamente
+  name     String    // Unicidad case-insensitive via índice
   active   Boolean   @default(true)
   supports Support[]
   areas    Area[]
@@ -141,8 +141,8 @@ model Management {
 
 model Area {
   id           Int         @id @default(autoincrement())
-  code         String      @unique
-  name         String
+  code         String?     // DEPRECATED: usar name directamente
+  name         String      // Unicidad case-insensitive via índice
   managementId Int
   management   Management  @relation(fields: [managementId], references: [id], onDelete: Cascade)
   active       Boolean     @default(true)
@@ -205,19 +205,41 @@ model PurchaseOrder {
 }
 
 model Invoice {
-  id             Int        @id @default(autoincrement())
-  vendorId       Int?
-  vendor         Vendor?    @relation(fields: [vendorId], references: [id])
-  docType        InvDocType @default(FACTURA)
-  numberNorm     String?
-  currency       String     @default("PEN")  // 'PEN' | 'USD'
-  totalForeign   Decimal?   // negativo si NOTA_CREDITO
-  totalLocal     Decimal?   // negativo si NOTA_CREDITO
-  statusCurrent  InvStatus  @default(INGRESADO)
-  ultimusIncident String?
-  approvedAt     DateTime?
-  statusHistory  InvoiceStatusHistory[]
-  controlLines   ControlLine[]
+  id              Int        @id @default(autoincrement())
+  
+  // NUEVO: Relación con OC (requerido para nuevas facturas)
+  ocId            Int?
+  oc              OC?        @relation(fields: [ocId], references: [id], onDelete: SetNull)
+  
+  // DEPRECATED: vendorId ahora se deriva de OC
+  vendorId        Int?
+  vendor          Vendor?    @relation(fields: [vendorId], references: [id])
+  
+  docType         InvDocType @default(FACTURA)
+  numberNorm      String?
+  
+  // Moneda se hereda de la OC
+  currency        String     @default("PEN")  // 'PEN' | 'USD'
+  
+  // NUEVO: Monto principal (sin IGV)
+  montoSinIgv     Decimal?
+  
+  // DEPRECATED: campos legacy (mantener para compatibilidad)
+  totalForeign    Decimal?   // negativo si NOTA_CREDITO
+  totalLocal      Decimal?   // negativo si NOTA_CREDITO
+  
+  statusCurrent   InvStatus  @default(INGRESADO)
+  ultimusIncident String?    // Incidente Ultimus
+  detalle         String?    @db.Text
+  approvedAt      DateTime?
+  
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  
+  statusHistory   InvoiceStatusHistory[]
+  controlLines    ControlLine[]
+  
+  @@index([ocId], name: "ix_invoice_oc")
 }
 
 model InvoiceStatusHistory {
@@ -309,6 +331,9 @@ model OC {
   
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
+  
+  // NUEVO: Relación con Facturas
+  invoices               Invoice[]
   
   @@index([supportId], name: "ix_oc_support")
   @@index([estado], name: "ix_oc_estado")

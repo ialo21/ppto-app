@@ -10,7 +10,20 @@ const createOcSchema = z.object({
   budgetPeriodToId: z.number().int().positive(),
   incidenteOc: z.string().trim().optional(),
   solicitudOc: z.string().trim().optional(),
-  fechaRegistro: z.string().datetime().or(z.date()).optional(),
+  fechaRegistro: z.string()
+    .refine((val) => {
+      // Aceptar formato ISO completo (YYYY-MM-DDTHH:mm:ss.sssZ) o ISO fecha (YYYY-MM-DD)
+      const isoDateTimeRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z?$/;
+      const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      
+      if (!isoDateTimeRegex.test(val) && !isoDateRegex.test(val)) {
+        return false;
+      }
+      
+      const date = new Date(val);
+      return !isNaN(date.getTime());
+    }, "Fecha inválida. Usa formato ISO (YYYY-MM-DD o YYYY-MM-DDTHH:mm:ssZ)")
+    .optional(),
   supportId: z.number().int().positive(),
   periodoEnFechasText: z.string().trim().optional(),
   descripcion: z.string().trim().optional(),
@@ -111,7 +124,15 @@ export async function registerOcRoutes(app: FastifyInstance) {
   // Create OC
   app.post("/ocs", async (req, reply) => {
     const parsed = createOcSchema.safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send({ error: "Datos inválidos", details: parsed.error });
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: "VALIDATION_ERROR",
+        issues: parsed.error.errors.map(err => ({
+          path: err.path,
+          message: err.message
+        }))
+      });
+    }
 
     const data = parsed.data;
 
@@ -167,7 +188,15 @@ export async function registerOcRoutes(app: FastifyInstance) {
   app.patch("/ocs/:id", async (req, reply) => {
     const id = Number((req.params as any).id);
     const parsed = updateOcSchema.safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send({ error: "Datos inválidos", details: parsed.error });
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: "VALIDATION_ERROR",
+        issues: parsed.error.errors.map(err => ({
+          path: err.path,
+          message: err.message
+        }))
+      });
+    }
 
     const data = parsed.data;
 

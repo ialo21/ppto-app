@@ -61,14 +61,21 @@ async function calcularConsumoOC(ocId: number, excludeInvoiceId?: number): Promi
 }
 
 export async function registerInvoiceRoutes(app: FastifyInstance) {
-  // List (con OC incluida)
+  // List (con OC incluida + Paquete, Concepto, CECO)
   app.get("/invoices", async (req, reply) => {
     const items = await prisma.invoice.findMany({
       orderBy: [{ createdAt: "desc" }],
       include: {
         oc: {
           include: {
-            support: true
+            support: {
+              include: {
+                expensePackage: true,
+                expenseConcept: true,
+                costCenter: true
+              }
+            },
+            ceco: true  // CECO directo de OC (si existe)
           }
         },
         vendor: true  // Legacy
@@ -98,8 +105,16 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
 
   // Create (FACTURA | NOTA_CREDITO)
   app.post("/invoices", async (req, reply) => {
+    // Log en modo desarrollo
+    if (process.env.NODE_ENV === "development") {
+      console.log("📥 POST /invoices - Payload recibido:", JSON.stringify(req.body, null, 2));
+    }
+
     const parsed = createInvoiceSchema.safeParse(req.body);
     if (!parsed.success) {
+      if (process.env.NODE_ENV === "development") {
+        console.error("❌ Validación Zod fallida:", parsed.error.errors);
+      }
       return reply.code(422).send({
         error: "VALIDATION_ERROR",
         issues: parsed.error.errors.map(err => ({
@@ -114,9 +129,17 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
     // 1. Verificar que la OC existe
     const oc = await prisma.oC.findUnique({
       where: { id: data.ocId }
+    }).catch(err => {
+      if (process.env.NODE_ENV === "development") {
+        console.error("❌ Error al buscar OC:", err);
+      }
+      throw err;
     });
 
     if (!oc) {
+      if (process.env.NODE_ENV === "development") {
+        console.error(`❌ OC con ID ${data.ocId} no encontrada`);
+      }
       return reply.code(422).send({
         error: "VALIDATION_ERROR",
         issues: [{ path: ["ocId"], message: "OC no encontrada" }]
@@ -169,6 +192,11 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
         totalForeign: null,
         totalLocal: null
       }
+    }).catch(err => {
+      if (process.env.NODE_ENV === "development") {
+        console.error("❌ Error al crear factura en DB:", err);
+      }
+      throw err;
     });
 
     // 5. Crear primer estado en historial
@@ -177,7 +205,16 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
         invoiceId: created.id,
         status: "INGRESADO"
       }
+    }).catch(err => {
+      if (process.env.NODE_ENV === "development") {
+        console.error("❌ Error al crear historial de estado:", err);
+      }
+      // No lanzar error aquí, la factura ya fue creada
     });
+
+    if (process.env.NODE_ENV === "development") {
+      console.log("✅ Factura creada exitosamente:", created.id);
+    }
 
     return created;
   });

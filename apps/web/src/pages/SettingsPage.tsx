@@ -814,7 +814,7 @@ export default function CatalogsPage() {
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold">Gerencias</h2>
                 {managementForm.id && (
-                  <Button variant="ghost" size="sm" onClick={() => setManagementForm({ id: "", code: "", name: "" })}>
+                  <Button variant="ghost" size="sm" onClick={() => setManagementForm({ id: "", name: "" })}>
                     Cancelar
                   </Button>
                 )}
@@ -870,7 +870,7 @@ export default function CatalogsPage() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => setManagementForm({ id: String(mgmt.id), code: mgmt.code, name: mgmt.name })}
+                              onClick={() => setManagementForm({ id: String(mgmt.id), name: mgmt.name })}
                             >
                               Editar
                             </Button>
@@ -900,7 +900,7 @@ export default function CatalogsPage() {
                   )}
                 </h2>
                 {areaForm.id && (
-                  <Button variant="ghost" size="sm" onClick={() => setAreaForm({ id: "", code: "", name: "", managementId: "" })}>
+                  <Button variant="ghost" size="sm" onClick={() => setAreaForm({ id: "", name: "", managementId: "" })}>
                     Cancelar
                   </Button>
                 )}
@@ -975,7 +975,6 @@ export default function CatalogsPage() {
                                   onClick={() =>
                                     setAreaForm({
                                       id: String(area.id),
-                                      code: area.code,
                                       name: area.name,
                                       managementId: String(area.managementId)
                                     })
@@ -1014,8 +1013,8 @@ export default function CatalogsPage() {
                       id: "",
                       name: "",
                       code: "",
-                      management: "",
-                      area: "",
+                      managementId: "",
+                      areaId: "",
                       costCenterId: "",
                       packageId: "",
                       conceptId: "",

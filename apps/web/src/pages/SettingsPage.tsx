@@ -119,18 +119,22 @@ export default function CatalogsPage() {
   const [articuloSearch, setArticuloSearch] = useState("");
   const [managementForm, setManagementForm] = useState({ id: "", name: "" });
   const [areaForm, setAreaForm] = useState({ id: "", name: "", managementId: "" });
-  const [supportForm, setSupportForm] = useState({
+  
+  // Estado inicial del formulario de Sustentos (para reset seguro)
+  const INITIAL_SUPPORT_FORM = {
     id: "",
     name: "",
     code: "",
-    managementId: "",  // Cambiado de string "management" a ID
-    areaId: "",  // Cambiado de string "area" a ID
-    costCenterId: "",  // DEPRECATED: mantener por compatibilidad
-    costCenterIds: [] as number[],  // M:N: array de IDs de CECOs
+    managementId: "",
+    areaId: "",
+    costCenterId: "",  // DEPRECATED
+    costCenterIds: [] as number[],  // M:N
     packageId: "",
     conceptId: "",
     expenseType: ""
-  });
+  };
+  
+  const [supportForm, setSupportForm] = useState(INITIAL_SUPPORT_FORM);
   const [costCenterSearchSupport, setCostCenterSearchSupport] = useState("");  // Para búsqueda en selector de CECOs de Sustentos
 
   const conceptRows = useMemo(() => {
@@ -389,8 +393,9 @@ export default function CatalogsPage() {
       };
       if (supportForm.costCenterId) payload.costCenterId = Number(supportForm.costCenterId);
       // M:N: Enviar array de costCenterIds
-      if (supportForm.costCenterIds.length > 0) {
-        payload.costCenterIds = supportForm.costCenterIds;
+      const costCenterIds = supportForm.costCenterIds ?? [];
+      if (costCenterIds.length > 0) {
+        payload.costCenterIds = costCenterIds;
       }
       if (supportForm.conceptId) {
         payload.expenseConceptId = Number(supportForm.conceptId);
@@ -401,18 +406,7 @@ export default function CatalogsPage() {
     },
     onSuccess: () => {
       toast.success("Sustento guardado");
-      setSupportForm({
-        id: "",
-        name: "",
-        code: "",
-        managementId: "",
-        areaId: "",
-        costCenterId: "",
-        costCenterIds: [],
-        packageId: "",
-        conceptId: "",
-        expenseType: ""
-      });
+      setSupportForm(INITIAL_SUPPORT_FORM);
       setSupportErrors({});
       setCostCenterSearchSupport("");
       queryClient.invalidateQueries({ queryKey: ["supports"] });
@@ -437,18 +431,7 @@ export default function CatalogsPage() {
     onSuccess: () => {
       toast.success("Sustento y sus registros asociados eliminados correctamente");
       if (supportForm.id) {
-        setSupportForm({
-          id: "",
-          name: "",
-          code: "",
-          managementId: "",
-          areaId: "",
-          costCenterId: "",
-          costCenterIds: [],
-          packageId: "",
-          conceptId: "",
-          expenseType: ""
-        });
+        setSupportForm(INITIAL_SUPPORT_FORM);
       }
       setSupportErrors({});
       queryClient.invalidateQueries({ queryKey: ["supports"] });
@@ -1050,19 +1033,11 @@ export default function CatalogsPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() =>
-                    setSupportForm({
-                      id: "",
-                      name: "",
-                      code: "",
-                      managementId: "",
-                      areaId: "",
-                      costCenterId: "",
-                      packageId: "",
-                      conceptId: "",
-                      expenseType: ""
-                    })
-                  }
+                  onClick={() => {
+                    setSupportForm(INITIAL_SUPPORT_FORM);
+                    setSupportErrors({});
+                    setCostCenterSearchSupport("");
+                  }}
                 >
                   Cancelar
                 </Button>
@@ -1132,10 +1107,11 @@ export default function CatalogsPage() {
                     {(costCentersQuery.data || [])
                       .filter(cc => {
                         const search = costCenterSearchSupport.toLowerCase();
+                        const selectedIds = supportForm.costCenterIds ?? [];
                         return (
                           cc.code.toLowerCase().includes(search) ||
                           (cc.name?.toLowerCase() || "").includes(search)
-                        ) && !supportForm.costCenterIds.includes(cc.id);
+                        ) && !selectedIds.includes(cc.id);
                       })
                       .map(cc => (
                         <button
@@ -1144,8 +1120,8 @@ export default function CatalogsPage() {
                           className="w-full text-left px-2 py-1 hover:bg-slate-100 rounded text-sm"
                           onClick={() => {
                             setSupportForm(f => ({
-                              ...f,
-                              costCenterIds: [...f.costCenterIds, cc.id]
+                              ...(f ?? INITIAL_SUPPORT_FORM),
+                              costCenterIds: [...(f?.costCenterIds ?? []), cc.id]
                             }));
                             setCostCenterSearchSupport("");
                           }}
@@ -1156,34 +1132,37 @@ export default function CatalogsPage() {
                   </div>
                 )}
                 {/* Chips de CECOs seleccionados */}
-                {supportForm.costCenterIds.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {supportForm.costCenterIds.map(ccId => {
-                      const cc = (costCentersQuery.data || []).find(c => c.id === ccId);
-                      if (!cc) return null;
-                      return (
-                        <span
-                          key={ccId}
-                          className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-md text-sm"
-                        >
-                          {cc.code} — {cc.name || "—"}
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setSupportForm(f => ({
-                                ...f,
-                                costCenterIds: f.costCenterIds.filter(id => id !== ccId)
-                              }))
-                            }
-                            className="text-blue-600 hover:text-blue-800"
+                {(() => {
+                  const selectedIds = supportForm.costCenterIds ?? [];
+                  return selectedIds.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {selectedIds.map(ccId => {
+                        const cc = (costCentersQuery.data || []).find(c => c.id === ccId);
+                        if (!cc) return null;
+                        return (
+                          <span
+                            key={ccId}
+                            className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-md text-sm"
                           >
-                            ×
-                          </button>
-                        </span>
-                      );
-                    })}
-                  </div>
-                )}
+                            {cc.code} — {cc.name || "—"}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSupportForm(f => ({
+                                  ...(f ?? INITIAL_SUPPORT_FORM),
+                                  costCenterIds: (f?.costCenterIds ?? []).filter(id => id !== ccId)
+                                }))
+                              }
+                              className="text-blue-600 hover:text-blue-800"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
                 {supportErrors.costCenterIds && (
                   <p className="text-xs text-red-600 mt-1">{supportErrors.costCenterIds}</p>
                 )}
@@ -1292,7 +1271,7 @@ export default function CatalogsPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() =>
+                            onClick={() => {
                               setSupportForm({
                                 id: String(support.id),
                                 name: support.name,
@@ -1300,12 +1279,13 @@ export default function CatalogsPage() {
                                 managementId: support.managementRef?.id ? String(support.managementRef.id) : "",
                                 areaId: support.areaRef?.id ? String(support.areaRef.id) : "",
                                 costCenterId: support.costCenter ? String(support.costCenter.id) : "",
-                                costCenterIds: support.costCenters ? support.costCenters.map(link => link.costCenter.id) : [],
+                                costCenterIds: (support.costCenters ?? []).map(link => link.costCenter.id),
                                 packageId: support.expensePackage ? String(support.expensePackage.id) : "",
                                 conceptId: support.expenseConcept ? String(support.expenseConcept.id) : "",
                                 expenseType: support.expenseType ?? ""
-                              })
-                            }
+                              });
+                              setCostCenterSearchSupport("");
+                            }}
                           >
                             Editar
                           </Button>

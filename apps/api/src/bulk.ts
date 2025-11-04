@@ -190,42 +190,44 @@ function generateTemplateCSV(): string {
     "packageName",
     "conceptName",
     "costCenterCode",
+    "costCenterCodes",
     "expenseType",
     "active"
   ];
 
   const examples = [
     // Managements
-    ["Management", "Gerencia de Tecnología", "", "", "", "", "", "", "", "true"],
-    ["Management", "Gerencia Comercial", "", "", "", "", "", "", "", "true"],
+    ["Management", "Gerencia de Tecnología", "", "", "", "", "", "", "", "", "true"],
+    ["Management", "Gerencia Comercial", "", "", "", "", "", "", "", "", "true"],
     
     // Areas
-    ["Area", "Desarrollo", "", "Gerencia de Tecnología", "", "", "", "", "", "true"],
-    ["Area", "Infraestructura", "", "Gerencia de Tecnología", "", "", "", "", "", "true"],
-    ["Area", "Ventas", "", "Gerencia Comercial", "", "", "", "", "", "true"],
+    ["Area", "Desarrollo", "", "Gerencia de Tecnología", "", "", "", "", "", "", "true"],
+    ["Area", "Infraestructura", "", "Gerencia de Tecnología", "", "", "", "", "", "", "true"],
+    ["Area", "Ventas", "", "Gerencia Comercial", "", "", "", "", "", "", "true"],
     
     // ExpensePackages
-    ["ExpensePackage", "Hardware", "", "", "", "", "", "", "", ""],
-    ["ExpensePackage", "Software", "", "", "", "", "", "", "", ""],
+    ["ExpensePackage", "Hardware", "", "", "", "", "", "", "", "", ""],
+    ["ExpensePackage", "Software", "", "", "", "", "", "", "", "", ""],
     
     // ExpenseConcepts
-    ["ExpenseConcept", "Laptops", "", "", "", "Hardware", "", "", "", ""],
-    ["ExpenseConcept", "Servidores", "", "", "", "Hardware", "", "", "", ""],
-    ["ExpenseConcept", "Licencias Microsoft", "", "", "", "Software", "", "", "", ""],
+    ["ExpenseConcept", "Laptops", "", "", "", "Hardware", "", "", "", "", ""],
+    ["ExpenseConcept", "Servidores", "", "", "", "Hardware", "", "", "", "", ""],
+    ["ExpenseConcept", "Licencias Microsoft", "", "", "", "Software", "", "", "", "", ""],
     
     // CostCenters (código único, nombres pueden duplicarse)
-    ["CostCenter", "Tecnología", "CC-001", "", "", "", "", "", "", ""],
-    ["CostCenter", "Operaciones", "CC-002", "", "", "", "", "", "", ""],
-    ["CostCenter", "Tecnología", "CC-003", "", "", "", "", "", "", ""],
+    ["CostCenter", "Tecnología", "CC-001", "", "", "", "", "", "", "", ""],
+    ["CostCenter", "Operaciones", "CC-002", "", "", "", "", "", "", "", ""],
+    ["CostCenter", "Tecnología", "CC-003", "", "", "", "", "", "", "", ""],
     
     // Articulos (código único, nombres pueden duplicarse)
-    ["Articulo", "Servicios Profesionales", "ART-001", "", "", "", "", "", "", ""],
-    ["Articulo", "Servicios Profesionales", "ART-002", "", "", "", "", "", "", ""],
-    ["Articulo", "Hardware", "ART-003", "", "", "", "", "", "", ""],
+    ["Articulo", "Servicios Profesionales", "ART-001", "", "", "", "", "", "", "", ""],
+    ["Articulo", "Servicios Profesionales", "ART-002", "", "", "", "", "", "", "", ""],
+    ["Articulo", "Hardware", "ART-003", "", "", "", "", "", "", "", ""],
     
-    // Supports
-    ["Support", "Soporte TI - Hardware", "SUP-001", "Gerencia de Tecnología", "Desarrollo", "Hardware", "Laptops", "CC-001", "ADMINISTRATIVO", "true"],
-    ["Support", "Soporte Ventas - Software", "SUP-002", "Gerencia Comercial", "Ventas", "Software", "Licencias Microsoft", "CC-002", "PRODUCTO", "true"]
+    // Supports (M:N con CECOs: usar costCenterCodes con ";" para múltiples)
+    ["Support", "Soporte TI - Hardware", "SUP-001", "Gerencia de Tecnología", "Desarrollo", "Hardware", "Laptops", "", "CC-001;CC-003", "ADMINISTRATIVO", "true"],
+    ["Support", "Soporte Ventas - Software", "SUP-002", "Gerencia Comercial", "Ventas", "Software", "Licencias Microsoft", "", "CC-002;CC-001", "PRODUCTO", "true"],
+    ["Support", "Soporte Infraestructura", "SUP-003", "Gerencia de Tecnología", "Infraestructura", "Hardware", "Servidores", "", "CC-001;CC-002;CC-003", "DISTRIBUIBLE", "true"]
   ];
 
   const lines = [headers.join(",")];
@@ -720,6 +722,7 @@ async function processSupport(data: any, rowNum: number, dryRun: boolean): Promi
     areaId = area.id;
   }
 
+  // DEPRECATED: costCenterCode (mantener por compatibilidad)
   let costCenterId: number | null = null;
   if (data.costCenterCode?.trim()) {
     const cc = await prisma.costCenter.findUnique({
@@ -735,6 +738,29 @@ async function processSupport(data: any, rowNum: number, dryRun: boolean): Promi
       };
     }
     costCenterId = cc.id;
+  }
+
+  // M:N: Parsear múltiples CECOs separados por ";"
+  const costCenterIds: number[] = [];
+  if (data.costCenterCodes?.trim()) {
+    const codesRaw = String(data.costCenterCodes).split(";").map((c: string) => c.trim()).filter((c: string) => c);
+    const uniqueCodes = [...new Set(codesRaw)];  // De-duplicar
+    
+    for (const code of uniqueCodes) {
+      const cc = await prisma.costCenter.findFirst({
+        where: { code: { equals: String(code), mode: "insensitive" } }
+      });
+      if (!cc) {
+        return {
+          row: rowNum,
+          type: "Support",
+          action: "error",
+          message: `Centro de costo "${code}" no encontrado`,
+          issues: [{ path: ["costCenterCodes"], message: `CECO "${code}" no existe` }]
+        };
+      }
+      costCenterIds.push(cc.id);
+    }
   }
 
   let expensePackageId: number | null = null;
@@ -819,28 +845,51 @@ async function processSupport(data: any, rowNum: number, dryRun: boolean): Promi
   if (existing) {
     // Actualizar
     if (!dryRun) {
-      await prisma.support.update({
-        where: { id: existing.id },
-        data: supportData
+      await prisma.$transaction(async tx => {
+        await tx.support.update({
+          where: { id: existing.id },
+          data: supportData
+        });
+
+        // Actualizar asociaciones M:N con CECOs (si se especifican)
+        if (costCenterIds.length > 0) {
+          // Eliminar asociaciones actuales
+          await tx.supportCostCenter.deleteMany({ where: { supportId: existing.id } });
+          // Crear nuevas asociaciones
+          await tx.supportCostCenter.createMany({
+            data: costCenterIds.map(ccId => ({ supportId: existing.id, costCenterId: ccId })),
+            skipDuplicates: true
+          });
+        }
       });
     }
     return {
       row: rowNum,
       type: "Support",
       action: "updated",
-      message: `Sustento "${name}" actualizado`
+      message: `Sustento "${name}" actualizado${costCenterIds.length > 0 ? ` con ${costCenterIds.length} CECO(s)` : ""}`
     };
   }
 
   if (!dryRun) {
-    await prisma.support.create({ data: supportData });
+    await prisma.$transaction(async tx => {
+      const newSupport = await tx.support.create({ data: supportData });
+      
+      // Crear asociaciones M:N con CECOs
+      if (costCenterIds.length > 0) {
+        await tx.supportCostCenter.createMany({
+          data: costCenterIds.map(ccId => ({ supportId: newSupport.id, costCenterId: ccId })),
+          skipDuplicates: true
+        });
+      }
+    });
   }
 
   return {
     row: rowNum,
     type: "Support",
     action: "created",
-    message: `Sustento "${name}" creado`
+    message: `Sustento "${name}" creado${costCenterIds.length > 0 ? ` con ${costCenterIds.length} CECO(s)` : ""}`
   };
 }
 

@@ -96,8 +96,8 @@ model Support {
   areaId           Int?
   areaRef          Area?              @relation(fields: [areaId], references: [id])
 
-  costCenterId     Int?
-  costCenter       CostCenter?        @relation(fields: [costCenterId], references: [id])
+  costCenterId     Int?  // DEPRECATED: usar costCenters (M:N)
+  costCenter       CostCenter?        @relation("LegacySupportCostCenter", fields: [costCenterId], references: [id])
 
   expensePackageId Int?
   expensePackage   ExpensePackage?    @relation(fields: [expensePackageId], references: [id])
@@ -113,14 +113,16 @@ model Support {
   budgetAllocations BudgetAllocation[]
   controlLines      ControlLine[]
   ocs               OC[]
+  costCenters       SupportCostCenter[]  // M:N con CostCenter
 }
 
 model CostCenter {
   id       Int       @id @default(autoincrement())
   code     String    @unique
   name     String?
-  supports Support[]
+  supports Support[] @relation("LegacySupportCostCenter")  // DEPRECATED: relación 1:N legacy
   ocs      OC[]
+  supportLinks SupportCostCenter[]  // M:N con Support
 }
 
 model Articulo {
@@ -338,4 +340,17 @@ model OC {
   @@index([supportId], name: "ix_oc_support")
   @@index([estado], name: "ix_oc_estado")
   @@index([fechaRegistro], name: "ix_oc_fecha_registro")
+}
+
+model SupportCostCenter {
+  id           Int        @id @default(autoincrement())
+  supportId    Int
+  support      Support    @relation(fields: [supportId], references: [id], onDelete: Cascade)
+  costCenterId Int
+  costCenter   CostCenter @relation(fields: [costCenterId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@unique([supportId, costCenterId], name: "ux_support_costcenter_pair")
+  @@index([supportId], name: "ix_supportcostcenter_support")
+  @@index([costCenterId], name: "ix_supportcostcenter_costcenter")
 }

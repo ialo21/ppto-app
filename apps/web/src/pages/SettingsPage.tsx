@@ -25,7 +25,8 @@ type Support = {
   management: string | null;  // DEPRECATED: legacy
   area: string | null;  // DEPRECATED: legacy
   expenseType: string | null;
-  costCenter: CostCenter | null;
+  costCenter: CostCenter | null;  // DEPRECATED: relación 1:N legacy
+  costCenters: Array<{ id: number; costCenter: CostCenter }>;  // M:N: múltiples CECOs
   expensePackage: { id: number; name: string } | null;
   expenseConcept: { id: number; name: string; packageId: number } | null;
 };
@@ -124,11 +125,13 @@ export default function CatalogsPage() {
     code: "",
     managementId: "",  // Cambiado de string "management" a ID
     areaId: "",  // Cambiado de string "area" a ID
-    costCenterId: "",
+    costCenterId: "",  // DEPRECATED: mantener por compatibilidad
+    costCenterIds: [] as number[],  // M:N: array de IDs de CECOs
     packageId: "",
     conceptId: "",
     expenseType: ""
   });
+  const [costCenterSearchSupport, setCostCenterSearchSupport] = useState("");  // Para búsqueda en selector de CECOs de Sustentos
 
   const conceptRows = useMemo(() => {
     const list: Array<ExpenseConcept & { packageName: string }> = [];
@@ -385,6 +388,10 @@ export default function CatalogsPage() {
         active: true
       };
       if (supportForm.costCenterId) payload.costCenterId = Number(supportForm.costCenterId);
+      // M:N: Enviar array de costCenterIds
+      if (supportForm.costCenterIds.length > 0) {
+        payload.costCenterIds = supportForm.costCenterIds;
+      }
       if (supportForm.conceptId) {
         payload.expenseConceptId = Number(supportForm.conceptId);
       } else if (supportForm.packageId) {
@@ -401,11 +408,13 @@ export default function CatalogsPage() {
         managementId: "",
         areaId: "",
         costCenterId: "",
+        costCenterIds: [],
         packageId: "",
         conceptId: "",
         expenseType: ""
       });
       setSupportErrors({});
+      setCostCenterSearchSupport("");
       queryClient.invalidateQueries({ queryKey: ["supports"] });
     },
     onError: (error: any) => {
@@ -435,6 +444,7 @@ export default function CatalogsPage() {
           managementId: "",
           areaId: "",
           costCenterId: "",
+          costCenterIds: [],
           packageId: "",
           conceptId: "",
           expenseType: ""
@@ -1106,17 +1116,78 @@ export default function CatalogsPage() {
                 </Select>
                 {supportErrors.areaId && <p className="text-xs text-red-600 mt-1">{supportErrors.areaId}</p>}
               </div>
-              <Select
-                value={supportForm.costCenterId}
-                onChange={e => setSupportForm(f => ({ ...f, costCenterId: e.target.value }))}
-              >
-                <option value="">Sin centro de costo</option>
-                {(costCentersQuery.data || []).map(cc => (
-                  <option key={cc.id} value={cc.id}>
-                    {cc.code} — {cc.name}
-                  </option>
-                ))}
-              </Select>
+              {/* Selector múltiple de CECOs */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Centros de costo (múltiples)</label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Buscar CECO por código o nombre..."
+                    value={costCenterSearchSupport}
+                    onChange={e => setCostCenterSearchSupport(e.target.value)}
+                  />
+                </div>
+                {/* Lista de CECOs filtrados */}
+                {costCenterSearchSupport.trim() && (
+                  <div className="max-h-40 overflow-y-auto border rounded-md p-2 space-y-1">
+                    {(costCentersQuery.data || [])
+                      .filter(cc => {
+                        const search = costCenterSearchSupport.toLowerCase();
+                        return (
+                          cc.code.toLowerCase().includes(search) ||
+                          (cc.name?.toLowerCase() || "").includes(search)
+                        ) && !supportForm.costCenterIds.includes(cc.id);
+                      })
+                      .map(cc => (
+                        <button
+                          key={cc.id}
+                          type="button"
+                          className="w-full text-left px-2 py-1 hover:bg-slate-100 rounded text-sm"
+                          onClick={() => {
+                            setSupportForm(f => ({
+                              ...f,
+                              costCenterIds: [...f.costCenterIds, cc.id]
+                            }));
+                            setCostCenterSearchSupport("");
+                          }}
+                        >
+                          {cc.code} — {cc.name || "—"}
+                        </button>
+                      ))}
+                  </div>
+                )}
+                {/* Chips de CECOs seleccionados */}
+                {supportForm.costCenterIds.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {supportForm.costCenterIds.map(ccId => {
+                      const cc = (costCentersQuery.data || []).find(c => c.id === ccId);
+                      if (!cc) return null;
+                      return (
+                        <span
+                          key={ccId}
+                          className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-md text-sm"
+                        >
+                          {cc.code} — {cc.name || "—"}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSupportForm(f => ({
+                                ...f,
+                                costCenterIds: f.costCenterIds.filter(id => id !== ccId)
+                              }))
+                            }
+                            className="text-blue-600 hover:text-blue-800"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+                {supportErrors.costCenterIds && (
+                  <p className="text-xs text-red-600 mt-1">{supportErrors.costCenterIds}</p>
+                )}
+              </div>
               <Select
                 value={supportForm.packageId}
                 onChange={e =>
@@ -1197,7 +1268,21 @@ export default function CatalogsPage() {
                       <Td>{support.managementRef?.name || support.management || ""}</Td>
                       <Td>{support.areaRef?.name || support.area || ""}</Td>
                       <Td>
-                        {support.costCenter ? `${support.costCenter.code} — ${support.costCenter.name}` : ""}
+                        {support.costCenters && support.costCenters.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {support.costCenters.map(link => (
+                              <span
+                                key={link.id}
+                                className="inline-block px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-xs"
+                                title={`${link.costCenter.code} — ${link.costCenter.name || "—"}`}
+                              >
+                                {link.costCenter.code}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          support.costCenter ? `${support.costCenter.code} — ${support.costCenter.name || "—"}` : "—"
+                        )}
                       </Td>
                       <Td>{support.expensePackage?.name || ""}</Td>
                       <Td>{support.expenseConcept?.name || ""}</Td>
@@ -1215,6 +1300,7 @@ export default function CatalogsPage() {
                                 managementId: support.managementRef?.id ? String(support.managementRef.id) : "",
                                 areaId: support.areaRef?.id ? String(support.areaRef.id) : "",
                                 costCenterId: support.costCenter ? String(support.costCenter.id) : "",
+                                costCenterIds: support.costCenters ? support.costCenters.map(link => link.costCenter.id) : [],
                                 packageId: support.expensePackage ? String(support.expensePackage.id) : "",
                                 conceptId: support.expenseConcept ? String(support.expenseConcept.id) : "",
                                 expenseType: support.expenseType ?? ""

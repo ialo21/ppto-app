@@ -16,7 +16,7 @@ Este módulo permite importar múltiples ítems de catálogos desde un archivo C
 ### Cabeceras obligatorias
 
 ```csv
-type,name,code,managementName,areaName,packageName,conceptName,costCenterCode,expenseType,active
+type,name,code,managementName,areaName,packageName,conceptName,costCenterCode,costCenterCodes,expenseType,active
 ```
 
 ### Descripción de columnas
@@ -30,7 +30,8 @@ type,name,code,managementName,areaName,packageName,conceptName,costCenterCode,ex
 | `areaName` | Nombre del área (referencia) | No | Opcional para `Support` |
 | `packageName` | Nombre del paquete (referencia) | Condicional | Requerido para `ExpenseConcept` y opcional para `Support` |
 | `conceptName` | Nombre del concepto (referencia) | No | Opcional para `Support` (requiere `packageName`) |
-| `costCenterCode` | Código del centro de costo (referencia) | No | Opcional para `Support` |
+| `costCenterCode` | Código del centro de costo (referencia - DEPRECATED) | No | Opcional para `Support` (usar `costCenterCodes` para M:N) |
+| `costCenterCodes` | Códigos de CECOs separados por `;` (M:N) | No | Opcional para `Support`. Ej: `CC-001;CC-002;CC-003` |
 | `expenseType` | Tipo de gasto | No | `ADMINISTRATIVO`, `PRODUCTO`, `DISTRIBUIBLE` (solo para `Support`) |
 | `active` | Estado activo | No | `true`, `false`, `1`, `0`, `yes`, `no`, `sí`, `si` (default: `true`) |
 
@@ -74,11 +75,15 @@ type,name,code,managementName,areaName,packageName,conceptName,costCenterCode,ex
 
 #### Support (Sustentos)
 - **Obligatorios**: `type=Support`, `name`
-- **Opcionales**: `code`, `managementName`, `areaName`, `packageName`, `conceptName`, `costCenterCode`, `expenseType`, `active`
+- **Opcionales**: `code`, `managementName`, `areaName`, `packageName`, `conceptName`, `costCenterCode` (DEPRECATED), `costCenterCodes`, `expenseType`, `active`
 - **Restricciones**: 
   - `name` debe ser único (case-insensitive)
   - Si especificas `conceptName`, debes especificar `packageName`
   - Todas las referencias deben existir previamente
+  - **Relación M:N con CECOs**: Usa `costCenterCodes` separados por `;` para asociar múltiples centros de costo
+  - Ejemplo: `costCenterCodes=CC-001;CC-002;CC-003`
+  - Los códigos de CECO se validan y de-duplican automáticamente
+  - Si el sustento ya existe, las asociaciones con CECOs se actualizan (elimina anteriores, crea nuevas)
 
 ## Orden de dependencias
 
@@ -130,23 +135,27 @@ ExpenseConcept,Licencias Microsoft,,,,Software,,,,
 ### Ejemplo 3: Crear centros de costo y artículos (nombres pueden duplicarse)
 
 ```csv
-type,name,code,managementName,areaName,packageName,conceptName,costCenterCode,expenseType,active
-CostCenter,Tecnología,CC-001,,,,,,,
-CostCenter,Operaciones,CC-002,,,,,,,
-CostCenter,Tecnología,CC-003,,,,,,,
-Articulo,Servicios Profesionales,ART-001,,,,,,,
-Articulo,Servicios Profesionales,ART-002,,,,,,,
-Articulo,Hardware,ART-003,,,,,,,
+type,name,code,managementName,areaName,packageName,conceptName,costCenterCode,costCenterCodes,expenseType,active
+CostCenter,Tecnología,CC-001,,,,,,,,
+CostCenter,Operaciones,CC-002,,,,,,,,
+CostCenter,Tecnología,CC-003,,,,,,,,
+Articulo,Servicios Profesionales,ART-001,,,,,,,,
+Articulo,Servicios Profesionales,ART-002,,,,,,,,
+Articulo,Hardware,ART-003,,,,,,,,
 ```
 
 **Nota**: Los códigos son únicos pero los nombres pueden repetirse. "Tecnología" existe en CC-001 y CC-003. "Servicios Profesionales" existe en ART-001 y ART-002.
 
-### Ejemplo 4: Crear sustento completo
+### Ejemplo 4: Crear sustentos con múltiples CECOs (M:N)
 
 ```csv
-type,name,code,managementName,areaName,packageName,conceptName,costCenterCode,expenseType,active
-Support,Soporte TI - Hardware,SUP-001,Gerencia de Tecnología,Desarrollo,Hardware,Laptops,CC-001,ADMINISTRATIVO,true
+type,name,code,managementName,areaName,packageName,conceptName,costCenterCode,costCenterCodes,expenseType,active
+Support,Soporte TI - Hardware,SUP-001,Gerencia de Tecnología,Desarrollo,Hardware,Laptops,,CC-001;CC-003,ADMINISTRATIVO,true
+Support,Soporte Ventas - Software,SUP-002,Gerencia Comercial,Ventas,Software,Licencias Microsoft,,CC-002;CC-001,PRODUCTO,true
+Support,Soporte Infraestructura,SUP-003,Gerencia de Tecnología,Infraestructura,Hardware,Servidores,,CC-001;CC-002;CC-003,DISTRIBUIBLE,true
 ```
+
+**Nota**: Un sustento puede asociarse a múltiples centros de costo usando `costCenterCodes` con `;` como separador. Los códigos se validan y de-duplican automáticamente.
 
 ## Manejo de errores
 

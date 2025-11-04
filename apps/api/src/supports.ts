@@ -15,7 +15,8 @@ const upsertSupportSchema = z.object({
   // DEPRECATED: mantener compatibilidad con datos legacy
   management: z.string().trim().nullable().optional(),
   area: z.string().trim().nullable().optional(),
-  costCenterId: z.number().int().positive().nullable().optional(),
+  costCenterId: z.number().int().positive().nullable().optional(),  // DEPRECATED: usar costCenterIds (M:N)
+  costCenterIds: z.array(z.number().int().positive()).optional(),  // M:N: array de IDs de CECOs
   expensePackageId: z.number().int().positive().nullable().optional(),
   expenseConceptId: z.number().int().positive().nullable().optional(),
   expenseType: expenseTypeEnum.optional(),
@@ -33,7 +34,10 @@ export async function registerSupportRoutes(app: FastifyInstance) {
   app.get("/supports", async () => prisma.support.findMany({
     orderBy: { name: "asc" },
     include: {
-      costCenter: true,
+      costCenter: true,  // DEPRECATED: relación 1:N legacy
+      costCenters: {  // M:N: múltiples CECOs
+        include: { costCenter: true }
+      },
       expensePackage: true,
       expenseConcept: true,
       managementRef: true,
@@ -84,12 +88,12 @@ export async function registerSupportRoutes(app: FastifyInstance) {
       });
     }
     
-    const { id, expenseConceptId, expensePackageId, costCenterId, expenseType, managementId, areaId, management, area, ...rest } = p.data;
+    const { id, expenseConceptId, expensePackageId, costCenterId, costCenterIds, expenseType, managementId, areaId, management, area, ...rest } = p.data;
     const { code, ...fields } = rest;
 
     const data: any = {
       ...fields,
-      costCenterId: costCenterId ?? null,
+      costCenterId: costCenterId ?? null,  // DEPRECATED: mantener por compatibilidad
       expensePackageId: expensePackageId ?? null,
       expenseConceptId: expenseConceptId ?? null,
       expenseType: expenseType ?? undefined,
@@ -132,6 +136,22 @@ export async function registerSupportRoutes(app: FastifyInstance) {
       }
     }
 
+    // Validar costCenterIds (M:N)
+    const uniqueCostCenterIds = costCenterIds ? [...new Set(costCenterIds)] : [];
+    if (uniqueCostCenterIds.length > 0) {
+      const foundCCs = await prisma.costCenter.findMany({
+        where: { id: { in: uniqueCostCenterIds } }
+      });
+      if (foundCCs.length !== uniqueCostCenterIds.length) {
+        const foundIds = new Set(foundCCs.map(cc => cc.id));
+        const missingIds = uniqueCostCenterIds.filter(id => !foundIds.has(id));
+        return reply.code(422).send({
+          error: "VALIDATION_ERROR",
+          issues: [{ path: ["costCenterIds"], message: `Centros de costo no encontrados: ${missingIds.join(", ")}` }]
+        });
+      }
+    }
+
     if (expenseConceptId != null) {
       const concept = await prisma.expenseConcept.findUnique({ where: { id: expenseConceptId } });
       if (!concept) {
@@ -165,14 +185,54 @@ export async function registerSupportRoutes(app: FastifyInstance) {
     if (trimmedCode) data.code = trimmedCode;
 
     try {
-      if (id) {
-        return await prisma.support.update({ where: { id }, data });
-      } else {
-        return await prisma.$transaction(async tx => {
+      return await prisma.$transaction(async tx => {
+        let support: { id: number };
+        
+        if (id) {
+          // Actualizar
+          support = await tx.support.update({ where: { id }, data });
+          
+          // Actualizar asociaciones M:N con CECOs
+          if (costCenterIds !== undefined) {
+            // Eliminar asociaciones actuales
+            await tx.supportCostCenter.deleteMany({ where: { supportId: id } });
+            // Crear nuevas asociaciones
+            if (uniqueCostCenterIds.length > 0) {
+              await tx.supportCostCenter.createMany({
+                data: uniqueCostCenterIds.map(ccId => ({ supportId: id, costCenterId: ccId })),
+                skipDuplicates: true
+              });
+            }
+          }
+        } else {
+          // Crear
           const generated = trimmedCode || await nextSupportCode(tx);
-          return tx.support.create({ data: { ...data, code: generated, expenseType: expenseType ?? "ADMINISTRATIVO" } });
+          support = await tx.support.create({ 
+            data: { ...data, code: generated, expenseType: expenseType ?? "ADMINISTRATIVO" } 
+          });
+          
+          // Crear asociaciones M:N con CECOs
+          if (uniqueCostCenterIds.length > 0) {
+            await tx.supportCostCenter.createMany({
+              data: uniqueCostCenterIds.map(ccId => ({ supportId: support.id, costCenterId: ccId })),
+              skipDuplicates: true
+            });
+          }
+        }
+        
+        // Devolver con relaciones incluidas
+        return await tx.support.findUnique({
+          where: { id: support.id },
+          include: {
+            costCenter: true,
+            costCenters: { include: { costCenter: true } },
+            expensePackage: true,
+            expenseConcept: true,
+            managementRef: true,
+            areaRef: true
+          }
         });
-      }
+      });
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
         return reply.code(409).send({ error: "Ya existe un sustento con ese nombre o codigo." });

@@ -90,7 +90,8 @@ const supportSchema = z.object({
   areaName: z.string().optional(),
   packageName: z.string().optional(),
   conceptName: z.string().optional(),
-  costCenterCode: z.string().optional(),
+  costCenterCode: z.string().optional(),  // DEPRECATED: usar costCenterCodes
+  costCenterCodes: z.string().optional(),  // M:N: códigos separados por ";"
   expenseType: z.enum(["ADMINISTRATIVO", "PRODUCTO", "DISTRIBUIBLE"]).optional(),
   active: activeTransform
 });
@@ -746,6 +747,13 @@ async function processSupport(data: any, rowNum: number, dryRun: boolean): Promi
     const codesRaw = String(data.costCenterCodes).split(";").map((c: string) => c.trim()).filter((c: string) => c);
     const uniqueCodes = [...new Set(codesRaw)];  // De-duplicar
     
+    // Debug log
+    console.log(`[Bulk Support] Fila ${rowNum}: parseando costCenterCodes`, {
+      raw: data.costCenterCodes,
+      parsed: uniqueCodes,
+      supportName: name
+    });
+    
     for (const code of uniqueCodes) {
       const cc = await prisma.costCenter.findFirst({
         where: { code: { equals: String(code), mode: "insensitive" } }
@@ -761,6 +769,13 @@ async function processSupport(data: any, rowNum: number, dryRun: boolean): Promi
       }
       costCenterIds.push(cc.id);
     }
+    
+    // Debug log
+    console.log(`[Bulk Support] Fila ${rowNum}: CECOs resueltos`, {
+      codes: uniqueCodes,
+      ids: costCenterIds,
+      count: costCenterIds.length
+    });
   }
 
   let expensePackageId: number | null = null;
@@ -851,23 +866,34 @@ async function processSupport(data: any, rowNum: number, dryRun: boolean): Promi
           data: supportData
         });
 
-        // Actualizar asociaciones M:N con CECOs (si se especifican)
-        if (costCenterIds.length > 0) {
+        // Actualizar asociaciones M:N con CECOs
+        // IMPORTANTE: Solo actualizar si se especifica costCenterCodes en el CSV
+        // De lo contrario, mantener las relaciones existentes
+        if (data.costCenterCodes !== undefined && data.costCenterCodes !== null) {
           // Eliminar asociaciones actuales
           await tx.supportCostCenter.deleteMany({ where: { supportId: existing.id } });
           // Crear nuevas asociaciones
-          await tx.supportCostCenter.createMany({
-            data: costCenterIds.map(ccId => ({ supportId: existing.id, costCenterId: ccId })),
-            skipDuplicates: true
-          });
+          if (costCenterIds.length > 0) {
+            await tx.supportCostCenter.createMany({
+              data: costCenterIds.map(ccId => ({ supportId: existing.id, costCenterId: ccId })),
+              skipDuplicates: true
+            });
+          }
+          console.log(`[Bulk Support] Fila ${rowNum}: Actualizadas ${costCenterIds.length} asociaciones M:N para Support ID ${existing.id}`);
         }
       });
     }
+    
+    // Mensaje incluye CECO info incluso en dry-run
+    const cecoMessage = costCenterIds.length > 0 
+      ? ` vinculando ${costCenterIds.length} CECO(s)` 
+      : data.costCenterCodes?.trim() ? " (sin CECOs)" : "";
+    
     return {
       row: rowNum,
       type: "Support",
       action: "updated",
-      message: `Sustento "${name}" actualizado${costCenterIds.length > 0 ? ` con ${costCenterIds.length} CECO(s)` : ""}`
+      message: `Sustento "${name}" actualizado${cecoMessage}`
     };
   }
 
@@ -881,15 +907,21 @@ async function processSupport(data: any, rowNum: number, dryRun: boolean): Promi
           data: costCenterIds.map(ccId => ({ supportId: newSupport.id, costCenterId: ccId })),
           skipDuplicates: true
         });
+        console.log(`[Bulk Support] Fila ${rowNum}: Creadas ${costCenterIds.length} asociaciones M:N para nuevo Support ID ${newSupport.id}`);
       }
     });
   }
+
+  // Mensaje incluye CECO info incluso en dry-run
+  const cecoMessage = costCenterIds.length > 0 
+    ? ` con ${costCenterIds.length} CECO(s)` 
+    : data.costCenterCodes?.trim() ? " (sin CECOs válidos)" : "";
 
   return {
     row: rowNum,
     type: "Support",
     action: "created",
-    message: `Sustento "${name}" creado${costCenterIds.length > 0 ? ` con ${costCenterIds.length} CECO(s)` : ""}`
+    message: `Sustento "${name}" creado${cecoMessage}`
   };
 }
 

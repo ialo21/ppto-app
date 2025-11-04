@@ -67,10 +67,10 @@ const expenseConceptSchema = z.object({
   packageName: z.string().min(1, "packageName es obligatorio")
 });
 
-// CostCenter: requiere code y name
+// CostCenter: requiere code, name opcional
 const costCenterSchema = z.object({
   type: z.literal("CostCenter"),
-  name: z.string().min(1, "El nombre es obligatorio"),
+  name: z.string().optional(),
   code: z.string().min(1, "El código es obligatorio")
 });
 
@@ -213,13 +213,15 @@ function generateTemplateCSV(): string {
     ["ExpenseConcept", "Servidores", "", "", "", "Hardware", "", "", "", ""],
     ["ExpenseConcept", "Licencias Microsoft", "", "", "", "Software", "", "", "", ""],
     
-    // CostCenters
-    ["CostCenter", "Administración", "CC-001", "", "", "", "", "", "", ""],
+    // CostCenters (código único, nombres pueden duplicarse)
+    ["CostCenter", "Tecnología", "CC-001", "", "", "", "", "", "", ""],
     ["CostCenter", "Operaciones", "CC-002", "", "", "", "", "", "", ""],
+    ["CostCenter", "Tecnología", "CC-003", "", "", "", "", "", "", ""],
     
-    // Articulos
-    ["Articulo", "Laptop HP", "ART-001", "", "", "", "", "", "", ""],
-    ["Articulo", "Mouse inalámbrico", "ART-002", "", "", "", "", "", "", ""],
+    // Articulos (código único, nombres pueden duplicarse)
+    ["Articulo", "Servicios Profesionales", "ART-001", "", "", "", "", "", "", ""],
+    ["Articulo", "Servicios Profesionales", "ART-002", "", "", "", "", "", "", ""],
+    ["Articulo", "Hardware", "ART-003", "", "", "", "", "", "", ""],
     
     // Supports
     ["Support", "Soporte TI - Hardware", "SUP-001", "Gerencia de Tecnología", "Desarrollo", "Hardware", "Laptops", "CC-001", "ADMINISTRATIVO", "true"],
@@ -560,28 +562,26 @@ async function processExpenseConcept(data: any, rowNum: number, dryRun: boolean)
 
 async function processCostCenter(data: any, rowNum: number, dryRun: boolean): Promise<RowResult> {
   const code = data.code?.trim();
-  const name = data.name?.trim();
+  const name = data.name?.trim() || null;
 
-  if (!code || !name) {
+  if (!code) {
     return {
       row: rowNum,
       type: "CostCenter",
       action: "error",
-      message: "Código y nombre son obligatorios",
-      issues: [
-        ...(!code ? [{ path: ["code"], message: "Campo requerido" }] : []),
-        ...(!name ? [{ path: ["name"], message: "Campo requerido" }] : [])
-      ]
+      message: "Código es obligatorio",
+      issues: [{ path: ["code"], message: "Campo requerido" }]
     };
   }
 
-  const existingByCode = await prisma.costCenter.findUnique({
-    where: { code }
+  // Buscar por código (case-insensitive) - código es la clave única
+  const existingByCode = await prisma.costCenter.findFirst({
+    where: { code: { equals: code, mode: "insensitive" } }
   });
 
   if (existingByCode) {
-    // Actualizar nombre si cambió
-    if (existingByCode.name.toLowerCase() !== name.toLowerCase()) {
+    // Actualizar nombre si cambió (nombres pueden duplicarse, o ser null)
+    if (existingByCode.name !== name) {
       if (!dryRun) {
         await prisma.costCenter.update({
           where: { id: existingByCode.id },
@@ -592,14 +592,14 @@ async function processCostCenter(data: any, rowNum: number, dryRun: boolean): Pr
         row: rowNum,
         type: "CostCenter",
         action: "updated",
-        message: `Centro de costo "${code}" actualizado`
+        message: `Centro de costo [${code}] actualizado${name ? ` (nombre: "${name}")` : ""}`
       };
     }
     return {
       row: rowNum,
       type: "CostCenter",
       action: "skipped",
-      message: `Centro de costo "${code}" ya existe`
+      message: `Centro de costo [${code}] ya existe sin cambios`
     };
   }
 
@@ -611,7 +611,7 @@ async function processCostCenter(data: any, rowNum: number, dryRun: boolean): Pr
     row: rowNum,
     type: "CostCenter",
     action: "created",
-    message: `Centro de costo "${code}" - "${name}" creado`
+    message: `Centro de costo [${code}]${name ? ` "${name}"` : ""} creado`
   };
 }
 
@@ -632,13 +632,14 @@ async function processArticulo(data: any, rowNum: number, dryRun: boolean): Prom
     };
   }
 
-  const existingByCode = await prisma.articulo.findUnique({
-    where: { code }
+  // Buscar por código (case-insensitive) - código es la clave única
+  const existingByCode = await prisma.articulo.findFirst({
+    where: { code: { equals: code, mode: "insensitive" } }
   });
 
   if (existingByCode) {
-    // Actualizar nombre si cambió
-    if (existingByCode.name.toLowerCase() !== name.toLowerCase()) {
+    // Actualizar nombre si cambió (nombres pueden duplicarse)
+    if (existingByCode.name !== name) {
       if (!dryRun) {
         await prisma.articulo.update({
           where: { id: existingByCode.id },
@@ -649,14 +650,14 @@ async function processArticulo(data: any, rowNum: number, dryRun: boolean): Prom
         row: rowNum,
         type: "Articulo",
         action: "updated",
-        message: `Artículo "${code}" actualizado`
+        message: `Artículo [${code}] actualizado (nombre: "${name}")`
       };
     }
     return {
       row: rowNum,
       type: "Articulo",
       action: "skipped",
-      message: `Artículo "${code}" ya existe`
+      message: `Artículo [${code}] ya existe sin cambios`
     };
   }
 
@@ -668,7 +669,7 @@ async function processArticulo(data: any, rowNum: number, dryRun: boolean): Prom
     row: rowNum,
     type: "Articulo",
     action: "created",
-    message: `Artículo "${code}" - "${name}" creado`
+    message: `Artículo [${code}] "${name}" creado`
   };
 }
 

@@ -61,14 +61,16 @@ type,name,code,managementName,areaName,packageName,conceptName,costCenterCode,ex
 #### CostCenter (Centros de costo)
 - **Obligatorios**: `type=CostCenter`, `name`, `code`
 - **Restricciones**: 
-  - `code` debe ser único
-  - `name` debe ser único (case-insensitive)
+  - **`code` debe ser único (case-insensitive)** - Es la clave principal
+  - `name` **puede duplicarse** - Se identifica por código
+- **Upsert**: Por código. Si el código existe, actualiza el nombre
 
 #### Articulo (Artículos)
 - **Obligatorios**: `type=Articulo`, `name`, `code`
 - **Restricciones**: 
-  - `code` debe ser único
-  - `name` debe ser único (case-insensitive)
+  - **`code` debe ser único (case-insensitive)** - Es la clave principal
+  - `name` **puede duplicarse** - Se identifica por código
+- **Upsert**: Por código. Si el código existe, actualiza el nombre
 
 #### Support (Sustentos)
 - **Obligatorios**: `type=Support`, `name`
@@ -125,15 +127,19 @@ ExpenseConcept,Servidores,,,,Hardware,,,,
 ExpenseConcept,Licencias Microsoft,,,,Software,,,,
 ```
 
-### Ejemplo 3: Crear centros de costo y artículos
+### Ejemplo 3: Crear centros de costo y artículos (nombres pueden duplicarse)
 
 ```csv
 type,name,code,managementName,areaName,packageName,conceptName,costCenterCode,expenseType,active
-CostCenter,Administración,CC-001,,,,,,,
+CostCenter,Tecnología,CC-001,,,,,,,
 CostCenter,Operaciones,CC-002,,,,,,,
-Articulo,Laptop HP,ART-001,,,,,,,
-Articulo,Mouse inalámbrico,ART-002,,,,,,,
+CostCenter,Tecnología,CC-003,,,,,,,
+Articulo,Servicios Profesionales,ART-001,,,,,,,
+Articulo,Servicios Profesionales,ART-002,,,,,,,
+Articulo,Hardware,ART-003,,,,,,,
 ```
+
+**Nota**: Los códigos son únicos pero los nombres pueden repetirse. "Tecnología" existe en CC-001 y CC-003. "Servicios Profesionales" existe en ART-001 y ART-002.
 
 ### Ejemplo 4: Crear sustento completo
 

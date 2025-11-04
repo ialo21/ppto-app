@@ -7,7 +7,7 @@ const prisma = new PrismaClient();
 const costCenterSchema = z.object({
   id: z.number().int().positive().optional(),
   code: z.string().min(1),
-  name: z.string().min(1)
+  name: z.string().optional()
 });
 
 const expensePackageSchema = z.object({

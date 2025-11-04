@@ -186,8 +186,20 @@ export async function registerSupportRoutes(app: FastifyInstance) {
     try {
       await prisma.support.delete({ where: { id }});
       return { ok: true };
-    } catch {
-      return reply.code(400).send({ error: "no se pudo eliminar (en uso?)" });
+    } catch (err) {
+      // Error específico de FK constraint
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
+        return reply.code(409).send({ 
+          error: "El sustento tiene registros asociados (OCs, líneas de control o asignaciones presupuestales). Elimínelos primero." 
+        });
+      }
+      // Error de registro no encontrado
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
+        return reply.code(404).send({ error: "Sustento no encontrado" });
+      }
+      // Otros errores
+      console.error("Error al eliminar sustento:", err);
+      return reply.code(500).send({ error: "Error interno al eliminar sustento" });
     }
   });
 }

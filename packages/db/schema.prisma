@@ -118,7 +118,7 @@ model Support {
 model CostCenter {
   id       Int       @id @default(autoincrement())
   code     String    @unique
-  name     String
+  name     String?
   supports Support[]
   ocs      OC[]
 }
@@ -176,7 +176,7 @@ model BudgetAllocation {
   versionId    Int
   version      BudgetVersion @relation(fields: [versionId], references: [id])
   supportId    Int
-  support      Support @relation(fields: [supportId], references: [id])
+  support      Support @relation(fields: [supportId], references: [id], onDelete: Cascade)
   periodId     Int
   period       Period  @relation(fields: [periodId], references: [id])
   amountLocal  Decimal
@@ -255,7 +255,7 @@ model InvoiceStatusHistory {
 model ControlLine {
   id        Int      @id @default(autoincrement())
   supportId Int
-  support   Support  @relation(fields: [supportId], references: [id])
+  support   Support  @relation(fields: [supportId], references: [id], onDelete: Cascade)
 
   type  ClType
   state ClState @default(NO_PROCESADO)
@@ -304,7 +304,7 @@ model OC {
   fechaRegistro          DateTime  @default(now())
   
   supportId              Int
-  support                Support   @relation(fields: [supportId], references: [id])
+  support                Support   @relation(fields: [supportId], references: [id], onDelete: Cascade)
   
   periodoEnFechasText    String?
   descripcion            String?   @db.Text

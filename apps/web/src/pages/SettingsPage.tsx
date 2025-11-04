@@ -112,6 +112,10 @@ export default function CatalogsPage() {
   const [conceptForm, setConceptForm] = useState({ id: "", packageId: "", name: "" });
   const [costCenterForm, setCostCenterForm] = useState({ id: "", code: "", name: "" });
   const [articuloForm, setArticuloForm] = useState({ id: "", code: "", name: "" });
+
+  // Búsqueda con debounce para CECO y Artículos
+  const [costCenterSearch, setCostCenterSearch] = useState("");
+  const [articuloSearch, setArticuloSearch] = useState("");
   const [managementForm, setManagementForm] = useState({ id: "", name: "" });
   const [areaForm, setAreaForm] = useState({ id: "", name: "", managementId: "" });
   const [supportForm, setSupportForm] = useState({
@@ -422,7 +426,7 @@ export default function CatalogsPage() {
   const deleteSupport = useMutation({
     mutationFn: async (id: number) => (await api.delete(`/supports/${id}`)).data,
     onSuccess: () => {
-      toast.success("Sustento eliminado");
+      toast.success("Sustento y sus registros asociados eliminados correctamente");
       if (supportForm.id) {
         setSupportForm({
           id: "",
@@ -439,7 +443,10 @@ export default function CatalogsPage() {
       setSupportErrors({});
       queryClient.invalidateQueries({ queryKey: ["supports"] });
     },
-    onError: () => toast.error("No se pudo eliminar el sustento")
+    onError: (error: any) => {
+      const errorMsg = error.response?.data?.error || "No se pudo eliminar el sustento";
+      toast.error(errorMsg);
+    }
   });
 
   const selectedSection = sections.find(s => s.key === section);
@@ -455,6 +462,26 @@ export default function CatalogsPage() {
     if (!selectedManagementId) return areasQuery.data || [];
     return (areasQuery.data || []).filter(a => a.managementId === selectedManagementId);
   }, [areasQuery.data, selectedManagementId]);
+
+  // Filtrar centros de costo por búsqueda (código y nombre, case-insensitive)
+  const filteredCostCenters = useMemo(() => {
+    if (!costCenterSearch.trim()) return costCentersQuery.data || [];
+    const search = costCenterSearch.toLowerCase();
+    return (costCentersQuery.data || []).filter(cc => 
+      cc.code.toLowerCase().includes(search) || 
+      (cc.name?.toLowerCase() || "").includes(search)
+    );
+  }, [costCentersQuery.data, costCenterSearch]);
+
+  // Filtrar artículos por búsqueda (código y nombre, case-insensitive)
+  const filteredArticulos = useMemo(() => {
+    if (!articuloSearch.trim()) return articulosQuery.data || [];
+    const search = articuloSearch.toLowerCase();
+    return (articulosQuery.data || []).filter(art => 
+      art.code.toLowerCase().includes(search) || 
+      art.name.toLowerCase().includes(search)
+    );
+  }, [articulosQuery.data, articuloSearch]);
 
   return (
     <div className="space-y-6">
@@ -664,19 +691,14 @@ export default function CatalogsPage() {
                 </Button>
               )}
             </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
               <Input
-                placeholder="ID (para editar)"
-                value={costCenterForm.id}
-                onChange={e => setCostCenterForm(f => ({ ...f, id: e.target.value }))}
-              />
-              <Input
-                placeholder="Código"
+                placeholder="Código (obligatorio)"
                 value={costCenterForm.code}
                 onChange={e => setCostCenterForm(f => ({ ...f, code: e.target.value }))}
               />
               <Input
-                placeholder="Nombre"
+                placeholder="Nombre (opcional)"
                 value={costCenterForm.name}
                 onChange={e => setCostCenterForm(f => ({ ...f, name: e.target.value }))}
               />
@@ -684,13 +706,20 @@ export default function CatalogsPage() {
             <div className="mt-3">
               <Button
                 onClick={() => saveCostCenter.mutate()}
-                disabled={saveCostCenter.isPending || !costCenterForm.code.trim() || !costCenterForm.name.trim()}
+                disabled={saveCostCenter.isPending || !costCenterForm.code.trim()}
               >
                 {costCenterForm.id ? "Actualizar" : "Crear"}
               </Button>
             </div>
           </CardHeader>
           <CardContent>
+            <div className="mb-4">
+              <Input
+                placeholder="🔍 Buscar por código o nombre..."
+                value={costCenterSearch}
+                onChange={e => setCostCenterSearch(e.target.value)}
+              />
+            </div>
             {costCentersQuery.isLoading ? (
               "Cargando..."
             ) : (
@@ -703,16 +732,16 @@ export default function CatalogsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(costCentersQuery.data || []).map(cc => (
+                  {filteredCostCenters.map(cc => (
                     <tr key={cc.id}>
                       <Td>{cc.code}</Td>
-                      <Td>{cc.name}</Td>
+                      <Td>{cc.name || "—"}</Td>
                       <Td>
                         <div className="flex flex-wrap gap-2">
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setCostCenterForm({ id: String(cc.id), code: cc.code, name: cc.name })}
+                            onClick={() => setCostCenterForm({ id: String(cc.id), code: cc.code, name: cc.name || "" })}
                           >
                             Editar
                           </Button>
@@ -741,12 +770,7 @@ export default function CatalogsPage() {
                 </Button>
               )}
             </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <Input
-                placeholder="ID (para editar)"
-                value={articuloForm.id}
-                onChange={e => setArticuloForm(f => ({ ...f, id: e.target.value }))}
-              />
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
               <Input
                 placeholder="Código"
                 value={articuloForm.code}
@@ -768,6 +792,13 @@ export default function CatalogsPage() {
             </div>
           </CardHeader>
           <CardContent>
+            <div className="mb-4">
+              <Input
+                placeholder="🔍 Buscar por código o nombre..."
+                value={articuloSearch}
+                onChange={e => setArticuloSearch(e.target.value)}
+              />
+            </div>
             {articulosQuery.isLoading ? (
               "Cargando..."
             ) : (
@@ -780,7 +811,7 @@ export default function CatalogsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(articulosQuery.data || []).map(art => (
+                  {filteredArticulos.map(art => (
                     <tr key={art.id}>
                       <Td>{art.code}</Td>
                       <Td>{art.name}</Td>
@@ -1192,7 +1223,23 @@ export default function CatalogsPage() {
                           >
                             Editar
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => deleteSupport.mutate(support.id)}>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => {
+                              if (confirm(
+                                `⚠️ ELIMINAR SUSTENTO: "${support.name}"\n\n` +
+                                `Esta acción eliminará el sustento y TODOS los registros asociados:\n` +
+                                `• Órdenes de compra\n` +
+                                `• Líneas de control\n` +
+                                `• Asignaciones presupuestales\n\n` +
+                                `Esta operación NO se puede deshacer.\n\n` +
+                                `¿Deseas continuar?`
+                              )) {
+                                deleteSupport.mutate(support.id);
+                              }
+                            }}
+                          >
                             Eliminar
                           </Button>
                         </div>

@@ -2,48 +2,59 @@ import { PrismaClient, Prisma } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+/**
+ * Bootstrap seed - Idempotente
+ * Crea datos mínimos necesarios sin destruir datos existentes.
+ * Seguro ejecutar múltiples veces.
+ */
 async function main() {
-  // Limpiar datos existentes respetando dependencias
-  await prisma.invoiceStatusHistory.deleteMany();
-  await prisma.invoice.deleteMany();
-  await prisma.controlLine.deleteMany();
-  await prisma.oC.deleteMany();
-  await prisma.budgetAllocation.deleteMany();
-  await prisma.budgetVersion.deleteMany();
-  await prisma.support.deleteMany();
-  await prisma.expenseConcept.deleteMany();
-  await prisma.expensePackage.deleteMany();
-  await prisma.area.deleteMany();
-  await prisma.management.deleteMany();
-  await prisma.articulo.deleteMany();
-  await prisma.costCenter.deleteMany();
-  await prisma.accountingClosure.deleteMany();
-  await prisma.fxReference.deleteMany();
-  await prisma.period.deleteMany();
+  console.log("🌱 Iniciando bootstrap seed (idempotente)...");
 
-  // Periodos 2026
+  // Periodos 2026 (upsert por year+month)
   const months = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
   for (let m = 1; m <= 12; m++) {
-    await prisma.period.create({
-      data: { year: 2026, month: m, label: `${months[m - 1]}26` }
+    await prisma.period.upsert({
+      where: { 
+        // Prisma requiere unique constraint; usamos findFirst + create condicional
+        id: (await prisma.period.findFirst({ where: { year: 2026, month: m } }))?.id || 0
+      },
+      update: {},
+      create: { year: 2026, month: m, label: `${months[m - 1]}26` }
+    }).catch(async () => {
+      // Si falla upsert (id=0 no existe), verificar si ya existe
+      const existing = await prisma.period.findFirst({ where: { year: 2026, month: m } });
+      if (!existing) {
+        await prisma.period.create({ data: { year: 2026, month: m, label: `${months[m - 1]}26` } });
+      }
     });
   }
 
-  // Tipo de cambio referencial
-  await prisma.fxReference.createMany({
-    data: [
-      { currency: "USD", rate: new Prisma.Decimal(3.75), effectiveFrom: new Date("2026-01-01"), effectiveTo: new Date("2026-06-30") },
-      { currency: "USD", rate: new Prisma.Decimal(3.70), effectiveFrom: new Date("2026-07-01"), effectiveTo: null as any }
-    ] as any
-  });
+  // Tipo de cambio referencial (skip si ya existe)
+  const fxCount = await prisma.fxReference.count();
+  if (fxCount === 0) {
+    await prisma.fxReference.createMany({
+      data: [
+        { currency: "USD", rate: new Prisma.Decimal(3.75), effectiveFrom: new Date("2026-01-01"), effectiveTo: new Date("2026-06-30") },
+        { currency: "USD", rate: new Prisma.Decimal(3.70), effectiveFrom: new Date("2026-07-01"), effectiveTo: null as any }
+      ] as any
+    });
+  }
 
-  // Version de presupuesto activa
-  const version = await prisma.budgetVersion.create({
-    data: { name: "Original 2026", status: "ACTIVE" }
-  });
+  // Version de presupuesto activa (upsert por nombre)
+  let version = await prisma.budgetVersion.findFirst({ where: { name: "Original 2026" } });
+  if (!version) {
+    version = await prisma.budgetVersion.create({
+      data: { name: "Original 2026", status: "ACTIVE" }
+    });
+  }
 
-  // Gerencias y Áreas
-  const gerenciaTI = await prisma.management.create({
+  // Gerencias y Áreas (upsert por nombre)
+  let gerenciaTI = await prisma.management.findFirst({ 
+    where: { name: "Gerencia TI" }, 
+    include: { areas: true } 
+  });
+  if (!gerenciaTI) {
+    gerenciaTI = await prisma.management.create({
     data: {
       code: "GER-TI",
       name: "Gerencia TI",
@@ -56,9 +67,15 @@ async function main() {
       }
     },
     include: { areas: true }
-  });
+    });
+  }
 
-  const gerenciaComercial = await prisma.management.create({
+  let gerenciaComercial = await prisma.management.findFirst({ 
+    where: { name: "Gerencia Comercial" }, 
+    include: { areas: true } 
+  });
+  if (!gerenciaComercial) {
+    gerenciaComercial = await prisma.management.create({
     data: {
       code: "GER-COM",
       name: "Gerencia Comercial",
@@ -70,19 +87,31 @@ async function main() {
       }
     },
     include: { areas: true }
-  });
+    });
+  }
 
   const areaCalidad = gerenciaTI.areas.find(a => a.name === "Calidad");
   const areaInfraestructura = gerenciaTI.areas.find(a => a.name === "Infraestructura");
   const areaMarketing = gerenciaComercial.areas.find(a => a.name === "Marketing");
 
-  // Datos maestros
-  const [ccTi, ccMarketing] = await Promise.all([
-    prisma.costCenter.create({ data: { code: "CC-TI", name: "TI Corporativo" } }),
-    prisma.costCenter.create({ data: { code: "CC-MKT", name: "Marketing" } })
-  ]);
+  // Datos maestros (upsert por code único)
+  const ccTi = await prisma.costCenter.upsert({
+    where: { code: "CC-TI" },
+    update: {},
+    create: { code: "CC-TI", name: "TI Corporativo" }
+  });
+  const ccMarketing = await prisma.costCenter.upsert({
+    where: { code: "CC-MKT" },
+    update: {},
+    create: { code: "CC-MKT", name: "Marketing" }
+  });
 
-  const pkgServicios = await prisma.expensePackage.create({
+  let pkgServicios = await prisma.expensePackage.findFirst({ 
+    where: { name: "Servicios Profesionales" }, 
+    include: { concepts: true } 
+  });
+  if (!pkgServicios) {
+    pkgServicios = await prisma.expensePackage.create({
     data: {
       name: "Servicios Profesionales",
       concepts: {
@@ -90,9 +119,15 @@ async function main() {
       }
     },
     include: { concepts: true }
-  });
+    });
+  }
 
-  const pkgOperacion = await prisma.expensePackage.create({
+  let pkgOperacion = await prisma.expensePackage.findFirst({ 
+    where: { name: "Operacion TI" }, 
+    include: { concepts: true } 
+  });
+  if (!pkgOperacion) {
+    pkgOperacion = await prisma.expensePackage.create({
     data: {
       name: "Operacion TI",
       concepts: {
@@ -100,61 +135,71 @@ async function main() {
       }
     },
     include: { concepts: true }
-  });
+    });
+  }
 
   const conceptQa = pkgServicios.concepts.find(c => c.name === "QA Externo");
   const conceptMarketing = pkgServicios.concepts.find(c => c.name === "Consultoria Marketing");
   const conceptCloud = pkgOperacion.concepts.find(c => c.name === "Servicios Cloud");
 
-  const [supportQa, supportMarketing, supportCloud] = await Promise.all([
-    prisma.support.create({
-      data: {
-        code: "S-0001",
-        name: "Servicios Externos QA",
-        management: "Gerencia TI",  // legacy
-        area: "Calidad",  // legacy
-        managementId: gerenciaTI.id,
-        areaId: areaCalidad?.id,
-        costCenterId: ccTi.id,
-        expensePackageId: pkgServicios.id,
-        expenseConceptId: conceptQa?.id,
-        expenseType: "ADMINISTRATIVO"
-      }
-    }),
-    prisma.support.create({
-      data: {
-        code: "S-0002",
-        name: "Marketing Digital",
-        management: "Gerencia Comercial",  // legacy
-        area: "Marketing",  // legacy
-        managementId: gerenciaComercial.id,
-        areaId: areaMarketing?.id,
-        costCenterId: ccMarketing.id,
-        expensePackageId: pkgServicios.id,
-        expenseConceptId: conceptMarketing?.id,
-        expenseType: "PRODUCTO"
-      }
-    }),
-    prisma.support.create({
-      data: {
-        code: "S-0003",
-        name: "Servicios Cloud",
-        management: "Gerencia TI",  // legacy
-        area: "Infraestructura",  // legacy
-        managementId: gerenciaTI.id,
-        areaId: areaInfraestructura?.id,
-        costCenterId: ccTi.id,
-        expensePackageId: pkgOperacion.id,
-        expenseConceptId: conceptCloud?.id,
-        expenseType: "DISTRIBUIBLE"
-      }
-    })
-  ]);
+  // Sustentos (upsert por name único)
+  const supportQa = await prisma.support.upsert({
+    where: { name: "Servicios Externos QA" },
+    update: {},
+    create: {
+      code: "S-0001",
+      name: "Servicios Externos QA",
+      management: "Gerencia TI",  // legacy
+      area: "Calidad",  // legacy
+      managementId: gerenciaTI.id,
+      areaId: areaCalidad?.id,
+      costCenterId: ccTi.id,
+      expensePackageId: pkgServicios.id,
+      expenseConceptId: conceptQa?.id,
+      expenseType: "ADMINISTRATIVO"
+    }
+  });
+  const supportMarketing = await prisma.support.upsert({
+    where: { name: "Marketing Digital" },
+    update: {},
+    create: {
+      code: "S-0002",
+      name: "Marketing Digital",
+      management: "Gerencia Comercial",  // legacy
+      area: "Marketing",  // legacy
+      managementId: gerenciaComercial.id,
+      areaId: areaMarketing?.id,
+      costCenterId: ccMarketing.id,
+      expensePackageId: pkgServicios.id,
+      expenseConceptId: conceptMarketing?.id,
+      expenseType: "PRODUCTO"
+    }
+  });
+  const supportCloud = await prisma.support.upsert({
+    where: { name: "Servicios Cloud" },
+    update: {},
+    create: {
+      code: "S-0003",
+      name: "Servicios Cloud",
+      management: "Gerencia TI",  // legacy
+      area: "Infraestructura",  // legacy
+      managementId: gerenciaTI.id,
+      areaId: areaInfraestructura?.id,
+      costCenterId: ccTi.id,
+      expensePackageId: pkgOperacion.id,
+      expenseConceptId: conceptCloud?.id,
+      expenseType: "DISTRIBUIBLE"
+    }
+  });
 
-  // Asignaciones de presupuesto (enero 2026)
+  // Asignaciones de presupuesto (enero 2026) - solo si no existen
   const periodEne = await prisma.period.findFirst({ where: { year: 2026, month: 1 } });
   if (periodEne) {
-    await prisma.budgetAllocation.createMany({
+    const allocCount = await prisma.budgetAllocation.count({ 
+      where: { versionId: version.id, periodId: periodEne.id } 
+    });
+    if (allocCount === 0) {
+      await prisma.budgetAllocation.createMany({
       data: [
         {
           versionId: version.id,
@@ -178,20 +223,33 @@ async function main() {
           currency: "PEN"
         }
       ]
-    });
+      });
+    }
   }
 
-  // Artículos
-  const [artServicios, artLicencias, artHardware] = await Promise.all([
-    prisma.articulo.create({ data: { code: "ART-001", name: "Servicios Profesionales" } }),
-    prisma.articulo.create({ data: { code: "ART-002", name: "Licencias de Software" } }),
-    prisma.articulo.create({ data: { code: "ART-003", name: "Hardware y Equipos" } })
-  ]);
+  // Artículos (upsert por code único)
+  const artServicios = await prisma.articulo.upsert({
+    where: { code: "ART-001" },
+    update: {},
+    create: { code: "ART-001", name: "Servicios Profesionales" }
+  });
+  const artLicencias = await prisma.articulo.upsert({
+    where: { code: "ART-002" },
+    update: {},
+    create: { code: "ART-002", name: "Licencias de Software" }
+  });
+  const artHardware = await prisma.articulo.upsert({
+    where: { code: "ART-003" },
+    update: {},
+    create: { code: "ART-003", name: "Hardware y Equipos" }
+  });
 
-  // Órdenes de Compra de ejemplo
+  // Órdenes de Compra de ejemplo - solo si no existen
   const periodFeb = await prisma.period.findFirst({ where: { year: 2026, month: 2 } });
   if (periodEne && periodFeb) {
-    await prisma.oC.createMany({
+    const ocCount = await prisma.oC.count();
+    if (ocCount === 0) {
+      await prisma.oC.createMany({
       data: [
         {
           budgetPeriodFromId: periodEne.id,
@@ -238,8 +296,16 @@ async function main() {
           linkCotizacion: "https://aws.amazon.com/pricing"
         }
       ]
-    });
+      });
+    }
   }
+
+  console.log("✅ Bootstrap seed completado");
 }
 
-main().finally(() => prisma.$disconnect());
+main()
+  .catch((e) => {
+    console.error("❌ Error en seed:", e);
+    process.exit(1);
+  })
+  .finally(() => prisma.$disconnect());

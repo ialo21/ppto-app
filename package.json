@@ -7,10 +7,13 @@
   ],
   "scripts": {
     "dev": "concurrently -r \"pnpm -C apps/api dev\" \"pnpm -C apps/web dev\"",
-    "db:up": "docker compose up -d",
-    "db:down": "docker compose down -v",
+    "db:up": "docker compose up -d db",
+    "db:stop": "docker compose stop db",
+    "db:down": "docker compose down",
+    "db:reset": "docker compose down -v && docker compose up -d db",
     "db:migrate": "pnpm -C packages/db prisma migrate dev --name safe_update",
-    "db:seed": "pnpm -C packages/db seed",
+    "migrate:deploy": "cd packages/db && pnpm prisma migrate deploy",
+    "seed:bootstrap": "cd packages/db && pnpm seed",
     "build": "pnpm -C apps/api build && pnpm -C apps/web build",
     "start": "concurrently -r \"pnpm -C apps/api start\" \"pnpm -C apps/web preview\""
   },

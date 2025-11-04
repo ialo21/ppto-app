@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 
 const INVOICE_STATUSES = [
   { value: "INGRESADO", label: "Ingresado", color: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200" },
@@ -19,14 +20,42 @@ interface StatusChipProps {
 
 export default function StatusChip({ currentStatus, onStatusChange, isLoading = false, disabled = false }: StatusChipProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [position, setPosition] = useState({ top: 0, left: 0, placement: 'bottom' as 'bottom' | 'top' });
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   const currentStatusConfig = INVOICE_STATUSES.find(s => s.value === currentStatus) || INVOICE_STATUSES[0];
 
+  const updatePosition = () => {
+    if (!buttonRef.current) return;
+    
+    const buttonRect = buttonRef.current.getBoundingClientRect();
+    const dropdownHeight = 280; // Aproximado
+    const padding = 8;
+    const offset = 6;
+    
+    // Determinar si flipear arriba o abajo
+    const spaceBelow = window.innerHeight - buttonRect.bottom;
+    const spaceAbove = buttonRect.top;
+    const shouldFlipUp = spaceBelow < dropdownHeight + padding && spaceAbove > spaceBelow;
+    
+    let top = shouldFlipUp 
+      ? buttonRect.top - dropdownHeight - offset
+      : buttonRect.bottom + offset;
+    
+    let left = buttonRect.left + (buttonRect.width / 2) - 112; // 224px/2 = 112 (center align)
+    
+    // Shift horizontal si se sale de los bordes
+    if (left < padding) left = padding;
+    if (left + 224 > window.innerWidth - padding) left = window.innerWidth - 224 - padding;
+    
+    setPosition({ top, left, placement: shouldFlipUp ? 'top' : 'bottom' });
+  };
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node) &&
+          buttonRef.current && !buttonRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
     };
@@ -38,14 +67,23 @@ export default function StatusChip({ currentStatus, onStatusChange, isLoading = 
       }
     };
 
+    const handleScroll = () => {
+      if (isOpen) updatePosition();
+    };
+
     if (isOpen) {
+      updatePosition();
       document.addEventListener("mousedown", handleClickOutside);
       document.addEventListener("keydown", handleEscape);
+      window.addEventListener("scroll", handleScroll, true);
+      window.addEventListener("resize", updatePosition);
     }
 
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("keydown", handleEscape);
+      window.removeEventListener("scroll", handleScroll, true);
+      window.removeEventListener("resize", updatePosition);
     };
   }, [isOpen]);
 
@@ -58,7 +96,7 @@ export default function StatusChip({ currentStatus, onStatusChange, isLoading = 
   };
 
   return (
-    <div className="relative inline-block" ref={dropdownRef}>
+    <>
       <button
         ref={buttonRef}
         type="button"
@@ -86,8 +124,15 @@ export default function StatusChip({ currentStatus, onStatusChange, isLoading = 
         </span>
       </button>
 
-      {isOpen && !isLoading && (
-        <div className="absolute z-50 mt-2 w-56 rounded-lg shadow-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 py-1">
+      {isOpen && !isLoading && createPortal(
+        <div 
+          ref={dropdownRef}
+          className="fixed z-50 w-56 rounded-lg shadow-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 py-1"
+          style={{ 
+            top: `${position.top}px`, 
+            left: `${position.left}px` 
+          }}
+        >
           {INVOICE_STATUSES.map((status) => (
             <button
               key={status.value}
@@ -111,9 +156,10 @@ export default function StatusChip({ currentStatus, onStatusChange, isLoading = 
               )}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   );
 }
 

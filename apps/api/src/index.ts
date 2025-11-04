@@ -9,6 +9,7 @@ import { registerSupportRoutes } from "./supports";
 import { registerBudgetRoutes } from "./budgets";
 import { registerMasterRoutes } from "./masters";
 import { registerOcRoutes } from "./oc";
+import { registerBulkRoutes } from "./bulk";
 
 const app = Fastify({ logger: true });
 await app.register(cors, { origin: true });
@@ -45,6 +46,7 @@ await registerInvoiceRoutes(app);
 await registerOcRoutes(app);
 await registerReportRoutes(app);
 await registerMasterRoutes(app);
+await registerBulkRoutes(app);
 
 const port = Number(process.env.API_PORT || 3001);
 app.listen({ port, host: "0.0.0.0" });

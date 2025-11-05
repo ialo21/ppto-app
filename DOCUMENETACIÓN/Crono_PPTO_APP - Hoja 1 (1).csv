@@ -1,0 +1,13 @@
+HU,Sprint,Inicio plan,Hito intermedio,Entrega prevista,Dep.,Notas
+HU-A1 CRUD Sustentos,S1,20/10/2025,27/10/2025,02/11/2025,—,Fundaciones FE/BE sin puntos en paralelo.
+HU-A2 M:N CECOs,S2,03/11/2025,10/11/2025,16/11/2025,A1,Cierra contrato de prorrateo al 100%.
+HU-B1 Carga masiva,S2,05/11/2025,12/11/2025,16/11/2025,A1,Corre en paralelo con A2; requiere plantilla y vista de errores.
+HU-A3 Estados + comentarios,S3,17/11/2025,24/11/2025,30/11/2025,A1,Estados Pendiente/Validado/Observado + bitácora.
+HU-D1 Autenticación/roles,S3,17/11/2025,22/11/2025,30/11/2025,—,Base para auditoría e integraciones.
+HU-D2 Auditoría cambios,S3,23/11/2025,27/11/2025,30/11/2025,D1,Trail por entidad y diffs.
+HU-B2 Catálogos,S3,20/11/2025,26/11/2025,30/11/2025,—,CRUD CECOs/Proveedores/Proyectos/Monedas.
+HU-C1 Filtros/búsqueda,S4,01/12/2025,04/12/2025,06/12/2025,A1,Va primero en S4 para habilitar export.
+HU-C2 Export CSV/Excel,S4,07/12/2025,10/12/2025,12/12/2025,C1,Respeta filtros/orden.
+HU-E1a Integración facturas (n8n→Portal),S4,01/12/2025,06/12/2025,10/12/2025,"A1, D1, D2",Idempotencia + correlation ID + evidencias.
+HU-E1b Migración automatización OCs,S4,01/12/2025,08/12/2025,12/12/2025,"A1–A3, B1, D1",Refactor a contrato único del portal.
+HU-E2 Alertas (opcional),S4,12/12/2025,—,14/12/2025,E1a/E1b,Solo si hay capacidad; post-MVP.

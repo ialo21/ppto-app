@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cronograma Gantt Interactivo - PPTO APP</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            color: #2c3e50;
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1f4e79 0%, #2980b9 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section h2 {
+            color: #1f4e79;
+            font-size: 1.8em;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #2980b9;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-number {
+            font-size: 3em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.9;
+        }
+
+        /* Gantt Chart Styles */
+        .gantt-container {
+            overflow-x: auto;
+            margin: 30px 0;
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+        }
+
+        .gantt-chart {
+            min-width: 1000px;
+        }
+
+        .gantt-header {
+            display: grid;
+            grid-template-columns: 250px 1fr;
+            margin-bottom: 10px;
+            font-weight: bold;
+            color: #1f4e79;
+        }
+
+        .gantt-timeline {
+            display: grid;
+            grid-template-columns: repeat(60, 1fr);
+            gap: 1px;
+            margin-bottom: 5px;
+            font-size: 0.75em;
+            text-align: center;
+        }
+
+        .timeline-date {
+            padding: 5px;
+            background: #e3f2fd;
+            border-radius: 3px;
+        }
+
+        .gantt-row {
+            display: grid;
+            grid-template-columns: 250px 1fr;
+            margin-bottom: 8px;
+            align-items: center;
+        }
+
+        .gantt-label {
+            padding: 10px;
+            background: #fff;
+            border-left: 4px solid #2980b9;
+            border-radius: 5px;
+            font-size: 0.9em;
+            margin-right: 10px;
+        }
+
+        .gantt-label.sprint {
+            font-weight: bold;
+            background: #deebf7;
+            border-left-color: #1f4e79;
+        }
+
+        .gantt-label.historia {
+            padding-left: 25px;
+            border-left-color: #64b5f6;
+        }
+
+        .gantt-bars {
+            position: relative;
+            height: 40px;
+            background: #f5f5f5;
+            border-radius: 5px;
+        }
+
+        .gantt-bar {
+            position: absolute;
+            height: 30px;
+            top: 5px;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75em;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        .gantt-bar:hover {
+            transform: scaleY(1.1);
+            z-index: 10;
+        }
+
+        .gantt-bar.completo {
+            background: linear-gradient(135deg, #70ad47 0%, #5d8a3a 100%);
+        }
+
+        .gantt-bar.parcial {
+            background: linear-gradient(135deg, #ffc000 0%, #d9a300 100%);
+        }
+
+        .gantt-bar.pendiente {
+            background: linear-gradient(135deg, #c5504b 0%, #a04440 100%);
+        }
+
+        .gantt-bar .tooltip {
+            display: none;
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #2c3e50;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 5px;
+            white-space: nowrap;
+            z-index: 100;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+
+        .gantt-bar:hover .tooltip {
+            display: block;
+        }
+
+        /* Milestone marker */
+        .milestone {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: #ff6b6b;
+            border-radius: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            border: 2px solid white;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+            z-index: 5;
+        }
+
+        /* Legend */
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin: 30px 0;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .legend-color {
+            width: 30px;
+            height: 20px;
+            border-radius: 4px;
+        }
+
+        /* Table Styles */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 0.9em;
+            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .data-table thead {
+            background: #1f4e79;
+            color: white;
+        }
+
+        .data-table th {
+            padding: 15px 10px;
+            text-align: left;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.85em;
+            letter-spacing: 0.5px;
+        }
+
+        .data-table td {
+            padding: 12px 10px;
+            border-bottom: 1px solid #ecf0f1;
+        }
+
+        .data-table tbody tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+
+        .data-table tbody tr:hover {
+            background: #e3f2fd;
+            transition: background 0.3s ease;
+        }
+
+        .sprint-row {
+            background: #deebf7 !important;
+            font-weight: bold;
+        }
+
+        .status-badge {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+            display: inline-block;
+        }
+
+        .status-completo {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-parcial {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-pendiente {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        /* Key Findings Box */
+        .key-findings {
+            background: linear-gradient(135deg, #e3f2fd 0%, #f8f9fa 100%);
+            border-left: 5px solid #2196f3;
+            padding: 25px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        .key-findings h3 {
+            color: #1565c0;
+            margin-bottom: 15px;
+        }
+
+        .key-findings ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .key-findings li {
+            padding: 8px 0;
+            padding-left: 30px;
+            position: relative;
+        }
+
+        .key-findings li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #2196f3;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8em;
+            }
+
+            .content {
+                padding: 20px;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .gantt-container {
+                padding: 10px;
+            }
+
+            .data-table {
+                font-size: 0.8em;
+            }
+
+            .data-table th,
+            .data-table td {
+                padding: 8px 5px;
+            }
+        }
+
+        /* Print Styles */
+        @media print {
+            body {
+                background: white;
+            }
+
+            .container {
+                box-shadow: none;
+            }
+
+            .gantt-bar .tooltip {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Cronograma Gantt Interactivo - PPTO APP</h1>
+            <p>Roadmap de Desarrollo por Sprints | Octubre - Diciembre 2025</p>
+        </div>
+
+        <div class="content">
+            <!-- Key Findings -->
+            <div class="section">
+                <div class="key-findings">
+                    <h3>🎯 Hallazgos Clave del Proyecto</h3>
+                    <ul>
+                        <li><strong>Progreso Actual:</strong> Sprint 1 completado, Sprint 2 en ejecución con HU-B1 iniciando en paralelo</li>
+                        <li><strong>Estrategia de Paralelización:</strong> HU-B1 arranca el 05/11 en paralelo con HU-A2 para optimizar tiempos</li>
+                        <li><strong>Hitos Intermedios:</strong> Se establecieron checkpoints para seguimiento de cada historia (27/10 a 10/12)</li>
+                        <li><strong>Go-Live Programado:</strong> 15-18 de diciembre 2025 (4 días para despliegue y estabilización)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="section">
+                <h2>📈 Métricas del Proyecto</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number">4</div>
+                        <div class="stat-label">Sprints</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">12</div>
+                        <div class="stat-label">Historias de Usuario</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">56</div>
+                        <div class="stat-label">Días de Desarrollo</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">4</div>
+                        <div class="stat-label">Días de Go-Live</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gantt Chart -->
+            <div class="section">
+                <h2>📅 Diagrama de Gantt Interactivo</h2>
+                
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: linear-gradient(135deg, #70ad47 0%, #5d8a3a 100%);"></div>
+                        <span>Completo</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: linear-gradient(135deg, #ffc000 0%, #d9a300 100%);"></div>
+                        <span>Parcial</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: linear-gradient(135deg, #c5504b 0%, #a04440 100%);"></div>
+                        <span>Pendiente</span>
+                    </div>
+                    <div class="legend-item">
+                        <div style="width: 12px; height: 12px; background: #ff6b6b; border-radius: 50%; border: 2px solid white;"></div>
+                        <span>Hito Intermedio</span>
+                    </div>
+                </div>
+
+                <div class="gantt-container">
+                    <div class="gantt-chart" id="ganttChart"></div>
+                </div>
+            </div>
+
+            <!-- Detailed Table -->
+            <div class="section">
+                <h2>📋 Cronograma Detallado</h2>
+                <div style="overflow-x: auto;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Historia de Usuario</th>
+                                <th>Sprint</th>
+                                <th>Inicio</th>
+                                <th>Hito</th>
+                                <th>Entrega</th>
+                                <th>Días</th>
+                                <th>Dependencias</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detailTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Project data
+        const projectData = [
+            {
+                sprint: 'S1',
+                sprintName: 'Sprint 1: Setup & Diseño + CRUD básico',
+                items: [
+                    {
+                        id: 'HU-A1',
+                        name: 'CRUD Sustentos',
+                        start: '2025-10-20',
+                        milestone: '2025-10-27',
+                        end: '2025-11-02',
+                        dependencies: '—',
+                        notes: 'Fundaciones FE/BE sin puntos en paralelo.',
+                        status: 'completo'
+                    }
+                ]
+            },
+            {
+                sprint: 'S2',
+                sprintName: 'Sprint 2: Relación M:N + Carga masiva',
+                items: [
+                    {
+                        id: 'HU-A2',
+                        name: 'M:N CECOs',
+                        start: '2025-11-03',
+                        milestone: '2025-11-10',
+                        end: '2025-11-16',
+                        dependencies: 'A1',
+                        notes: 'Cierra contrato de prorrateo al 100%.',
+                        status: 'parcial'
+                    },
+                    {
+                        id: 'HU-B1',
+                        name: 'Carga masiva',
+                        start: '2025-11-05',
+                        milestone: '2025-11-12',
+                        end: '2025-11-16',
+                        dependencies: 'A1',
+                        notes: 'Corre en paralelo con A2; requiere plantilla y vista de errores.',
+                        status: 'pendiente'
+                    }
+                ]
+            },
+            {
+                sprint: 'S3',
+                sprintName: 'Sprint 3: Estados, Seguridad y Auditoría',
+                items: [
+                    {
+                        id: 'HU-A3',
+                        name: 'Estados + comentarios',
+                        start: '2025-11-17',
+                        milestone: '2025-11-24',
+                        end: '2025-11-30',
+                        dependencies: 'A1',
+                        notes: 'Estados Pendiente/Validado/Observado + bitácora.',
+                        status: 'pendiente'
+                    },
+                    {
+                        id: 'HU-D1',
+                        name: 'Autenticación/roles',
+                        start: '2025-11-17',
+                        milestone: '2025-11-22',
+                        end: '2025-11-30',
+                        dependencies: '—',
+                        notes: 'Base para auditoría e integraciones.',
+                        status: 'pendiente'
+                    },
+                    {
+                        id: 'HU-D2',
+                        name: 'Auditoría cambios',
+                        start: '2025-11-23',
+                        milestone: '2025-11-27',
+                        end: '2025-11-30',
+                        dependencies: 'D1',
+                        notes: 'Trail por entidad y diffs.',
+                        status: 'pendiente'
+                    },
+                    {
+                        id: 'HU-B2',
+                        name: 'Catálogos',
+                        start: '2025-11-20',
+                        milestone: '2025-11-26',
+                        end: '2025-11-30',
+                        dependencies: '—',
+                        notes: 'CRUD CECOs/Proveedores/Proyectos/Monedas.',
+                        status: 'pendiente'
+                    }
+                ]
+            },
+            {
+                sprint: 'S4',
+                sprintName: 'Sprint 4: Integraciones y End-to-End',
+                items: [
+                    {
+                        id: 'HU-C1',
+                        name: 'Filtros/búsqueda',
+                        start: '2025-12-01',
+                        milestone: '2025-12-04',
+                        end: '2025-12-06',
+                        dependencies: 'A1',
+                        notes: 'Va primero en S4 para habilitar export.',
+                        status: 'pendiente'
+                    },
+                    {
+                        id: 'HU-C2',
+                        name: 'Export CSV/Excel',
+                        start: '2025-12-07',
+                        milestone: '2025-12-10',
+                        end: '2025-12-12',
+                        dependencies: 'C1',
+                        notes: 'Respeta filtros/orden.',
+                        status: 'pendiente'
+                    },
+                    {
+                        id: 'HU-E1a',
+                        name: 'Integración facturas (n8n→Portal)',
+                        start: '2025-12-01',
+                        milestone: '2025-12-06',
+                        end: '2025-12-10',
+                        dependencies: 'A1, D1, D2',
+                        notes: 'Idempotencia + correlation ID + evidencias.',
+                        status: 'pendiente'
+                    },
+                    {
+                        id: 'HU-E1b',
+                        name: 'Migración automatización OCs',
+                        start: '2025-12-01',
+                        milestone: '2025-12-08',
+                        end: '2025-12-12',
+                        dependencies: 'A1–A3, B1, D1',
+                        notes: 'Refactor a contrato único del portal.',
+                        status: 'pendiente'
+                    },
+                    {
+                        id: 'HU-E2',
+                        name: 'Alertas (opcional)',
+                        start: '2025-12-12',
+                        milestone: null,
+                        end: '2025-12-14',
+                        dependencies: 'E1a/E1b',
+                        notes: 'Solo si hay capacidad; post-MVP.',
+                        status: 'pendiente'
+                    }
+                ]
+            },
+            {
+                sprint: 'GL',
+                sprintName: 'Go-Live: MVP a producción',
+                items: [
+                    {
+                        id: 'GL',
+                        name: 'Go-Live',
+                        start: '2025-12-15',
+                        milestone: null,
+                        end: '2025-12-18',
+                        dependencies: 'Todos',
+                        notes: 'Despliegue y estabilización.',
+                        status: 'pendiente'
+                    }
+                ]
+            }
+        ];
+
+        // Calculate days between dates
+        function daysBetween(date1, date2) {
+            const d1 = new Date(date1);
+            const d2 = new Date(date2);
+            return Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
+        }
+
+        // Format date to Spanish
+        function formatDate(dateStr) {
+            if (!dateStr) return '—';
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        }
+
+        // Calculate position percentage
+        function calculatePosition(date, startDate, endDate) {
+            const start = new Date(startDate).getTime();
+            const end = new Date(endDate).getTime();
+            const current = new Date(date).getTime();
+            return ((current - start) / (end - start)) * 100;
+        }
+
+        // Calculate width percentage
+        function calculateWidth(startDate, endDate, projectStart, projectEnd) {
+            const duration = daysBetween(startDate, endDate);
+            const totalDuration = daysBetween(projectStart, projectEnd);
+            return (duration / totalDuration) * 100;
+        }
+
+        // Render Gantt Chart
+        function renderGanttChart() {
+            const ganttChart = document.getElementById('ganttChart');
+            const projectStart = '2025-10-20';
+            const projectEnd = '2025-12-18';
+            
+            let html = '<div class="gantt-header"><div>Tareas</div><div>Línea de Tiempo (Oct - Dic 2025)</div></div>';
+
+            projectData.forEach(sprint => {
+                // Sprint row
+                html += `
+                    <div class="gantt-row">
+                        <div class="gantt-label sprint"><strong>${sprint.sprint}:</strong> ${sprint.sprintName}</div>
+                        <div class="gantt-bars"></div>
+                    </div>
+                `;
+
+                // User story rows
+                sprint.items.forEach(item => {
+                    const startPos = calculatePosition(item.start, projectStart, projectEnd);
+                    const width = calculateWidth(item.start, item.end, projectStart, projectEnd);
+                    const duration = daysBetween(item.start, item.end);
+
+                    let milestoneHtml = '';
+                    if (item.milestone) {
+                        const milestonePos = calculatePosition(item.milestone, projectStart, projectEnd);
+                        milestoneHtml = `<div class="milestone" style="left: ${milestonePos}%;" title="Hito: ${formatDate(item.milestone)}"></div>`;
+                    }
+
+                    html += `
+                        <div class="gantt-row">
+                            <div class="gantt-label historia">${item.id}: ${item.name}</div>
+                            <div class="gantt-bars">
+                                ${milestoneHtml}
+                                <div class="gantt-bar ${item.status}" style="left: ${startPos}%; width: ${width}%;">
+                                    ${item.id}
+                                    <div class="tooltip">
+                                        ${item.name}<br>
+                                        ${formatDate(item.start)} - ${formatDate(item.end)}<br>
+                                        Duración: ${duration} días
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            });
+
+            ganttChart.innerHTML = html;
+        }
+
+        // Render Detail Table
+        function renderDetailTable() {
+            const tbody = document.getElementById('detailTableBody');
+            let html = '';
+
+            projectData.forEach(sprint => {
+                // Sprint row
+                const sprintStart = sprint.items[0].start;
+                const sprintEnd = sprint.items[sprint.items.length - 1].end;
+                const sprintDuration = daysBetween(sprintStart, sprintEnd);
+                const sprintStatus = sprint.items.every(i => i.status === 'completo') ? 'completo' : 
+                                    sprint.items.some(i => i.status !== 'pendiente') ? 'parcial' : 'pendiente';
+
+                html += `
+                    <tr class="sprint-row">
+                        <td><strong>${sprint.sprint}</strong></td>
+                        <td colspan="7"><strong>${sprint.sprintName}</strong></td>
+                        <td><span class="status-badge status-${sprintStatus}">${sprintStatus.charAt(0).toUpperCase() + sprintStatus.slice(1)}</span></td>
+                    </tr>
+                `;
+
+                // User story rows
+                sprint.items.forEach(item => {
+                    const duration = daysBetween(item.start, item.end);
+                    html += `
+                        <tr>
+                            <td>${item.id}</td>
+                            <td>${item.name}</td>
+                            <td>${sprint.sprint}</td>
+                            <td>${formatDate(item.start)}</td>
+                            <td>${formatDate(item.milestone)}</td>
+                            <td>${formatDate(item.end)}</td>
+                            <td>${duration}</td>
+                            <td>${item.dependencies}</td>
+                            <td><span class="status-badge status-${item.status}">${item.status.charAt(0).toUpperCase() + item.status.slice(1)}</span></td>
+                        </tr>
+                    `;
+                });
+            });
+
+            tbody.innerHTML = html;
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            renderGanttChart();
+            renderDetailTable();
+        });
+    </script>
+</body>
+</html>
+

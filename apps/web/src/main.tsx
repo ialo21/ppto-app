@@ -17,7 +17,7 @@ function Sidebar(){
       <div className="text-xl font-bold px-3 py-2">PPTO TI</div>
       <nav className="space-y-1">
         <NavLink to="/" end className={({isActive})=>`${link} ${isActive?active:""}`}><Home size={18}/>Dashboard</NavLink>
-        <NavLink to="/budget" className={({isActive})=>`${link} ${isActive?active:""}`}><Wallet size={18}/>PPTO</NavLink>
+        <NavLink to="/ppto" className={({isActive})=>`${link} ${isActive?active:""}`}><Wallet size={18}/>PPTO</NavLink>
         <NavLink to="/control-lines" className={({isActive})=>`${link} ${isActive?active:""}`}><ListChecks size={18}/>Lineas</NavLink>
         <NavLink to="/purchase-orders" className={({isActive})=>`${link} ${isActive?active:""}`}><ShoppingCart size={18}/>Órdenes de Compra</NavLink>
         <NavLink to="/invoices" className={({isActive})=>`${link} ${isActive?active:""}`}><FileText size={18}/>Facturas</NavLink>
@@ -66,7 +66,7 @@ import CatalogsPage from "./pages/SettingsPage";
 const router = createBrowserRouter([
   { element: <AppLayout />, children: [
     { path: "/", element: <Dashboard /> },
-    { path: "/budget", element: <BudgetPage /> },
+    { path: "/ppto", element: <BudgetPage /> },
     { path: "/control-lines", element: <ControlLinesPage /> },
     { path: "/purchase-orders", element: <PurchaseOrdersPage /> },
     { path: "/invoices", element: <InvoicesPage /> },

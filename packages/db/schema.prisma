@@ -123,6 +123,7 @@ model CostCenter {
   supports Support[] @relation("LegacySupportCostCenter")  // DEPRECATED: relación 1:N legacy
   ocs      OC[]
   supportLinks SupportCostCenter[]  // M:N con Support
+  budgetAllocations BudgetAllocation[]
 }
 
 model Articulo {
@@ -179,12 +180,15 @@ model BudgetAllocation {
   version      BudgetVersion @relation(fields: [versionId], references: [id])
   supportId    Int
   support      Support @relation(fields: [supportId], references: [id], onDelete: Cascade)
+  costCenterId Int?
+  costCenter   CostCenter? @relation(fields: [costCenterId], references: [id], onDelete: Cascade)
   periodId     Int
   period       Period  @relation(fields: [periodId], references: [id])
   amountLocal  Decimal
   currency     String  @default("PEN")
 
-  @@unique([versionId, periodId, supportId], name: "ux_alloc_version_period_support")
+  @@unique([versionId, periodId, supportId, costCenterId], name: "ux_alloc_version_period_support_ceco")
+  @@index([periodId, costCenterId], name: "ix_alloc_period_ceco")
 }
 
 model Vendor {

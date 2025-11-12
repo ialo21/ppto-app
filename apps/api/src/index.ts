@@ -7,6 +7,7 @@ import { registerControlLineRoutes } from "./controlLines";
 import { registerReportRoutes } from "./reports";
 import { registerSupportRoutes } from "./supports";
 import { registerBudgetRoutes } from "./budgets";
+import { registerDetailedBudgetRoutes } from "./budgets-detailed";
 import { registerMasterRoutes } from "./masters";
 import { registerOcRoutes } from "./oc";
 import { registerBulkRoutes } from "./bulk";
@@ -22,6 +23,16 @@ app.get("/health", async () => ({ ok: true }));
 // Periods: list
 app.get("/periods", async () => {
   return prisma.period.findMany({ orderBy: [{ year: "asc" }, { month: "asc" }] });
+});
+
+// Periods: get distinct years
+app.get("/periods/years", async () => {
+  const periods = await prisma.period.findMany({
+    select: { year: true },
+    distinct: ["year"],
+    orderBy: { year: "desc" }
+  });
+  return periods.map(p => ({ year: p.year }));
 });
 
 // Periods: receive accounting closure
@@ -41,6 +52,7 @@ app.post("/periods/:id/closure", async (req, reply) => {
 // Rutas específicas
 await registerSupportRoutes(app);
 await registerBudgetRoutes(app);
+await registerDetailedBudgetRoutes(app);
 await registerControlLineRoutes(app);
 await registerInvoiceRoutes(app);
 await registerOcRoutes(app);

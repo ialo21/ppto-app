@@ -28,7 +28,8 @@ const typeEnum = z.enum([
   "ExpenseConcept",
   "CostCenter",
   "Articulo",
-  "Support"
+  "Support",
+  "Budget"
 ]);
 
 const activeTransform = z.string().optional().transform(val => {
@@ -96,6 +97,25 @@ const supportSchema = z.object({
   active: activeTransform
 });
 
+// Budget: requiere supportName, costCenterCode y 12 meses
+const budgetSchema = z.object({
+  type: z.literal("Budget"),
+  supportName: z.string().min(1, "supportName es obligatorio"),
+  costCenterCode: z.string().min(1, "costCenterCode es obligatorio"),
+  ene: z.string().optional(),
+  feb: z.string().optional(),
+  mar: z.string().optional(),
+  abr: z.string().optional(),
+  may: z.string().optional(),
+  jun: z.string().optional(),
+  jul: z.string().optional(),
+  ago: z.string().optional(),
+  sep: z.string().optional(),
+  oct: z.string().optional(),
+  nov: z.string().optional(),
+  dic: z.string().optional()
+});
+
 // Mapa de esquemas por tipo
 const schemasByType: Record<string, z.ZodSchema> = {
   Management: managementSchema,
@@ -104,7 +124,8 @@ const schemasByType: Record<string, z.ZodSchema> = {
   ExpenseConcept: expenseConceptSchema,
   CostCenter: costCenterSchema,
   Articulo: articuloSchema,
-  Support: supportSchema
+  Support: supportSchema,
+  Budget: budgetSchema
 };
 
 type CsvRow = 
@@ -114,7 +135,8 @@ type CsvRow =
   | z.infer<typeof expenseConceptSchema>
   | z.infer<typeof costCenterSchema>
   | z.infer<typeof articuloSchema>
-  | z.infer<typeof supportSchema>;
+  | z.infer<typeof supportSchema>
+  | z.infer<typeof budgetSchema>;
 
 type RowResult = {
   row: number;
@@ -246,7 +268,7 @@ function generateTemplateCSV(): string {
 }
 
 // Procesador principal de carga masiva
-async function processBulkCSV(rows: CsvRow[], dryRun: boolean): Promise<BulkResponse> {
+async function processBulkCSV(rows: CsvRow[], dryRun: boolean, year?: number, overwriteBlanks?: boolean): Promise<BulkResponse> {
   const results: RowResult[] = [];
   const byType: Record<string, { created: number; updated: number; skipped: number; errors: number }> = {};
 
@@ -257,7 +279,7 @@ async function processBulkCSV(rows: CsvRow[], dryRun: boolean): Promise<BulkResp
   };
 
   // Ordenar filas por tipo según dependencias
-  const typeOrder = ["Management", "ExpensePackage", "CostCenter", "Articulo", "Area", "ExpenseConcept", "Support"];
+  const typeOrder = ["Management", "ExpensePackage", "CostCenter", "Articulo", "Area", "ExpenseConcept", "Support", "Budget"];
   const sortedRows = rows
     .map((row, idx) => ({ row, originalIndex: idx + 2 })) // +2 porque row 1 es headers, 0-indexed
     .sort((a, b) => {
@@ -295,6 +317,9 @@ async function processBulkCSV(rows: CsvRow[], dryRun: boolean): Promise<BulkResp
           break;
         case "Support":
           result = await processSupport(data, rowNum, dryRun);
+          break;
+        case "Budget":
+          result = await processBudget(data, rowNum, dryRun, year, overwriteBlanks);
           break;
         default:
           result = {
@@ -925,6 +950,229 @@ async function processSupport(data: any, rowNum: number, dryRun: boolean): Promi
   };
 }
 
+async function processBudget(data: any, rowNum: number, dryRun: boolean, year?: number, overwriteBlanks?: boolean): Promise<RowResult> {
+  const supportName = data.supportName?.trim();
+  const costCenterCode = data.costCenterCode?.trim();
+
+  if (!supportName) {
+    return {
+      row: rowNum,
+      type: "Budget",
+      action: "error",
+      message: "supportName es obligatorio",
+      issues: [{ path: ["supportName"], message: "Campo requerido" }]
+    };
+  }
+
+  if (!costCenterCode) {
+    return {
+      row: rowNum,
+      type: "Budget",
+      action: "error",
+      message: "costCenterCode es obligatorio",
+      issues: [{ path: ["costCenterCode"], message: "Campo requerido" }]
+    };
+  }
+
+  if (!year) {
+    return {
+      row: rowNum,
+      type: "Budget",
+      action: "error",
+      message: "El año es obligatorio (query param year=YYYY)",
+      issues: [{ path: ["_general"], message: "Año no especificado" }]
+    };
+  }
+
+  // Resolver supportName -> supportId
+  const support = await prisma.support.findFirst({
+    where: { name: { equals: supportName, mode: "insensitive" } }
+  });
+
+  if (!support) {
+    return {
+      row: rowNum,
+      type: "Budget",
+      action: "error",
+      message: `Sustento "${supportName}" no encontrado`,
+      issues: [{ path: ["supportName"], message: "Sustento no existe" }]
+    };
+  }
+
+  // Resolver costCenterCode -> costCenterId
+  const costCenter = await prisma.costCenter.findFirst({
+    where: { code: { equals: costCenterCode, mode: "insensitive" } }
+  });
+
+  if (!costCenter) {
+    return {
+      row: rowNum,
+      type: "Budget",
+      action: "error",
+      message: `Centro de costo "${costCenterCode}" no encontrado`,
+      issues: [{ path: ["costCenterCode"], message: "CECO no existe" }]
+    };
+  }
+
+  // Obtener versión activa
+  const version = await prisma.budgetVersion.findFirst({ where: { status: "ACTIVE" } });
+  if (!version) {
+    return {
+      row: rowNum,
+      type: "Budget",
+      action: "error",
+      message: "No hay versión de presupuesto ACTIVE",
+      issues: [{ path: ["_general"], message: "Versión de presupuesto no disponible" }]
+    };
+  }
+
+  // Mapeo mes -> campo CSV
+  const monthMap: Record<number, string> = {
+    1: "ene", 2: "feb", 3: "mar", 4: "abr", 5: "may", 6: "jun",
+    7: "jul", 8: "ago", 9: "sep", 10: "oct", 11: "nov", 12: "dic"
+  };
+
+  // Obtener períodos del año
+  const periods = await prisma.period.findMany({
+    where: { year },
+    include: { closures: true },
+    orderBy: { month: "asc" }
+  });
+
+  if (periods.length === 0) {
+    return {
+      row: rowNum,
+      type: "Budget",
+      action: "error",
+      message: `No hay períodos configurados para el año ${year}`,
+      issues: [{ path: ["_general"], message: "Períodos no existen" }]
+    };
+  }
+
+  const periodsByMonth = new Map(periods.map(p => [p.month, p]));
+  const issues: Array<{ path: string[]; message: string }> = [];
+  const upserts: Array<{ periodId: number; amountPen: number; month: number }> = [];
+
+  // Procesar cada mes
+  for (let month = 1; month <= 12; month++) {
+    const monthKey = monthMap[month];
+    const rawValue = (data[monthKey] as string | undefined)?.trim();
+    const period = periodsByMonth.get(month);
+
+    // Si no existe el período para ese mes
+    if (!period) {
+      if (rawValue && rawValue !== "") {
+        issues.push({
+          path: [monthKey],
+          message: `Periodo ${year}-${String(month).padStart(2, "0")} no existe`
+        });
+      }
+      continue;
+    }
+
+    // Si el período está cerrado
+    const isClosed = !!period.closures;
+    if (isClosed && rawValue && rawValue !== "") {
+      issues.push({
+        path: [monthKey],
+        message: `Periodo ${year}-${String(month).padStart(2, "0")} está cerrado`
+      });
+      continue;
+    }
+
+    // Determinar si procesar este mes
+    let shouldProcess = false;
+    let amount = 0;
+
+    if (rawValue === undefined || rawValue === "") {
+      // Valor vacío
+      if (overwriteBlanks) {
+        shouldProcess = true;
+        amount = 0;
+      }
+      // Si no overwriteBlanks, no tocar este mes
+    } else {
+      // Valor presente
+      const parsed = parseFloat(rawValue);
+      if (isNaN(parsed)) {
+        issues.push({
+          path: [monthKey],
+          message: `Valor inválido: "${rawValue}"`
+        });
+        continue;
+      }
+      if (parsed < 0) {
+        issues.push({
+          path: [monthKey],
+          message: `Valor negativo no permitido`
+        });
+        continue;
+      }
+      shouldProcess = true;
+      amount = parsed;
+    }
+
+    if (shouldProcess && !isClosed) {
+      upserts.push({ periodId: period.id, amountPen: amount, month });
+    }
+  }
+
+  // Si hay issues, retornar error
+  if (issues.length > 0) {
+    return {
+      row: rowNum,
+      type: "Budget",
+      action: "error",
+      message: `Errores en fila: ${issues.length} problemas encontrados`,
+      issues
+    };
+  }
+
+  // Si no hay upserts, skip
+  if (upserts.length === 0) {
+    return {
+      row: rowNum,
+      type: "Budget",
+      action: "skipped",
+      message: `Sin cambios para "${supportName}" - "${costCenterCode}"`
+    };
+  }
+
+  // Ejecutar upserts
+  if (!dryRun) {
+    await prisma.$transaction(async tx => {
+      for (const { periodId, amountPen } of upserts) {
+        await tx.budgetAllocation.upsert({
+          where: {
+            ux_alloc_version_period_support_ceco: {
+              versionId: version.id,
+              periodId,
+              supportId: support.id,
+              costCenterId: costCenter.id
+            }
+          },
+          update: { amountLocal: amountPen },
+          create: {
+            versionId: version.id,
+            periodId,
+            supportId: support.id,
+            costCenterId: costCenter.id,
+            amountLocal: amountPen,
+            currency: "PEN"
+          }
+        });
+      }
+    });
+  }
+
+  return {
+    row: rowNum,
+    type: "Budget",
+    action: upserts.length > 0 ? "created" : "skipped",
+    message: `"${supportName}" - "${costCenterCode}": ${upserts.length} meses procesados`
+  };
+}
+
 export async function registerBulkRoutes(app: FastifyInstance) {
   // Registrar plugin multipart para subida de archivos
   await app.register(multipart, {
@@ -940,6 +1188,33 @@ export async function registerBulkRoutes(app: FastifyInstance) {
     reply
       .header("Content-Type", "text/csv; charset=utf-8")
       .header("Content-Disposition", 'attachment; filename="catalogs_template.csv"')
+      .send("\uFEFF" + csv); // BOM para UTF-8
+  });
+
+  // Endpoint para descargar plantilla CSV de presupuesto
+  app.get("/bulk/template/budget", async (req, reply) => {
+    const headers = ["supportName", "costCenterCode", "ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+    const examples = [
+      ["Licencias Microsoft", "CC-001", "5000", "5000", "5000", "5000", "5000", "5000", "5000", "5000", "5000", "5000", "5000", "5000"],
+      ["Soporte TI - Hardware", "CC-002", "3000", "3000", "3000", "", "", "", "3000", "3000", "3000", "3000", "3000", "3000"],
+      ["Cloud Services", "CC-001", "10000.50", "10000.50", "10000.50", "10000.50", "10000.50", "10000.50", "10000.50", "10000.50", "10000.50", "10000.50", "10000.50", "10000.50"]
+    ];
+
+    const lines = [headers.join(",")];
+    examples.forEach(row => {
+      const escaped = row.map(cell => {
+        if (cell.includes(",") || cell.includes('"') || cell.includes("\n")) {
+          return `"${cell.replace(/"/g, '""')}"`;
+        }
+        return cell;
+      });
+      lines.push(escaped.join(","));
+    });
+
+    const csv = lines.join("\n");
+    reply
+      .header("Content-Type", "text/csv; charset=utf-8")
+      .header("Content-Disposition", 'attachment; filename="budget_template.csv"')
       .send("\uFEFF" + csv); // BOM para UTF-8
   });
 
@@ -1033,9 +1308,11 @@ export async function registerBulkRoutes(app: FastifyInstance) {
 
       // Determinar si es dry-run desde query params
       const dryRun = (req.query as any).dryRun !== "false";
+      const year = (req.query as any).year ? Number((req.query as any).year) : undefined;
+      const overwriteBlanks = (req.query as any).overwriteBlanks === "true";
 
       // Procesar
-      const result = await processBulkCSV(validatedRows, dryRun);
+      const result = await processBulkCSV(validatedRows, dryRun, year, overwriteBlanks);
 
       // Si hay errores en el procesamiento, devolver 422
       if (result.summary.errors > 0) {

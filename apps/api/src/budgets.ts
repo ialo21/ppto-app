@@ -29,7 +29,11 @@ export async function registerBudgetRoutes(app: FastifyInstance) {
       versionId = v?.id!;
     }
     const rows = await prisma.budgetAllocation.findMany({
-      where: { periodId, versionId },
+      where: { 
+        periodId, 
+        versionId,
+        costCenterId: null // Solo mostrar asignaciones simples (sin CECO)
+      },
       include: { support: true },
       orderBy: { supportId: "asc" }
     });
@@ -51,51 +55,27 @@ export async function registerBudgetRoutes(app: FastifyInstance) {
     const result = await prisma.$transaction(async (tx) => {
       const out = [];
       for (const it of items) {
-        try {
-          // Usar upsert con el índice único compuesto
-          const row = await tx.budgetAllocation.upsert({
-            where: {
-              ux_alloc_version_period_support: { 
-                versionId, 
-                periodId, 
-                supportId: it.supportId 
-              }
-            },
-            update: { amountLocal: new Prisma.Decimal(it.amountLocal) },
-            create: {
-              versionId, periodId, supportId: it.supportId,
-              amountLocal: new Prisma.Decimal(it.amountLocal),
-              currency: "PEN"
+        // Usar el nuevo constraint que incluye costCenterId (null para vista simple)
+        const row = await tx.budgetAllocation.upsert({
+          where: {
+            ux_alloc_version_period_support_ceco: { 
+              versionId, 
+              periodId, 
+              supportId: it.supportId,
+              costCenterId: null as any // Vista simple sin CECO
             }
-          });
-          out.push(row);
-        } catch (error: any) {
-          // Fallback si el índice no está disponible aún
-          if (error.code === '42P10') {
-            const existing = await tx.budgetAllocation.findFirst({
-              where: { versionId, periodId, supportId: it.supportId }
-            });
-
-            let row;
-            if (existing) {
-              row = await tx.budgetAllocation.update({
-                where: { id: existing.id },
-                data: { amountLocal: new Prisma.Decimal(it.amountLocal) }
-              });
-            } else {
-              row = await tx.budgetAllocation.create({
-                data: {
-                  versionId, periodId, supportId: it.supportId,
-                  amountLocal: new Prisma.Decimal(it.amountLocal),
-                  currency: "PEN"
-                }
-              });
-            }
-            out.push(row);
-          } else {
-            throw error;
+          },
+          update: { amountLocal: new Prisma.Decimal(it.amountLocal) },
+          create: {
+            versionId, 
+            periodId, 
+            supportId: it.supportId,
+            costCenterId: null, // Vista simple sin CECO
+            amountLocal: new Prisma.Decimal(it.amountLocal),
+            currency: "PEN"
           }
-        }
+        });
+        out.push(row);
       }
       return out;
     });

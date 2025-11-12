@@ -1,49 +1,1013 @@
-import React, { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { Card, CardContent, CardHeader } from "../components/ui/Card";
 import Select from "../components/ui/Select";
 import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
 import { Table, Th, Td } from "../components/ui/Table";
-export default function BudgetPage(){
-  const { data: periods } = useQuery({ queryKey:["periods"], queryFn: async()=> (await api.get("/periods")).data });
-  const { data: supports } = useQuery({ queryKey:["supports"], queryFn: async()=> (await api.get("/supports")).data });
-  const [periodId, setPeriodId] = useState<number|undefined>();
-  const { data: allocs, refetch } = useQuery({
-    queryKey:["budgets",periodId],
-    enabled: !!periodId,
-    queryFn: async()=> (await api.get("/budgets",{ params:{ periodId } })).data
+import { toast } from "sonner";
+import BulkUploader from "../components/BulkUploader";
+import { useManagements, useAreas, useExpensePackages } from "../hooks/useCatalogData";
+
+type ViewMode = "monthly" | "annual";
+
+interface BudgetRow {
+  supportId: number;
+  supportCode: string | null;
+  supportName: string;
+  costCenterId: number;
+  costCenterCode: string;
+  costCenterName: string | null;
+  amountPen: number;
+  management?: string;
+  area?: string;
+}
+
+interface EditedValue {
+  supportId: number;
+  costCenterId: number;
+  value: string;
+  isValid: boolean;
+  error?: string;
+}
+
+interface AnnualRow {
+  supportId: number;
+  supportName: string;
+  supportCode: string | null;
+  costCenterId: number;
+  costCenterCode: string;
+  costCenterName: string | null;
+  managementName?: string;
+  areaName?: string;
+  months: Record<string, { periodId: number; isClosed: boolean; amountPen: number }>;
+  totalYear: number;
+}
+
+interface AnnualEditedValue {
+  supportId: number;
+  costCenterId: number;
+  periodId: number;
+  month: string;
+  value: string;
+  isValid: boolean;
+  error?: string;
+}
+
+const LOCAL_STORAGE_KEYS = {
+  viewMode: "ppto.viewMode",
+  year: "ppto.year",
+  periodId: "ppto.periodId"
+};
+
+export default function BudgetPage() {
+  const queryClient = useQueryClient();
+  
+  // View mode
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const saved = localStorage.getItem(LOCAL_STORAGE_KEYS.viewMode);
+    return (saved === "annual" ? "annual" : "monthly") as ViewMode;
   });
-  const [edited, setEdited] = useState<Record<number,string>>({});
-  const save = useMutation({ mutationFn: async ()=>{
-    const items = Object.entries(edited).map(([supportId, amountLocal])=>({ supportId: Number(supportId), amountLocal: Number(amountLocal||0) }));
-    return (await api.post("/budgets/upsert",{ periodId, items })).data;
-  }, onSuccess: ()=>{ setEdited({}); refetch(); }});
+
+  // State
+  const [selectedYear, setSelectedYear] = useState<number | undefined>(() => {
+    const saved = localStorage.getItem(LOCAL_STORAGE_KEYS.year);
+    return saved ? Number(saved) : undefined;
+  });
+  
+  const [selectedPeriodId, setSelectedPeriodId] = useState<number | undefined>(() => {
+    const saved = localStorage.getItem(LOCAL_STORAGE_KEYS.periodId);
+    return saved ? Number(saved) : undefined;
+  });
+  
+  const [searchText, setSearchText] = useState("");
+  const [edited, setEdited] = useState<Map<string, EditedValue>>(new Map());
+  const [annualEdited, setAnnualEdited] = useState<Map<string, AnnualEditedValue>>(new Map());
+  const [sortBy, setSortBy] = useState<"support" | "ceco" | "amount">("support");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+
+  // Filters
+  const [managementId, setManagementId] = useState<number | undefined>();
+  const [areaId, setAreaId] = useState<number | undefined>();
+  const [packageId, setPackageId] = useState<number | undefined>();
+  const [conceptId, setConceptId] = useState<number | undefined>();
+
+  // Refs for keyboard navigation
+  const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
+
+  // Fetch catalog data
+  const managementsQuery = useManagements();
+  const areasQuery = useAreas();
+  const packagesQuery = useExpensePackages();
+
+  // Fetch available years
+  const { data: yearsData } = useQuery({
+    queryKey: ["periods-years"],
+    queryFn: async () => (await api.get("/periods/years")).data
+  });
+
+  // Fetch all periods
+  const { data: allPeriods } = useQuery({
+    queryKey: ["periods"],
+    queryFn: async () => (await api.get("/periods")).data
+  });
+
+  const availableYears = useMemo(() => {
+    if (!yearsData) return [];
+    return yearsData.map((y: any) => y.year);
+  }, [yearsData]);
+
+  const periodsForYear = useMemo(() => {
+    if (!allPeriods || !selectedYear) return [];
+    return allPeriods.filter((p: any) => p.year === selectedYear);
+  }, [allPeriods, selectedYear]);
+
+  // Available areas filtered by management
+  const availableAreas = useMemo(() => {
+    if (!managementId || !areasQuery.data) return areasQuery.data || [];
+    return areasQuery.data.filter((a: any) => a.managementId === managementId);
+  }, [managementId, areasQuery.data]);
+
+  // Available concepts filtered by package
+  const availableConcepts = useMemo(() => {
+    if (!packageId || !packagesQuery.data) return [];
+    const pkg = packagesQuery.data.find((p: any) => p.id === packageId);
+    return pkg?.concepts || [];
+  }, [packageId, packagesQuery.data]);
+
+  // Auto-select year and period on mount
+  useEffect(() => {
+    if (availableYears.length > 0 && !selectedYear) {
+      // Select current year if exists, otherwise most recent
+      const currentYear = new Date().getFullYear();
+      const yearToSelect = availableYears.includes(currentYear) ? currentYear : availableYears[0];
+      setSelectedYear(yearToSelect);
+      localStorage.setItem(LOCAL_STORAGE_KEYS.year, String(yearToSelect));
+    }
+  }, [availableYears, selectedYear]);
+
+  useEffect(() => {
+    if (periodsForYear.length > 0 && !selectedPeriodId && viewMode === "monthly") {
+      // Auto-select last open period, or last period of year
+      const openPeriods = periodsForYear.filter((p: any) => !p.closures);
+      const periodToSelect = openPeriods.length > 0 
+        ? openPeriods[openPeriods.length - 1]
+        : periodsForYear[periodsForYear.length - 1];
+      
+      setSelectedPeriodId(periodToSelect.id);
+      localStorage.setItem(LOCAL_STORAGE_KEYS.periodId, String(periodToSelect.id));
+    }
+  }, [periodsForYear, selectedPeriodId, viewMode]);
+
+  // Persist view mode
+  useEffect(() => {
+    localStorage.setItem(LOCAL_STORAGE_KEYS.viewMode, viewMode);
+  }, [viewMode]);
+
+  // Persist year and period
+  useEffect(() => {
+    if (selectedYear) {
+      localStorage.setItem(LOCAL_STORAGE_KEYS.year, String(selectedYear));
+    }
+  }, [selectedYear]);
+
+  useEffect(() => {
+    if (selectedPeriodId) {
+      localStorage.setItem(LOCAL_STORAGE_KEYS.periodId, String(selectedPeriodId));
+    }
+  }, [selectedPeriodId]);
+
+  // Reset period when year changes
+  useEffect(() => {
+    setSelectedPeriodId(undefined);
+    setEdited(new Map());
+    setAnnualEdited(new Map());
+  }, [selectedYear]);
+
+  // Build query params for monthly view
+  const monthlyParams = useMemo(() => {
+    const params: any = { periodId: selectedPeriodId };
+    if (searchText.trim()) params.search = searchText.trim();
+    if (managementId) params.managementId = managementId;
+    if (areaId) params.areaId = areaId;
+    if (packageId) params.packageId = packageId;
+    if (conceptId) params.conceptId = conceptId;
+    return params;
+  }, [selectedPeriodId, searchText, managementId, areaId, packageId, conceptId]);
+
+  // Fetch monthly budget data
+  const { data: budgetData, refetch: refetchMonthly } = useQuery({
+    queryKey: ["budgets-detailed", monthlyParams],
+    enabled: viewMode === "monthly" && !!selectedPeriodId,
+    queryFn: async () => (await api.get("/budgets/detailed", { params: monthlyParams })).data
+  });
+
+  // Build query params for annual view
+  const annualParams = useMemo(() => {
+    const params: any = { year: selectedYear };
+    if (searchText.trim()) params.search = searchText.trim();
+    if (managementId) params.managementId = managementId;
+    if (areaId) params.areaId = areaId;
+    if (packageId) params.packageId = packageId;
+    if (conceptId) params.conceptId = conceptId;
+    return params;
+  }, [selectedYear, searchText, managementId, areaId, packageId, conceptId]);
+
+  // Fetch annual budget data
+  const { data: annualData, refetch: refetchAnnual } = useQuery({
+    queryKey: ["budgets-annual", annualParams],
+    enabled: viewMode === "annual" && !!selectedYear,
+    queryFn: async () => (await api.get("/budgets/annual", { params: annualParams })).data
+  });
+
+  // Monthly batch save
+  const saveMonthlyMutation = useMutation({
+    mutationFn: async () => {
+      const items = Array.from(edited.values())
+        .filter(e => e.isValid)
+        .map(e => ({
+          supportId: e.supportId,
+          costCenterId: e.costCenterId,
+          amountPen: parseFloat(e.value) || 0
+        }));
+      
+      return (await api.put("/budgets/detailed/batch", {
+        periodId: selectedPeriodId,
+        items
+      })).data;
+    },
+    onSuccess: () => {
+      toast.success("Cambios guardados exitosamente");
+      setEdited(new Map());
+      queryClient.invalidateQueries({ queryKey: ["budgets-detailed"] });
+      queryClient.invalidateQueries({ queryKey: ["budgets-annual"] });
+      refetchMonthly();
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.error || "Error al guardar";
+      toast.error(message);
+    }
+  });
+
+  // Annual batch save
+  const saveAnnualMutation = useMutation({
+    mutationFn: async () => {
+      const changes = Array.from(annualEdited.values())
+        .filter(e => e.isValid)
+        .map(e => ({
+          supportId: e.supportId,
+          costCenterId: e.costCenterId,
+          periodId: e.periodId,
+          amountPen: parseFloat(e.value) || 0
+        }));
+      
+      return (await api.put("/budgets/annual/batch", { changes })).data;
+    },
+    onSuccess: (data) => {
+      toast.success(`Cambios guardados: ${data.count} actualizados${data.skipped > 0 ? `, ${data.skipped} omitidos (períodos cerrados)` : ""}`);
+      setAnnualEdited(new Map());
+      queryClient.invalidateQueries({ queryKey: ["budgets-detailed"] });
+      queryClient.invalidateQueries({ queryKey: ["budgets-annual"] });
+      refetchAnnual();
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.error || "Error al guardar";
+      toast.error(message);
+    }
+  });
+
+  // Validation
+  const validateAmount = (value: string): { isValid: boolean; error?: string } => {
+    if (value === "") return { isValid: true };
+    
+    const num = parseFloat(value);
+    if (isNaN(num)) {
+      return { isValid: false, error: "Debe ser un número válido" };
+    }
+    if (num < 0) {
+      return { isValid: false, error: "No puede ser negativo" };
+    }
+    
+    const parts = value.split(".");
+    if (parts.length > 1 && parts[1].length > 2) {
+      return { isValid: false, error: "Máximo 2 decimales" };
+    }
+    
+    return { isValid: true };
+  };
+
+  // Monthly cell edit
+  const handleMonthlyCellEdit = (supportId: number, costCenterId: number, value: string) => {
+    const key = `${supportId}-${costCenterId}`;
+    const validation = validateAmount(value);
+    
+    setEdited(prev => {
+      const newMap = new Map(prev);
+      newMap.set(key, {
+        supportId,
+        costCenterId,
+        value,
+        isValid: validation.isValid,
+        error: validation.error
+      });
+      return newMap;
+    });
+  };
+
+  // Annual cell edit
+  const handleAnnualCellEdit = (supportId: number, costCenterId: number, periodId: number, month: string, value: string) => {
+    const key = `${supportId}-${costCenterId}-${month}`;
+    const validation = validateAmount(value);
+    
+    setAnnualEdited(prev => {
+      const newMap = new Map(prev);
+      newMap.set(key, {
+        supportId,
+        costCenterId,
+        periodId,
+        month,
+        value,
+        isValid: validation.isValid,
+        error: validation.error
+      });
+      return newMap;
+    });
+  };
+
+  // Keyboard navigation
+  const handleKeyDown = (e: React.KeyboardEvent, currentKey: string, rows: any[], rowIndex: number, cellType: "monthly" | "annual", monthIndex?: number) => {
+    if (e.key === "Escape") {
+      if (cellType === "monthly") {
+        const row = rows[rowIndex];
+        const key = `${row.supportId}-${row.costCenterId}`;
+        setEdited(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(key);
+          return newMap;
+        });
+      } else {
+        setAnnualEdited(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(currentKey);
+          return newMap;
+        });
+      }
+      return;
+    }
+
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const nextRowIndex = e.shiftKey ? rowIndex - 1 : rowIndex + 1;
+      
+      if (nextRowIndex >= 0 && nextRowIndex < rows.length) {
+        const nextRow = rows[nextRowIndex];
+        let nextKey: string;
+        
+        if (cellType === "monthly") {
+          nextKey = `${nextRow.supportId}-${nextRow.costCenterId}`;
+        } else {
+          const months = Object.keys(nextRow.months).sort();
+          const month = monthIndex !== undefined ? months[monthIndex] : months[0];
+          nextKey = `${nextRow.supportId}-${nextRow.costCenterId}-${month}`;
+        }
+        
+        const nextInput = inputRefs.current.get(nextKey);
+        nextInput?.focus();
+        nextInput?.select();
+      }
+    }
+  };
+
+  // Format number
+  const formatNumber = (num: number): string => {
+    return new Intl.NumberFormat("es-PE", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(num);
+  };
+
+  // Get monthly cell value
+  const getMonthlyCellValue = (row: BudgetRow): string => {
+    const key = `${row.supportId}-${row.costCenterId}`;
+    const editedVal = edited.get(key);
+    if (editedVal !== undefined) {
+      return editedVal.value;
+    }
+    return row.amountPen.toFixed(2);
+  };
+
+  // Get annual cell value
+  const getAnnualCellValue = (row: AnnualRow, month: string): string => {
+    const key = `${row.supportId}-${row.costCenterId}-${month}`;
+    const editedVal = annualEdited.get(key);
+    if (editedVal !== undefined) {
+      return editedVal.value;
+    }
+    return row.months[month]?.amountPen?.toFixed(2) || "0.00";
+  };
+
+  // Check if cell is dirty
+  const isCellDirty = (key: string): boolean => {
+    return edited.has(key) || annualEdited.has(key);
+  };
+
+  // Sort monthly rows
+  const sortedMonthlyRows = useMemo(() => {
+    if (!budgetData?.rows) return [];
+    const rows = [...budgetData.rows];
+    
+    rows.sort((a: BudgetRow, b: BudgetRow) => {
+      let compareValue = 0;
+      
+      if (sortBy === "support") {
+        compareValue = a.supportName.localeCompare(b.supportName);
+      } else if (sortBy === "ceco") {
+        compareValue = a.costCenterCode.localeCompare(b.costCenterCode);
+      } else if (sortBy === "amount") {
+        const aVal = parseFloat(getMonthlyCellValue(a)) || 0;
+        const bVal = parseFloat(getMonthlyCellValue(b)) || 0;
+        compareValue = aVal - bVal;
+      }
+      
+      return sortOrder === "asc" ? compareValue : -compareValue;
+    });
+    
+    return rows;
+  }, [budgetData?.rows, sortBy, sortOrder, edited]);
+
+  // Calculate monthly totals
+  const monthlyTotal = useMemo(() => {
+    if (!sortedMonthlyRows) return 0;
+    return sortedMonthlyRows.reduce((sum, row: BudgetRow) => {
+      const key = `${row.supportId}-${row.costCenterId}`;
+      const editedVal = edited.get(key);
+      const amount = editedVal?.isValid 
+        ? (parseFloat(editedVal.value) || 0)
+        : row.amountPen;
+      return sum + amount;
+    }, 0);
+  }, [sortedMonthlyRows, edited]);
+
+  // Calculate annual totals
+  const annualTotals = useMemo(() => {
+    if (!annualData?.rows) return { monthTotals: {}, yearTotal: 0 };
+    
+    const monthTotals: Record<string, number> = {};
+    let yearTotal = 0;
+    
+    annualData.rows.forEach((row: AnnualRow) => {
+      Object.entries(row.months).forEach(([month, data]) => {
+        const key = `${row.supportId}-${row.costCenterId}-${month}`;
+        const editedVal = annualEdited.get(key);
+        const amount = editedVal?.isValid 
+          ? (parseFloat(editedVal.value) || 0)
+          : data.amountPen;
+        
+        monthTotals[month] = (monthTotals[month] || 0) + amount;
+        yearTotal += amount;
+      });
+    });
+    
+    return { monthTotals, yearTotal };
+  }, [annualData?.rows, annualEdited]);
+
+  const isClosed = budgetData?.isClosed || false;
+  const hasMonthlyChanges = edited.size > 0 && Array.from(edited.values()).some(e => e.isValid);
+  const hasAnnualChanges = annualEdited.size > 0 && Array.from(annualEdited.values()).some(e => e.isValid);
+  const hasInvalidMonthlyChanges = Array.from(edited.values()).some(e => !e.isValid);
+  const hasInvalidAnnualChanges = Array.from(annualEdited.values()).some(e => !e.isValid);
+
+  const canSaveMonthly = hasMonthlyChanges && !hasInvalidMonthlyChanges && !isClosed && !saveMonthlyMutation.isPending;
+  const canSaveAnnual = hasAnnualChanges && !hasInvalidAnnualChanges && !saveAnnualMutation.isPending;
+
+  // Handle CSV upload success
+  const handleCSVSuccess = () => {
+    queryClient.invalidateQueries({ queryKey: ["budgets-detailed"] });
+    queryClient.invalidateQueries({ queryKey: ["budgets-annual"] });
+    refetchMonthly();
+    refetchAnnual();
+  };
+
+  // Empty state
+  if (yearsData && yearsData.length === 0) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-semibold">PPTO</h1>
+        <Card>
+          <CardContent className="py-12">
+            <div className="text-center space-y-4">
+              <div className="text-slate-500 dark:text-slate-400">
+                <p className="text-lg font-medium">No hay períodos configurados</p>
+                <p className="text-sm mt-2">
+                  Para comenzar a gestionar presupuestos, primero necesitas crear períodos.
+                </p>
+              </div>
+              <div>
+                <Button disabled>
+                  Ir a gestión de períodos
+                </Button>
+                <p className="text-xs text-slate-400 mt-2">
+                  (Funcionalidad pendiente de implementar)
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">PPTO por mes</h1>
-      <Card><CardHeader className="space-y-3">
-        <Select value={periodId??""} onChange={e=>setPeriodId(Number(e.target.value))}>
-          <option value="">Elige período…</option>
-          {(periods||[]).map((p:any)=><option key={p.id} value={p.id}>{p.year}-{String(p.month).padStart(2,"0")} {p.label||""}</option>)}
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">PPTO</h1>
+        {budgetData?.period && viewMode === "monthly" && (
+          <div className="text-sm text-slate-600 dark:text-slate-400">
+            {budgetData.period.label || `${budgetData.period.year}-${String(budgetData.period.month).padStart(2, "0")}`}
+            {isClosed && (
+              <span className="ml-2 inline-flex items-center px-2 py-1 text-xs font-medium rounded-md bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+                Cerrado
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      <Card>
+        <CardHeader className="space-y-3">
+          {/* View Toggle */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant={viewMode === "monthly" ? "primary" : "secondary"}
+              size="sm"
+              onClick={() => setViewMode("monthly")}
+            >
+              Mensual
+            </Button>
+            <Button
+              variant={viewMode === "annual" ? "primary" : "secondary"}
+              size="sm"
+              onClick={() => setViewMode("annual")}
+            >
+              Anual
+            </Button>
+          </div>
+
+          {/* Filters */}
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            {/* Year */}
+            <div>
+              <label className="block text-sm font-medium mb-1">Año</label>
+              <Select 
+                value={selectedYear ?? ""} 
+                onChange={e => setSelectedYear(Number(e.target.value))}
+                disabled={!availableYears.length}
+              >
+                {availableYears.length === 0 && <option value="">Sin años disponibles</option>}
+                {availableYears.map(year => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </Select>
+            </div>
+
+            {/* Period (only for monthly) */}
+            {viewMode === "monthly" && (
+              <div>
+                <label className="block text-sm font-medium mb-1">Período (Mes)</label>
+                <Select
+                  value={selectedPeriodId ?? ""}
+                  onChange={e => {
+                    setSelectedPeriodId(e.target.value ? Number(e.target.value) : undefined);
+                    setEdited(new Map());
+                  }}
+                  disabled={!selectedYear || periodsForYear.length === 0}
+                >
+                  <option value="">
+                    {!selectedYear 
+                      ? "Seleccione año primero" 
+                      : periodsForYear.length === 0 
+                        ? "No hay períodos para este año"
+                        : "Seleccione período..."}
+                  </option>
+                  {periodsForYear.map((p: any) => (
+                    <option key={p.id} value={p.id}>
+                      {p.year}-{String(p.month).padStart(2, "0")} {p.label || ""}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            )}
+
+            {/* Search */}
+            <div>
+              <label className="block text-sm font-medium mb-1">Buscar</label>
+              <Input
+                placeholder="Sustento o CECO..."
+                value={searchText}
+                onChange={e => setSearchText(e.target.value)}
+                disabled={!selectedYear}
+              />
+            </div>
+
+            {/* Management */}
+            <div>
+              <label className="block text-sm font-medium mb-1">Gerencia</label>
+              <Select
+                value={managementId ?? ""}
+                onChange={e => {
+                  setManagementId(e.target.value ? Number(e.target.value) : undefined);
+                  setAreaId(undefined); // Reset area when management changes
+                }}
+              >
+                <option value="">Todas</option>
+                {(managementsQuery.data || []).map((m: any) => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </Select>
+            </div>
+
+            {/* Area */}
+            <div>
+              <label className="block text-sm font-medium mb-1">Área</label>
+              <Select
+                value={areaId ?? ""}
+                onChange={e => setAreaId(e.target.value ? Number(e.target.value) : undefined)}
+                disabled={!managementId}
+              >
+                <option value="">Todas</option>
+                {availableAreas.map((a: any) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </Select>
+            </div>
+
+            {/* Package */}
+            <div>
+              <label className="block text-sm font-medium mb-1">Paquete</label>
+              <Select
+                value={packageId ?? ""}
+                onChange={e => {
+                  setPackageId(e.target.value ? Number(e.target.value) : undefined);
+                  setConceptId(undefined); // Reset concept when package changes
+                }}
+              >
+                <option value="">Todos</option>
+                {(packagesQuery.data || []).map((p: any) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </Select>
+            </div>
+
+            {/* Concept */}
+            {packageId && (
+              <div>
+                <label className="block text-sm font-medium mb-1">Concepto</label>
+                <Select
+                  value={conceptId ?? ""}
+                  onChange={e => setConceptId(e.target.value ? Number(e.target.value) : undefined)}
+                  disabled={!packageId}
+                >
+                  <option value="">Todos</option>
+                  {availableConcepts.map((c: any) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
         </Select>
-        <Button onClick={()=>save.mutate()} disabled={!periodId}>Guardar cambios</Button>
-      </CardHeader><CardContent>
-        {periodId && (
+              </div>
+            )}
+          </div>
+
+          {/* Actions */}
+          {viewMode === "monthly" && selectedPeriodId && (
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => saveMonthlyMutation.mutate()}
+                disabled={!canSaveMonthly}
+              >
+                {saveMonthlyMutation.isPending ? "Guardando..." : "Guardar cambios"}
+              </Button>
+              
+              {edited.size > 0 && (
+                <Button
+                  variant="secondary"
+                  onClick={() => setEdited(new Map())}
+                >
+                  Descartar cambios
+                </Button>
+              )}
+              
+              {hasInvalidMonthlyChanges && (
+                <span className="text-sm text-red-600 dark:text-red-400">
+                  Hay valores inválidos que deben corregirse
+                </span>
+              )}
+            </div>
+          )}
+
+          {viewMode === "annual" && selectedYear && (
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => saveAnnualMutation.mutate()}
+                disabled={!canSaveAnnual}
+              >
+                {saveAnnualMutation.isPending ? "Guardando..." : "Guardar cambios"}
+              </Button>
+              
+              {annualEdited.size > 0 && (
+                <Button
+                  variant="secondary"
+                  onClick={() => setAnnualEdited(new Map())}
+                >
+                  Descartar cambios
+                </Button>
+              )}
+              
+              {hasInvalidAnnualChanges && (
+                <span className="text-sm text-red-600 dark:text-red-400">
+                  Hay valores inválidos que deben corregirse
+                </span>
+              )}
+            </div>
+          )}
+        </CardHeader>
+
+        <CardContent>
+          {/* MONTHLY VIEW */}
+          {viewMode === "monthly" && (
+            <>
+              {!selectedPeriodId ? (
+                <div className="text-center py-8 text-slate-500">
+                  Seleccione un año y período para ver el presupuesto
+                </div>
+              ) : budgetData ? (
+                <>
+                  {/* Warnings */}
+                  {budgetData.supportsWithoutCostCenters?.length > 0 && (
+                    <div className="mb-4 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
+                      <p className="text-sm font-medium text-yellow-800 dark:text-yellow-400 mb-1">
+                        ⚠️ Sustentos sin CECOs asociados
+                      </p>
+                      <p className="text-xs text-yellow-700 dark:text-yellow-500">
+                        Los siguientes sustentos no tienen centros de costo asignados:
+                      </p>
+                      <ul className="text-xs text-yellow-700 dark:text-yellow-500 mt-1 ml-4 list-disc">
+                        {budgetData.supportsWithoutCostCenters.slice(0, 5).map((s: any) => (
+                          <li key={s.supportId}>{s.supportName} ({s.supportCode || "sin código"})</li>
+                        ))}
+                        {budgetData.supportsWithoutCostCenters.length > 5 && (
+                          <li>... y {budgetData.supportsWithoutCostCenters.length - 5} más</li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+
+                  {sortedMonthlyRows.length === 0 ? (
+                    <div className="text-center py-8 text-slate-500">
+                      No hay datos para mostrar con los filtros aplicados
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <thead>
+                          <tr>
+                            <Th 
+                              className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
+                              onClick={() => {
+                                if (sortBy === "support") {
+                                  setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+                                } else {
+                                  setSortBy("support");
+                                  setSortOrder("asc");
+                                }
+                              }}
+                            >
+                              Sustento {sortBy === "support" && (sortOrder === "asc" ? "↑" : "↓")}
+                            </Th>
+                            <Th 
+                              className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
+                              onClick={() => {
+                                if (sortBy === "ceco") {
+                                  setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+                                } else {
+                                  setSortBy("ceco");
+                                  setSortOrder("asc");
+                                }
+                              }}
+                            >
+                              CECO {sortBy === "ceco" && (sortOrder === "asc" ? "↑" : "↓")}
+                            </Th>
+                            <Th 
+                              className="text-right cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
+                              onClick={() => {
+                                if (sortBy === "amount") {
+                                  setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+                                } else {
+                                  setSortBy("amount");
+                                  setSortOrder("asc");
+                                }
+                              }}
+                            >
+                              Monto (PEN) {sortBy === "amount" && (sortOrder === "asc" ? "↑" : "↓")}
+                            </Th>
+                            <Th>Gerencia</Th>
+                            <Th>Área</Th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sortedMonthlyRows.map((row: BudgetRow, idx: number) => {
+                            const key = `${row.supportId}-${row.costCenterId}`;
+                            const validation = edited.get(key);
+                            const isDirty = isCellDirty(key);
+                            const hasError = validation && !validation.isValid;
+                            
+                            return (
+                              <tr 
+                                key={key}
+                                className={isDirty ? "bg-yellow-50 dark:bg-yellow-900/10" : ""}
+                              >
+                                <Td>
+                                  <div className="font-medium">{row.supportName}</div>
+                                  {row.supportCode && (
+                                    <div className="text-xs text-slate-500">{row.supportCode}</div>
+                                  )}
+                                </Td>
+                                <Td>
+                                  <div className="font-medium">{row.costCenterCode}</div>
+                                  {row.costCenterName && (
+                                    <div className="text-xs text-slate-500">{row.costCenterName}</div>
+                                  )}
+                                </Td>
+                                <Td>
+                                  <div className="flex flex-col gap-1">
+                                    <Input
+                                      ref={el => el && inputRefs.current.set(key, el)}
+                                      type="text"
+                                      value={getMonthlyCellValue(row)}
+                                      onChange={e => handleMonthlyCellEdit(row.supportId, row.costCenterId, e.target.value)}
+                                      onKeyDown={e => handleKeyDown(e, key, sortedMonthlyRows, idx, "monthly")}
+                                      disabled={isClosed}
+                                      className={`text-right ${hasError ? "border-red-500" : ""}`}
+                                      style={{ width: "140px" }}
+                                    />
+                                    {hasError && validation?.error && (
+                                      <span className="text-xs text-red-600 dark:text-red-400">
+                                        {validation.error}
+                                      </span>
+                                    )}
+                                  </div>
+                                </Td>
+                                <Td>{row.management || "-"}</Td>
+                                <Td>{row.area || "-"}</Td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                        <tfoot className="bg-slate-50 dark:bg-slate-900 font-semibold">
+                          <tr>
+                            <Td colSpan={2} className="text-right">Total:</Td>
+                            <Td className="text-right">{formatNumber(monthlyTotal)}</Td>
+                            <Td colSpan={2}></Td>
+                          </tr>
+                        </tfoot>
+                      </Table>
+                    </div>
+                  )}
+                </>
+              ) : null}
+            </>
+          )}
+
+          {/* ANNUAL VIEW */}
+          {viewMode === "annual" && selectedYear && annualData && (
+            <>
+              {annualData.rows.length === 0 ? (
+                <div className="text-center py-8 text-slate-500">
+                  No hay datos para mostrar con los filtros aplicados
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
           <Table>
-            <thead><tr><Th>Sustento</Th><Th>Monto</Th></tr></thead>
+                    <thead>
+                      <tr>
+                        <Th className="sticky left-0 bg-white dark:bg-slate-950 z-10">Sustento</Th>
+                        <Th className="sticky left-[200px] bg-white dark:bg-slate-950 z-10">CECO</Th>
+                        <Th>Ene</Th>
+                        <Th>Feb</Th>
+                        <Th>Mar</Th>
+                        <Th>Abr</Th>
+                        <Th>May</Th>
+                        <Th>Jun</Th>
+                        <Th>Jul</Th>
+                        <Th>Ago</Th>
+                        <Th>Sep</Th>
+                        <Th>Oct</Th>
+                        <Th>Nov</Th>
+                        <Th>Dic</Th>
+                        <Th className="bg-slate-100 dark:bg-slate-800">Total</Th>
+                      </tr>
+                    </thead>
             <tbody>
-              {(supports||[]).map((s:any)=>{
-                const current = (allocs?.rows||[]).find((r:any)=> r.supportId===s.id)?.amountLocal ?? 0;
-                const val = edited[s.id] ?? String(current);
-                return <tr key={s.id}><Td>{s.name}</Td>
-                  <Td><Input value={val} onChange={e=>setEdited(prev=>({...prev,[s.id]:e.target.value}))}/></Td></tr>
+                      {annualData.rows.map((row: AnnualRow, rowIdx: number) => {
+                        const months = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"];
+                        
+                        // Calculate row total with edits
+                        let rowTotal = 0;
+                        months.forEach(month => {
+                          const key = `${row.supportId}-${row.costCenterId}-${month}`;
+                          const editedVal = annualEdited.get(key);
+                          const amount = editedVal?.isValid 
+                            ? (parseFloat(editedVal.value) || 0)
+                            : (row.months[month]?.amountPen || 0);
+                          rowTotal += amount;
+                        });
+
+                        return (
+                          <tr key={`${row.supportId}-${row.costCenterId}`}>
+                            <Td className="sticky left-0 bg-white dark:bg-slate-950">
+                              <div className="font-medium">{row.supportName}</div>
+                              {row.supportCode && (
+                                <div className="text-xs text-slate-500">{row.supportCode}</div>
+                              )}
+                            </Td>
+                            <Td className="sticky left-[200px] bg-white dark:bg-slate-950">
+                              <div className="font-medium">{row.costCenterCode}</div>
+                            </Td>
+                            {months.map((month, monthIdx) => {
+                              const monthData = row.months[month];
+                              const key = `${row.supportId}-${row.costCenterId}-${month}`;
+                              const validation = annualEdited.get(key);
+                              const isDirty = isCellDirty(key);
+                              const hasError = validation && !validation.isValid;
+                              const isClosed = monthData?.isClosed || false;
+
+                              return (
+                                <Td key={month} className={isDirty ? "bg-yellow-50 dark:bg-yellow-900/10" : ""}>
+                                  {monthData ? (
+                                    <div className="flex flex-col gap-1">
+                                      <Input
+                                        ref={el => el && inputRefs.current.set(key, el)}
+                                        type="text"
+                                        value={getAnnualCellValue(row, month)}
+                                        onChange={e => handleAnnualCellEdit(row.supportId, row.costCenterId, monthData.periodId, month, e.target.value)}
+                                        onKeyDown={e => handleKeyDown(e, key, annualData.rows, rowIdx, "annual", monthIdx)}
+                                        disabled={isClosed}
+                                        title={isClosed ? "Período cerrado" : ""}
+                                        className={`text-right ${hasError ? "border-red-500" : ""} ${isClosed ? "bg-slate-100 dark:bg-slate-800 cursor-not-allowed" : ""}`}
+                                        style={{ width: "100px" }}
+                                      />
+                                      {hasError && validation?.error && (
+                                        <span className="text-xs text-red-600 dark:text-red-400">
+                                          {validation.error}
+                                        </span>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs text-slate-400">N/A</span>
+                                  )}
+                                </Td>
+                              );
+                            })}
+                            <Td className="text-right font-semibold bg-slate-100 dark:bg-slate-800">
+                              {formatNumber(rowTotal)}
+                            </Td>
+                          </tr>
+                        );
               })}
             </tbody>
+                    <tfoot className="bg-slate-50 dark:bg-slate-900 font-semibold">
+                      <tr>
+                        <Td colSpan={2} className="text-right">Total por mes:</Td>
+                        {["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"].map(month => (
+                          <Td key={month} className="text-right">
+                            {formatNumber(annualTotals.monthTotals[month] || 0)}
+                          </Td>
+                        ))}
+                        <Td className="text-right bg-slate-200 dark:bg-slate-700">
+                          {formatNumber(annualTotals.yearTotal)}
+                        </Td>
+                      </tr>
+                    </tfoot>
           </Table>
-        )}
-      </CardContent></Card>
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* CSV UPLOAD */}
+      {selectedYear && (
+        <BulkUploader
+          title="Carga Masiva de Presupuesto (CSV)"
+          description={`Importa presupuesto anual completo (12 meses) para el año ${selectedYear} desde un archivo CSV.`}
+          templateUrl="/bulk/template/budget"
+          uploadUrl="/bulk/catalogs"
+          templateFilename="budget_template.csv"
+          additionalParams={{ type: "budget", year: selectedYear }}
+          onSuccess={handleCSVSuccess}
+          showOverwriteBlanks={true}
+        />
+      )}
     </div>
   );
 }

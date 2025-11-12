@@ -1,12 +1,14 @@
 import { FastifyInstance } from "fastify";
 import { PrismaClient, Prisma } from "@prisma/client";
 import { z } from "zod";
+import { ensureYearPeriods } from "./periods";
 
 const prisma = new PrismaClient();
 
 // Schema for listing detailed budget allocations
 const listDetailedSchema = z.object({
   periodId: z.coerce.number(),
+  year: z.coerce.number().optional(), // Optional: to auto-create periods for year
   versionId: z.coerce.number().optional(),
   search: z.string().optional(),
   managementId: z.coerce.number().optional(),
@@ -36,8 +38,13 @@ export async function registerDetailedBudgetRoutes(app: FastifyInstance) {
     const q = listDetailedSchema.safeParse(req.query);
     if (!q.success) return reply.code(400).send(q.error);
     
-    const { periodId, search, managementId, areaId, packageId, conceptId } = q.data;
+    const { periodId, year, search, managementId, areaId, packageId, conceptId } = q.data;
     let versionId = q.data.versionId;
+    
+    // Ensure year periods exist if year param provided
+    if (year) {
+      await ensureYearPeriods(year);
+    }
     
     // Get active version if not specified
     if (!versionId) {
@@ -264,6 +271,9 @@ export async function registerDetailedBudgetRoutes(app: FastifyInstance) {
     const conceptId = (req.query as any).conceptId ? Number((req.query as any).conceptId) : undefined;
 
     if (!year) return reply.code(400).send({ error: "year es requerido" });
+
+    // Ensure all 12 periods exist for the year
+    await ensureYearPeriods(year);
 
     // Get active version
     const version = await prisma.budgetVersion.findFirst({ where: { status: "ACTIVE" } });

@@ -59,22 +59,29 @@ interface AnnualEditedValue {
 const LOCAL_STORAGE_KEYS = {
   viewMode: "ppto.viewMode",
   year: "ppto.year",
-  periodId: "ppto.periodId"
+  periodId: "ppto.periodId",
+  onlyWithBudget: "ppto.onlyWithBudget"
 };
 
 export default function BudgetPage() {
   const queryClient = useQueryClient();
   
-  // View mode
+  // View mode (default: annual)
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem(LOCAL_STORAGE_KEYS.viewMode);
-    return (saved === "annual" ? "annual" : "monthly") as ViewMode;
+    return (saved === "monthly" || saved === "annual") ? saved as ViewMode : "annual";
+  });
+
+  // Only show rows with budget > 0 (default: true)
+  const [onlyWithBudget, setOnlyWithBudget] = useState<boolean>(() => {
+    const saved = localStorage.getItem(LOCAL_STORAGE_KEYS.onlyWithBudget);
+    return saved !== null ? saved === "true" : true;
   });
 
   // State
   const [selectedYear, setSelectedYear] = useState<number | undefined>(() => {
     const saved = localStorage.getItem(LOCAL_STORAGE_KEYS.year);
-    return saved ? Number(saved) : undefined;
+    return saved ? Number(saved) : new Date().getFullYear(); // Default: current year
   });
   
   const [selectedPeriodId, setSelectedPeriodId] = useState<number | undefined>(() => {
@@ -94,6 +101,10 @@ export default function BudgetPage() {
   const [areaId, setAreaId] = useState<number | undefined>();
   const [packageId, setPackageId] = useState<number | undefined>();
   const [conceptId, setConceptId] = useState<number | undefined>();
+
+  // Bulk upload year (for CSV) - defaults to selectedYear
+  const [bulkYear, setBulkYear] = useState<number | undefined>(selectedYear);
+  const [bulkYearTouched, setBulkYearTouched] = useState(false);
 
   // Refs for keyboard navigation
   const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
@@ -126,21 +137,21 @@ export default function BudgetPage() {
     queryFn: async () => (await api.get("/periods/years")).data
   });
 
-  // Fetch all periods
-  const { data: allPeriods } = useQuery({
-    queryKey: ["periods"],
-    queryFn: async () => (await api.get("/periods")).data
+  // Fetch periods for selected year (creates them if missing)
+  const { data: periodsForYear = [], isLoading: isLoadingPeriods } = useQuery({
+    queryKey: ["periods-for-year", selectedYear],
+    queryFn: async () => {
+      if (!selectedYear) return [];
+      const response = await api.get("/periods", { params: { year: selectedYear } });
+      return response.data;
+    },
+    enabled: !!selectedYear
   });
 
   const availableYears = useMemo(() => {
     if (!yearsData) return [];
     return yearsData.map((y: any) => y.year);
   }, [yearsData]);
-
-  const periodsForYear = useMemo(() => {
-    if (!allPeriods || !selectedYear) return [];
-    return allPeriods.filter((p: any) => p.year === selectedYear);
-  }, [allPeriods, selectedYear]);
 
   // Available areas filtered by management
   const availableAreas = useMemo(() => {
@@ -155,29 +166,42 @@ export default function BudgetPage() {
     return pkg?.concepts || [];
   }, [packageId, packagesQuery.data]);
 
-  // Auto-select year and period on mount
-  useEffect(() => {
-    if (availableYears.length > 0 && !selectedYear) {
-      const currentYear = new Date().getFullYear();
-      const yearToSelect = availableYears.includes(currentYear) ? currentYear : availableYears[0];
-      setSelectedYear(yearToSelect);
-      localStorage.setItem(LOCAL_STORAGE_KEYS.year, String(yearToSelect));
-    }
-  }, [availableYears, selectedYear]);
+  // No auto-select year from seed - already defaults to current year in useState
 
+  // Auto-select period when switching to monthly view or when periods load
   useEffect(() => {
     if (periodsForYear.length > 0 && !selectedPeriodId && viewMode === "monthly") {
-      const openPeriods = periodsForYear.filter((p: any) => !p.closures);
-      const periodToSelect = openPeriods.length > 0 
-        ? openPeriods[openPeriods.length - 1]
-        : periodsForYear[periodsForYear.length - 1];
+      const currentMonth = new Date().getMonth() + 1; // 1-12
+      const currentYear = new Date().getFullYear();
       
-      setSelectedPeriodId(periodToSelect.id);
-      localStorage.setItem(LOCAL_STORAGE_KEYS.periodId, String(periodToSelect.id));
+      // If viewing current year, try to select current month
+      if (selectedYear === currentYear) {
+        const currentMonthPeriod = periodsForYear.find((p: any) => p.month === currentMonth);
+        
+        if (currentMonthPeriod) {
+          setSelectedPeriodId(currentMonthPeriod.id);
+          localStorage.setItem(LOCAL_STORAGE_KEYS.periodId, String(currentMonthPeriod.id));
+          return;
+        }
+      }
+      
+      // Otherwise select January (month 1) as default
+      const januaryPeriod = periodsForYear.find((p: any) => p.month === 1);
+      if (januaryPeriod) {
+        setSelectedPeriodId(januaryPeriod.id);
+        localStorage.setItem(LOCAL_STORAGE_KEYS.periodId, String(januaryPeriod.id));
+      }
     }
-  }, [periodsForYear, selectedPeriodId, viewMode]);
+  }, [periodsForYear, selectedPeriodId, viewMode, selectedYear]);
 
-  // Persist view mode, year, and period
+  // Reset period and edits when year changes
+  useEffect(() => {
+    setSelectedPeriodId(undefined);
+    setEdited(new Map());
+    setAnnualEdited(new Map());
+  }, [selectedYear]);
+
+  // Persist view mode, year, period, and onlyWithBudget
   useEffect(() => {
     localStorage.setItem(LOCAL_STORAGE_KEYS.viewMode, viewMode);
   }, [viewMode]);
@@ -194,22 +218,27 @@ export default function BudgetPage() {
     }
   }, [selectedPeriodId]);
 
-  // Reset period when year changes
   useEffect(() => {
-    setSelectedPeriodId(undefined);
-    setEdited(new Map());
-    setAnnualEdited(new Map());
-  }, [selectedYear]);
+    localStorage.setItem(LOCAL_STORAGE_KEYS.onlyWithBudget, String(onlyWithBudget));
+  }, [onlyWithBudget]);
+
+  // Sync bulk year with selected year if not manually touched
+  useEffect(() => {
+    if (selectedYear && !bulkYearTouched) {
+      setBulkYear(selectedYear);
+    }
+  }, [selectedYear, bulkYearTouched]);
 
   // Build query params for monthly view (without search, we'll filter client-side)
   const monthlyParams = useMemo(() => {
     const params: any = { periodId: selectedPeriodId };
+    if (selectedYear) params.year = selectedYear; // Ensure year periods exist
     if (managementId) params.managementId = managementId;
     if (areaId) params.areaId = areaId;
     if (packageId) params.packageId = packageId;
     if (conceptId) params.conceptId = conceptId;
     return params;
-  }, [selectedPeriodId, managementId, areaId, packageId, conceptId]);
+  }, [selectedPeriodId, selectedYear, managementId, areaId, packageId, conceptId]);
 
   // Fetch monthly budget data
   const { data: budgetData, refetch: refetchMonthly } = useQuery({
@@ -442,6 +471,18 @@ export default function BudgetPage() {
     if (!budgetData?.rows) return [];
     let rows = [...budgetData.rows];
     
+    // Apply "only with budget" filter
+    if (onlyWithBudget) {
+      rows = rows.filter((row: BudgetRow) => {
+        const key = `${row.supportId}-${row.costCenterId}`;
+        const editedVal = edited.get(key);
+        const amount = editedVal?.isValid 
+          ? (parseFloat(editedVal.value) || 0)
+          : row.amountPen;
+        return amount > 0;
+      });
+    }
+    
     // Apply client-side search filter
     if (debouncedSearch.trim()) {
       rows = rows.filter((row: BudgetRow) => 
@@ -467,12 +508,28 @@ export default function BudgetPage() {
     });
     
     return rows;
-  }, [budgetData?.rows, sortBy, sortOrder, edited, debouncedSearch]);
+  }, [budgetData?.rows, sortBy, sortOrder, edited, debouncedSearch, onlyWithBudget]);
 
   // Filter annual rows (CLIENT-SIDE)
   const filteredAnnualRows = useMemo(() => {
     if (!annualData?.rows) return [];
     let rows = [...annualData.rows];
+    
+    // Apply "only with budget" filter (sum of 12 months > 0)
+    if (onlyWithBudget) {
+      rows = rows.filter((row: AnnualRow) => {
+        let yearTotal = 0;
+        Object.keys(row.months).forEach(month => {
+          const key = `${row.supportId}-${row.costCenterId}-${month}`;
+          const editedVal = annualEdited.get(key);
+          const amount = editedVal?.isValid 
+            ? (parseFloat(editedVal.value) || 0)
+            : (row.months[month]?.amountPen || 0);
+          yearTotal += amount;
+        });
+        return yearTotal > 0;
+      });
+    }
     
     // Apply client-side search filter
     if (debouncedSearch.trim()) {
@@ -482,7 +539,7 @@ export default function BudgetPage() {
     }
     
     return rows;
-  }, [annualData?.rows, debouncedSearch]);
+  }, [annualData?.rows, debouncedSearch, onlyWithBudget, annualEdited]);
 
   // Calculate monthly totals
   const monthlyTotal = useMemo(() => {
@@ -595,8 +652,15 @@ export default function BudgetPage() {
   const handleCSVSuccess = () => {
     queryClient.invalidateQueries({ queryKey: ["budgets-detailed"] });
     queryClient.invalidateQueries({ queryKey: ["budgets-annual"] });
-    refetchMonthly();
-    refetchAnnual();
+    
+    // If bulk year matches selected year, refetch current views
+    if (bulkYear === selectedYear) {
+      refetchMonthly();
+      refetchAnnual();
+    }
+    
+    // Reset bulk year touched flag so it syncs again
+    setBulkYearTouched(false);
   };
 
   // Empty state
@@ -647,21 +711,39 @@ export default function BudgetPage() {
       <Card>
         <CardHeader className="space-y-3">
           {/* View Toggle */}
-          <div className="flex items-center gap-2">
-            <Button
-              variant={viewMode === "monthly" ? "primary" : "secondary"}
-              size="sm"
-              onClick={() => setViewMode("monthly")}
-            >
-              Mensual
-            </Button>
-            <Button
-              variant={viewMode === "annual" ? "primary" : "secondary"}
-              size="sm"
-              onClick={() => setViewMode("annual")}
-            >
-              Anual
-            </Button>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Button
+                variant={viewMode === "monthly" ? "primary" : "secondary"}
+                size="sm"
+                onClick={() => setViewMode("monthly")}
+              >
+                Mensual
+              </Button>
+              <Button
+                variant={viewMode === "annual" ? "primary" : "secondary"}
+                size="sm"
+                onClick={() => setViewMode("annual")}
+              >
+                Anual
+              </Button>
+            </div>
+            
+            {/* Only with budget toggle */}
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="onlyWithBudget"
+                checked={onlyWithBudget}
+                onChange={e => setOnlyWithBudget(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-300"
+              />
+              <label htmlFor="onlyWithBudget" className="text-sm font-medium">
+                {viewMode === "annual" 
+                  ? "Mostrar solo sustentos con PPTO en el año" 
+                  : "Mostrar solo sustentos con PPTO en el mes"}
+              </label>
+            </div>
           </div>
 
           {/* Filters */}
@@ -669,16 +751,24 @@ export default function BudgetPage() {
             {/* Year */}
             <div>
               <label className="block text-sm font-medium mb-1">Año</label>
-              <Select 
-                value={selectedYear ?? ""} 
-                onChange={e => setSelectedYear(Number(e.target.value))}
-                disabled={!availableYears.length}
-              >
-                {availableYears.length === 0 && <option value="">Sin años disponibles</option>}
-                {availableYears.map((year: number) => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
-              </Select>
+              <Input
+                type="number"
+                min={2000}
+                max={2100}
+                value={selectedYear ?? ""}
+                onChange={e => {
+                  const val = e.target.value;
+                  if (val === "") {
+                    setSelectedYear(undefined);
+                  } else {
+                    const year = Number(val);
+                    if (year >= 2000 && year <= 2100) {
+                      setSelectedYear(year);
+                    }
+                  }
+                }}
+                placeholder="Ej: 2025"
+              />
             </div>
 
             {/* Period (only for monthly) */}
@@ -691,13 +781,13 @@ export default function BudgetPage() {
                     setSelectedPeriodId(e.target.value ? Number(e.target.value) : undefined);
                     setEdited(new Map());
                   }}
-                  disabled={!selectedYear || periodsForYear.length === 0}
+                  disabled={!selectedYear || isLoadingPeriods}
                 >
                   <option value="">
                     {!selectedYear 
                       ? "Seleccione año primero" 
-                      : periodsForYear.length === 0 
-                        ? "No hay períodos para este año"
+                      : isLoadingPeriods 
+                        ? "Cargando períodos..."
                         : "Seleccione período..."}
                   </option>
                   {periodsForYear.map((p: any) => (
@@ -1157,17 +1247,55 @@ export default function BudgetPage() {
 
       {/* CSV UPLOAD */}
       {selectedYear && (
-        <BulkUploader
-          title="Carga Masiva de Presupuesto (CSV)"
-          description={`Importa presupuesto anual completo (12 meses) para el año ${selectedYear} desde un archivo CSV.`}
-          templateUrl="/bulk/template/budget"
-          uploadUrl="/bulk/catalogs"
-          templateFilename="budget_template.csv"
-          additionalParams={{ type: "budget", year: selectedYear }}
-          onSuccess={handleCSVSuccess}
-          showOverwriteBlanks={true}
-        />
+        <>
+          <Card>
+            <CardHeader>
+              <h2 className="text-lg font-semibold">Configuración de Carga Masiva</h2>
+            </CardHeader>
+            <CardContent>
+              <div className="max-w-xs">
+                <label className="block text-sm font-medium mb-1">Año de carga (destino CSV)</label>
+                <Input
+                  type="number"
+                  min={2000}
+                  max={2100}
+                  value={bulkYear ?? ""}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setBulkYearTouched(true);
+                    if (val === "") {
+                      setBulkYear(undefined);
+                    } else {
+                      const year = Number(val);
+                      if (year >= 2000 && year <= 2100) {
+                        setBulkYear(year);
+                      }
+                    }
+                  }}
+                  placeholder="Ej: 2025"
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  Por defecto usa el año seleccionado arriba. Puedes cambiarlo para cargar datos en otro año.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {bulkYear && bulkYear >= 2000 && bulkYear <= 2100 && (
+            <BulkUploader
+              title="Carga Masiva de Presupuesto (CSV)"
+              description={`Importa presupuesto anual completo (12 meses) para el año ${bulkYear} desde un archivo CSV.`}
+              templateUrl="/bulk/template/budget"
+              uploadUrl="/bulk/catalogs"
+              templateFilename={`budget_template_${bulkYear}.csv`}
+              additionalParams={{ type: "budget", year: bulkYear }}
+              onSuccess={handleCSVSuccess}
+              showOverwriteBlanks={true}
+            />
+          )}
+        </>
       )}
     </div>
   );
 }
+

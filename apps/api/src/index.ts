@@ -11,6 +11,7 @@ import { registerDetailedBudgetRoutes } from "./budgets-detailed";
 import { registerMasterRoutes } from "./masters";
 import { registerOcRoutes } from "./oc";
 import { registerBulkRoutes } from "./bulk";
+import { ensureYearPeriods } from "./periods";
 
 const app = Fastify({ logger: true });
 await app.register(cors, { origin: true });
@@ -20,8 +21,20 @@ const prisma = new PrismaClient();
 // Health
 app.get("/health", async () => ({ ok: true }));
 
-// Periods: list
-app.get("/periods", async () => {
+// Periods: list (optionally filtered by year)
+app.get("/periods", async (req, reply) => {
+  const year = (req.query as any).year ? Number((req.query as any).year) : undefined;
+  
+  // If year is specified, ensure all 12 periods exist
+  if (year) {
+    await ensureYearPeriods(year);
+    return prisma.period.findMany({ 
+      where: { year },
+      orderBy: { month: "asc" }
+    });
+  }
+  
+  // Otherwise return all periods
   return prisma.period.findMany({ orderBy: [{ year: "asc" }, { month: "asc" }] });
 });
 

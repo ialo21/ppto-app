@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest } from "fastify";
 import { PrismaClient, ExpenseType } from "@prisma/client";
 import { z } from "zod";
 import multipart, { MultipartFile } from "@fastify/multipart";
+import { ensureYearPeriods } from "./periods";
 
 const prisma = new PrismaClient();
 
@@ -983,6 +984,9 @@ async function processBudget(data: any, rowNum: number, dryRun: boolean, year?: 
       issues: [{ path: ["_general"], message: "Año no especificado" }]
     };
   }
+
+  // Ensure all 12 periods exist for the year (idempotent)
+  await ensureYearPeriods(year);
 
   // Resolver supportName -> supportId
   const support = await prisma.support.findFirst({

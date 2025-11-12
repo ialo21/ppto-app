@@ -1241,6 +1241,12 @@ export async function registerBulkRoutes(app: FastifyInstance) {
         });
       }
 
+      // Determinar si es dry-run desde query params
+      const dryRun = (req.query as any).dryRun !== "false";
+      const year = (req.query as any).year ? Number((req.query as any).year) : undefined;
+      const overwriteBlanks = (req.query as any).overwriteBlanks === "true";
+      const typeParam = (req.query as any).type; // "budget", "support", etc.
+
       // Validar cada fila con esquema específico por tipo
       const validatedRows: CsvRow[] = [];
       const validationErrors: Array<{ row: number; type: string; issues: any[] }> = [];
@@ -1249,7 +1255,23 @@ export async function registerBulkRoutes(app: FastifyInstance) {
         // Paso 1: Sanitizar la fila (trim, vacíos → undefined)
         const sanitized = sanitizeRow(raw);
         
-        // Paso 2: Validar que tenga un tipo válido
+        // Paso 2: Si type viene como query param, inyectarlo en la fila
+        if (typeParam && !sanitized.type) {
+          // Mapear type del query param a nombre de entidad
+          const typeMapping: Record<string, string> = {
+            budget: "Budget",
+            support: "Support",
+            management: "Management",
+            area: "Area",
+            costcenter: "CostCenter",
+            articulo: "Articulo",
+            package: "ExpensePackage",
+            concept: "ExpenseConcept"
+          };
+          sanitized.type = typeMapping[typeParam.toLowerCase()] || typeParam;
+        }
+        
+        // Paso 3: Validar que tenga un tipo válido
         const typeValidation = typeEnum.safeParse(sanitized.type);
         if (!typeValidation.success) {
           validationErrors.push({
@@ -1262,7 +1284,7 @@ export async function registerBulkRoutes(app: FastifyInstance) {
         
         const rowType = typeValidation.data;
         
-        // Paso 3: Aplicar el esquema específico del tipo
+        // Paso 4: Aplicar el esquema específico del tipo
         const schema = schemasByType[rowType];
         const parsed = schema.safeParse(sanitized);
         
@@ -1305,11 +1327,6 @@ export async function registerBulkRoutes(app: FastifyInstance) {
           rows: errorRows
         });
       }
-
-      // Determinar si es dry-run desde query params
-      const dryRun = (req.query as any).dryRun !== "false";
-      const year = (req.query as any).year ? Number((req.query as any).year) : undefined;
-      const overwriteBlanks = (req.query as any).overwriteBlanks === "true";
 
       // Procesar
       const result = await processBulkCSV(validatedRows, dryRun, year, overwriteBlanks);

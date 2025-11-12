@@ -91,9 +91,63 @@ export default function BulkUploader({
     onError: (error: any) => {
       console.error("Error en carga CSV:", error);
       
+      const status = error.response?.status;
+      const errorData = error.response?.data;
+      
+      // Handle 404: Endpoint no encontrado
+      if (status === 404) {
+        const message = errorData?.message || "Endpoint no encontrado";
+        toast.error(
+          <div>
+            <div className="font-semibold">Error 404: Endpoint bulk no encontrado</div>
+            <div className="text-xs mt-1">Revisa la ruta y el método HTTP</div>
+            {errorData?.message && (
+              <div className="text-xs mt-1 font-mono bg-slate-100 dark:bg-slate-800 p-1 rounded">
+                {errorData.message}
+              </div>
+            )}
+          </div>,
+          { duration: 10000 }
+        );
+        return;
+      }
+      
+      // Handle 415/400: Formato de archivo o encabezados inválidos
+      if (status === 415 || status === 400) {
+        const message = errorData?.error || errorData?.message || "Formato de archivo o encabezados inválidos";
+        toast.error(
+          <div>
+            <div className="font-semibold">Error {status}: {status === 415 ? "Formato no soportado" : "Solicitud inválida"}</div>
+            <div className="text-xs mt-1">{message}</div>
+            {status === 415 && (
+              <div className="text-xs mt-1">Verifica que el archivo sea CSV válido con codificación UTF-8</div>
+            )}
+          </div>,
+          { duration: 8000 }
+        );
+        return;
+      }
+      
       // Handle 422 validation errors
-      if (error.response?.status === 422) {
-        const errorData = error.response?.data;
+      if (status === 422) {
+        // Si hay rows (formato BulkResponse con errores)
+        if (errorData?.rows && Array.isArray(errorData.rows)) {
+          const errorRows = errorData.rows.filter((r: any) => r.action === "error");
+          const errorCount = errorRows.length;
+          
+          toast.error(
+            <div>
+              <div className="font-semibold">Errores de validación: {errorCount} filas con problemas</div>
+              <div className="text-xs mt-1">Revisa el detalle abajo de la tabla de resultados</div>
+            </div>,
+            { duration: 8000 }
+          );
+          
+          // Mostrar resultado con errores
+          setResult(errorData);
+          console.log("Errores completos de validación:", errorData);
+          return;
+        }
         
         // Si hay issues de Zod, mostrar los primeros 3
         if (errorData?.issues && Array.isArray(errorData.issues)) {
@@ -121,16 +175,44 @@ export default function BulkUploader({
           return;
         }
         
-        // Si es un mensaje de error genérico
+        // Si es un mensaje de error genérico de validación
         if (errorData?.error) {
-          toast.error(`Error de validación: ${errorData.error}`);
+          toast.error(
+            <div>
+              <div className="font-semibold">Error de validación:</div>
+              <div className="text-xs mt-1">{errorData.error}</div>
+            </div>,
+            { duration: 8000 }
+          );
           return;
         }
       }
       
-      // Otros errores
-      const message = error.response?.data?.error || error.message || "Error al procesar el archivo";
-      toast.error(message);
+      // Handle 500: Error interno del servidor
+      if (status === 500) {
+        const message = errorData?.message || errorData?.error || "Error interno del servidor";
+        toast.error(
+          <div>
+            <div className="font-semibold">Error 500: Error en el servidor</div>
+            <div className="text-xs mt-1">{message}</div>
+            <div className="text-xs mt-1 text-slate-500">Verifica los logs del servidor para más detalles</div>
+          </div>,
+          { duration: 10000 }
+        );
+        return;
+      }
+      
+      // Otros errores genéricos
+      const message = errorData?.error || errorData?.message || error.message || "Error al procesar el archivo";
+      const statusText = error.response?.statusText;
+      
+      toast.error(
+        <div>
+          <div className="font-semibold">Error {status ? `${status}` : ""}{statusText ? `: ${statusText}` : ""}</div>
+          <div className="text-xs mt-1">{message}</div>
+        </div>,
+        { duration: 8000 }
+      );
     }
   });
 

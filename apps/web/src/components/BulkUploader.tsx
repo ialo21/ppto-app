@@ -78,18 +78,58 @@ export default function BulkUploader({
           setResult(null);
           onSuccess?.();
         } else {
-          toast.error(`Carga con errores: ${data.summary.errors} errores encontrados`);
+          toast.error(`Carga con errores: ${data.summary.errors} errores encontrados. Revisa el detalle abajo.`);
         }
       } else {
         if (data.summary.errors > 0) {
-          toast.warning(`Vista previa: ${data.summary.errors} errores encontrados`);
+          toast.warning(`Vista previa: ${data.summary.errors} errores encontrados. Revisa el detalle abajo.`);
         } else {
           toast.success("Vista previa completada sin errores");
         }
       }
     },
     onError: (error: any) => {
-      const message = error.response?.data?.error || "Error al procesar el archivo";
+      console.error("Error en carga CSV:", error);
+      
+      // Handle 422 validation errors
+      if (error.response?.status === 422) {
+        const errorData = error.response?.data;
+        
+        // Si hay issues de Zod, mostrar los primeros 3
+        if (errorData?.issues && Array.isArray(errorData.issues)) {
+          const messages = errorData.issues.slice(0, 3).map((issue: any) => {
+            const field = issue.path?.join(".") || "campo desconocido";
+            return `${field}: ${issue.message}`;
+          });
+          
+          toast.error(
+            <div>
+              <div className="font-semibold">Errores en el CSV:</div>
+              <ul className="list-disc ml-4 mt-1">
+                {messages.map((msg, i) => (
+                  <li key={i} className="text-xs">{msg}</li>
+                ))}
+              </ul>
+              {errorData.issues.length > 3 && (
+                <div className="text-xs mt-1">...y {errorData.issues.length - 3} más (ver consola)</div>
+              )}
+            </div>,
+            { duration: 8000 }
+          );
+          
+          console.log("Errores completos de validación:", errorData);
+          return;
+        }
+        
+        // Si es un mensaje de error genérico
+        if (errorData?.error) {
+          toast.error(`Error de validación: ${errorData.error}`);
+          return;
+        }
+      }
+      
+      // Otros errores
+      const message = error.response?.data?.error || error.message || "Error al procesar el archivo";
       toast.error(message);
     }
   });

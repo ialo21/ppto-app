@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { Card, CardContent, CardHeader } from "../components/ui/Card";
@@ -9,6 +9,7 @@ import { Table, Th, Td } from "../components/ui/Table";
 import { toast } from "sonner";
 import BulkUploader from "../components/BulkUploader";
 import { useManagements, useAreas, useExpensePackages } from "../hooks/useCatalogData";
+import { matchesSearch, debounce } from "../utils/searchUtils";
 
 type ViewMode = "monthly" | "annual";
 
@@ -82,6 +83,7 @@ export default function BudgetPage() {
   });
   
   const [searchText, setSearchText] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [edited, setEdited] = useState<Map<string, EditedValue>>(new Map());
   const [annualEdited, setAnnualEdited] = useState<Map<string, AnnualEditedValue>>(new Map());
   const [sortBy, setSortBy] = useState<"support" | "ceco" | "amount">("support");
@@ -96,10 +98,27 @@ export default function BudgetPage() {
   // Refs for keyboard navigation
   const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
+  // Refs for annual view two-table layout
+  const leftTableBodyRef = useRef<HTMLTableSectionElement>(null);
+  const rightTableBodyRef = useRef<HTMLTableSectionElement>(null);
+  const leftTableHeaderRef = useRef<HTMLTableSectionElement>(null);
+  const rightTableHeaderRef = useRef<HTMLTableSectionElement>(null);
+  const rightScrollContainerRef = useRef<HTMLDivElement>(null);
+
   // Fetch catalog data
   const managementsQuery = useManagements();
   const areasQuery = useAreas();
   const packagesQuery = useExpensePackages();
+
+  // Debounce search input
+  const debouncedSetSearch = useMemo(
+    () => debounce((value: string) => setDebouncedSearch(value), 300),
+    []
+  );
+
+  useEffect(() => {
+    debouncedSetSearch(searchText);
+  }, [searchText, debouncedSetSearch]);
 
   // Fetch available years
   const { data: yearsData } = useQuery({
@@ -139,7 +158,6 @@ export default function BudgetPage() {
   // Auto-select year and period on mount
   useEffect(() => {
     if (availableYears.length > 0 && !selectedYear) {
-      // Select current year if exists, otherwise most recent
       const currentYear = new Date().getFullYear();
       const yearToSelect = availableYears.includes(currentYear) ? currentYear : availableYears[0];
       setSelectedYear(yearToSelect);
@@ -149,7 +167,6 @@ export default function BudgetPage() {
 
   useEffect(() => {
     if (periodsForYear.length > 0 && !selectedPeriodId && viewMode === "monthly") {
-      // Auto-select last open period, or last period of year
       const openPeriods = periodsForYear.filter((p: any) => !p.closures);
       const periodToSelect = openPeriods.length > 0 
         ? openPeriods[openPeriods.length - 1]
@@ -160,12 +177,11 @@ export default function BudgetPage() {
     }
   }, [periodsForYear, selectedPeriodId, viewMode]);
 
-  // Persist view mode
+  // Persist view mode, year, and period
   useEffect(() => {
     localStorage.setItem(LOCAL_STORAGE_KEYS.viewMode, viewMode);
   }, [viewMode]);
 
-  // Persist year and period
   useEffect(() => {
     if (selectedYear) {
       localStorage.setItem(LOCAL_STORAGE_KEYS.year, String(selectedYear));
@@ -185,16 +201,15 @@ export default function BudgetPage() {
     setAnnualEdited(new Map());
   }, [selectedYear]);
 
-  // Build query params for monthly view
+  // Build query params for monthly view (without search, we'll filter client-side)
   const monthlyParams = useMemo(() => {
     const params: any = { periodId: selectedPeriodId };
-    if (searchText.trim()) params.search = searchText.trim();
     if (managementId) params.managementId = managementId;
     if (areaId) params.areaId = areaId;
     if (packageId) params.packageId = packageId;
     if (conceptId) params.conceptId = conceptId;
     return params;
-  }, [selectedPeriodId, searchText, managementId, areaId, packageId, conceptId]);
+  }, [selectedPeriodId, managementId, areaId, packageId, conceptId]);
 
   // Fetch monthly budget data
   const { data: budgetData, refetch: refetchMonthly } = useQuery({
@@ -203,16 +218,15 @@ export default function BudgetPage() {
     queryFn: async () => (await api.get("/budgets/detailed", { params: monthlyParams })).data
   });
 
-  // Build query params for annual view
+  // Build query params for annual view (without search, we'll filter client-side)
   const annualParams = useMemo(() => {
     const params: any = { year: selectedYear };
-    if (searchText.trim()) params.search = searchText.trim();
     if (managementId) params.managementId = managementId;
     if (areaId) params.areaId = areaId;
     if (packageId) params.packageId = packageId;
     if (conceptId) params.conceptId = conceptId;
     return params;
-  }, [selectedYear, searchText, managementId, areaId, packageId, conceptId]);
+  }, [selectedYear, managementId, areaId, packageId, conceptId]);
 
   // Fetch annual budget data
   const { data: annualData, refetch: refetchAnnual } = useQuery({
@@ -387,6 +401,17 @@ export default function BudgetPage() {
     }).format(num);
   };
 
+  // Handle vertical scroll synchronization for annual view two-table layout
+  const handleRightTableScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const rightContainer = e.currentTarget;
+    const leftBody = leftTableBodyRef.current;
+    
+    // Sync vertical scroll to left table body
+    if (leftBody && leftBody.parentElement) {
+      leftBody.parentElement.scrollTop = rightContainer.scrollTop;
+    }
+  }, []);
+
   // Get monthly cell value
   const getMonthlyCellValue = (row: BudgetRow): string => {
     const key = `${row.supportId}-${row.costCenterId}`;
@@ -412,11 +437,19 @@ export default function BudgetPage() {
     return edited.has(key) || annualEdited.has(key);
   };
 
-  // Sort monthly rows
-  const sortedMonthlyRows = useMemo(() => {
+  // Filter and sort monthly rows (CLIENT-SIDE)
+  const filteredAndSortedMonthlyRows = useMemo(() => {
     if (!budgetData?.rows) return [];
-    const rows = [...budgetData.rows];
+    let rows = [...budgetData.rows];
     
+    // Apply client-side search filter
+    if (debouncedSearch.trim()) {
+      rows = rows.filter((row: BudgetRow) => 
+        matchesSearch(debouncedSearch, row.supportName, row.costCenterCode)
+      );
+    }
+    
+    // Sort
     rows.sort((a: BudgetRow, b: BudgetRow) => {
       let compareValue = 0;
       
@@ -434,12 +467,27 @@ export default function BudgetPage() {
     });
     
     return rows;
-  }, [budgetData?.rows, sortBy, sortOrder, edited]);
+  }, [budgetData?.rows, sortBy, sortOrder, edited, debouncedSearch]);
+
+  // Filter annual rows (CLIENT-SIDE)
+  const filteredAnnualRows = useMemo(() => {
+    if (!annualData?.rows) return [];
+    let rows = [...annualData.rows];
+    
+    // Apply client-side search filter
+    if (debouncedSearch.trim()) {
+      rows = rows.filter((row: AnnualRow) => 
+        matchesSearch(debouncedSearch, row.supportName, row.costCenterCode)
+      );
+    }
+    
+    return rows;
+  }, [annualData?.rows, debouncedSearch]);
 
   // Calculate monthly totals
   const monthlyTotal = useMemo(() => {
-    if (!sortedMonthlyRows) return 0;
-    return sortedMonthlyRows.reduce((sum, row: BudgetRow) => {
+    if (!filteredAndSortedMonthlyRows) return 0;
+    return filteredAndSortedMonthlyRows.reduce((sum, row: BudgetRow) => {
       const key = `${row.supportId}-${row.costCenterId}`;
       const editedVal = edited.get(key);
       const amount = editedVal?.isValid 
@@ -447,16 +495,16 @@ export default function BudgetPage() {
         : row.amountPen;
       return sum + amount;
     }, 0);
-  }, [sortedMonthlyRows, edited]);
+  }, [filteredAndSortedMonthlyRows, edited]);
 
   // Calculate annual totals
   const annualTotals = useMemo(() => {
-    if (!annualData?.rows) return { monthTotals: {}, yearTotal: 0 };
+    if (!filteredAnnualRows || filteredAnnualRows.length === 0) return { monthTotals: {}, yearTotal: 0 };
     
     const monthTotals: Record<string, number> = {};
     let yearTotal = 0;
     
-    annualData.rows.forEach((row: AnnualRow) => {
+    filteredAnnualRows.forEach((row: AnnualRow) => {
       Object.entries(row.months).forEach(([month, data]) => {
         const key = `${row.supportId}-${row.costCenterId}-${month}`;
         const editedVal = annualEdited.get(key);
@@ -470,7 +518,69 @@ export default function BudgetPage() {
     });
     
     return { monthTotals, yearTotal };
-  }, [annualData?.rows, annualEdited]);
+  }, [filteredAnnualRows, annualEdited]);
+
+  // Sync row heights between left and right tables in annual view
+  // This runs after every render and also on window resize
+  useLayoutEffect(() => {
+    if (viewMode !== "annual" || !filteredAnnualRows || filteredAnnualRows.length === 0) return;
+
+    const syncHeights = () => {
+      const leftBody = leftTableBodyRef.current;
+      const rightBody = rightTableBodyRef.current;
+      const leftHeader = leftTableHeaderRef.current;
+      const rightHeader = rightTableHeaderRef.current;
+
+      if (!leftBody || !rightBody || !leftHeader || !rightHeader) return;
+
+      // Sync header heights
+      const leftHeaderRow = leftHeader.querySelector("tr");
+      const rightHeaderRow = rightHeader.querySelector("tr");
+      if (leftHeaderRow && rightHeaderRow) {
+        // Reset heights first to get natural height
+        leftHeaderRow.style.height = "";
+        rightHeaderRow.style.height = "";
+        const leftHeaderHeight = leftHeaderRow.getBoundingClientRect().height;
+        const rightHeaderHeight = rightHeaderRow.getBoundingClientRect().height;
+        const maxHeaderHeight = Math.max(leftHeaderHeight, rightHeaderHeight);
+        leftHeaderRow.style.height = `${maxHeaderHeight}px`;
+        rightHeaderRow.style.height = `${maxHeaderHeight}px`;
+      }
+
+      // Sync body row heights
+      const leftRows = Array.from(leftBody.querySelectorAll("tr"));
+      const rightRows = Array.from(rightBody.querySelectorAll("tr"));
+      
+      leftRows.forEach((leftRow, idx) => {
+        const rightRow = rightRows[idx];
+        if (rightRow) {
+          // Reset heights first to get natural height
+          leftRow.style.height = "";
+          rightRow.style.height = "";
+          const leftHeight = leftRow.getBoundingClientRect().height;
+          const rightHeight = rightRow.getBoundingClientRect().height;
+          const maxHeight = Math.max(leftHeight, rightHeight);
+          leftRow.style.height = `${maxHeight}px`;
+          rightRow.style.height = `${maxHeight}px`;
+        }
+      });
+    };
+
+    syncHeights();
+
+    // Debounced resize handler to avoid excessive calculations
+    let resizeTimer: NodeJS.Timeout;
+    const handleResize = () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(syncHeights, 150);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      clearTimeout(resizeTimer);
+    };
+  }, [viewMode, filteredAnnualRows, annualEdited]); // Recalculate when data changes or edits are made
 
   const isClosed = budgetData?.isClosed || false;
   const hasMonthlyChanges = edited.size > 0 && Array.from(edited.values()).some(e => e.isValid);
@@ -565,7 +675,7 @@ export default function BudgetPage() {
                 disabled={!availableYears.length}
               >
                 {availableYears.length === 0 && <option value="">Sin años disponibles</option>}
-                {availableYears.map(year => (
+                {availableYears.map((year: number) => (
                   <option key={year} value={year}>{year}</option>
                 ))}
               </Select>
@@ -607,6 +717,7 @@ export default function BudgetPage() {
                 value={searchText}
                 onChange={e => setSearchText(e.target.value)}
                 disabled={!selectedYear}
+                title="Busca por nombre de Sustento o código de CECO (case-insensitive)"
               />
             </div>
 
@@ -617,7 +728,7 @@ export default function BudgetPage() {
                 value={managementId ?? ""}
                 onChange={e => {
                   setManagementId(e.target.value ? Number(e.target.value) : undefined);
-                  setAreaId(undefined); // Reset area when management changes
+                  setAreaId(undefined);
                 }}
               >
                 <option value="">Todas</option>
@@ -649,7 +760,7 @@ export default function BudgetPage() {
                 value={packageId ?? ""}
                 onChange={e => {
                   setPackageId(e.target.value ? Number(e.target.value) : undefined);
-                  setConceptId(undefined); // Reset concept when package changes
+                  setConceptId(undefined);
                 }}
               >
                 <option value="">Todos</option>
@@ -761,116 +872,125 @@ export default function BudgetPage() {
                     </div>
                   )}
 
-                  {sortedMonthlyRows.length === 0 ? (
+                  {filteredAndSortedMonthlyRows.length === 0 ? (
                     <div className="text-center py-8 text-slate-500">
-                      No hay datos para mostrar con los filtros aplicados
+                      {debouncedSearch ? 
+                        `No hay datos para "${debouncedSearch}" con los filtros aplicados` :
+                        "No hay datos para mostrar con los filtros aplicados"
+                      }
                     </div>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <thead>
-                          <tr>
-                            <Th 
-                              className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
-                              onClick={() => {
-                                if (sortBy === "support") {
-                                  setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-                                } else {
-                                  setSortBy("support");
-                                  setSortOrder("asc");
-                                }
-                              }}
-                            >
-                              Sustento {sortBy === "support" && (sortOrder === "asc" ? "↑" : "↓")}
-                            </Th>
-                            <Th 
-                              className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
-                              onClick={() => {
-                                if (sortBy === "ceco") {
-                                  setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-                                } else {
-                                  setSortBy("ceco");
-                                  setSortOrder("asc");
-                                }
-                              }}
-                            >
-                              CECO {sortBy === "ceco" && (sortOrder === "asc" ? "↑" : "↓")}
-                            </Th>
-                            <Th 
-                              className="text-right cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
-                              onClick={() => {
-                                if (sortBy === "amount") {
-                                  setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-                                } else {
-                                  setSortBy("amount");
-                                  setSortOrder("asc");
-                                }
-                              }}
-                            >
-                              Monto (PEN) {sortBy === "amount" && (sortOrder === "asc" ? "↑" : "↓")}
-                            </Th>
-                            <Th>Gerencia</Th>
-                            <Th>Área</Th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {sortedMonthlyRows.map((row: BudgetRow, idx: number) => {
-                            const key = `${row.supportId}-${row.costCenterId}`;
-                            const validation = edited.get(key);
-                            const isDirty = isCellDirty(key);
-                            const hasError = validation && !validation.isValid;
-                            
-                            return (
-                              <tr 
-                                key={key}
-                                className={isDirty ? "bg-yellow-50 dark:bg-yellow-900/10" : ""}
+                    <>
+                      <div className="mb-2 text-sm text-slate-600 dark:text-slate-400">
+                        Mostrando {filteredAndSortedMonthlyRows.length} fila{filteredAndSortedMonthlyRows.length !== 1 ? 's' : ''}
+                        {debouncedSearch && ` para "${debouncedSearch}"`}
+                      </div>
+                      <div className="overflow-x-auto">
+          <Table>
+                          <thead>
+                            <tr>
+                              <Th 
+                                className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
+                                onClick={() => {
+                                  if (sortBy === "support") {
+                                    setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+                                  } else {
+                                    setSortBy("support");
+                                    setSortOrder("asc");
+                                  }
+                                }}
                               >
-                                <Td>
-                                  <div className="font-medium">{row.supportName}</div>
-                                  {row.supportCode && (
-                                    <div className="text-xs text-slate-500">{row.supportCode}</div>
-                                  )}
-                                </Td>
-                                <Td>
-                                  <div className="font-medium">{row.costCenterCode}</div>
-                                  {row.costCenterName && (
-                                    <div className="text-xs text-slate-500">{row.costCenterName}</div>
-                                  )}
-                                </Td>
-                                <Td>
-                                  <div className="flex flex-col gap-1">
-                                    <Input
-                                      ref={el => el && inputRefs.current.set(key, el)}
-                                      type="text"
-                                      value={getMonthlyCellValue(row)}
-                                      onChange={e => handleMonthlyCellEdit(row.supportId, row.costCenterId, e.target.value)}
-                                      onKeyDown={e => handleKeyDown(e, key, sortedMonthlyRows, idx, "monthly")}
-                                      disabled={isClosed}
-                                      className={`text-right ${hasError ? "border-red-500" : ""}`}
-                                      style={{ width: "140px" }}
-                                    />
-                                    {hasError && validation?.error && (
-                                      <span className="text-xs text-red-600 dark:text-red-400">
-                                        {validation.error}
-                                      </span>
+                                Sustento {sortBy === "support" && (sortOrder === "asc" ? "↑" : "↓")}
+                              </Th>
+                              <Th 
+                                className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
+                                onClick={() => {
+                                  if (sortBy === "ceco") {
+                                    setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+                                  } else {
+                                    setSortBy("ceco");
+                                    setSortOrder("asc");
+                                  }
+                                }}
+                              >
+                                CECO {sortBy === "ceco" && (sortOrder === "asc" ? "↑" : "↓")}
+                              </Th>
+                              <Th 
+                                className="text-right cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
+                                onClick={() => {
+                                  if (sortBy === "amount") {
+                                    setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+                                  } else {
+                                    setSortBy("amount");
+                                    setSortOrder("asc");
+                                  }
+                                }}
+                              >
+                                Monto (PEN) {sortBy === "amount" && (sortOrder === "asc" ? "↑" : "↓")}
+                              </Th>
+                              <Th>Gerencia</Th>
+                              <Th>Área</Th>
+                            </tr>
+                          </thead>
+            <tbody>
+                            {filteredAndSortedMonthlyRows.map((row: BudgetRow, idx: number) => {
+                              const key = `${row.supportId}-${row.costCenterId}`;
+                              const validation = edited.get(key);
+                              const isDirty = isCellDirty(key);
+                              const hasError = validation && !validation.isValid;
+                              
+                              return (
+                                <tr 
+                                  key={key}
+                                  className={isDirty ? "bg-yellow-50 dark:bg-yellow-900/10" : ""}
+                                >
+                                  <Td>
+                                    <div className="font-medium">{row.supportName}</div>
+                                    {row.supportCode && (
+                                      <div className="text-xs text-slate-500">{row.supportCode}</div>
                                     )}
-                                  </div>
-                                </Td>
-                                <Td>{row.management || "-"}</Td>
-                                <Td>{row.area || "-"}</Td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                        <tfoot className="bg-slate-50 dark:bg-slate-900 font-semibold">
-                          <tr>
-                            <Td colSpan={2} className="text-right">Total:</Td>
-                            <Td className="text-right">{formatNumber(monthlyTotal)}</Td>
-                            <Td colSpan={2}></Td>
-                          </tr>
-                        </tfoot>
-                      </Table>
-                    </div>
+                                  </Td>
+                                  <Td>
+                                    <div className="font-medium">{row.costCenterCode}</div>
+                                    {row.costCenterName && (
+                                      <div className="text-xs text-slate-500">{row.costCenterName}</div>
+                                    )}
+                                  </Td>
+                                  <Td>
+                                    <div className="flex flex-col gap-1">
+                                      <Input
+                                        ref={el => el && inputRefs.current.set(key, el)}
+                                        type="text"
+                                        value={getMonthlyCellValue(row)}
+                                        onChange={e => handleMonthlyCellEdit(row.supportId, row.costCenterId, e.target.value)}
+                                        onKeyDown={e => handleKeyDown(e, key, filteredAndSortedMonthlyRows, idx, "monthly")}
+                                        disabled={isClosed}
+                                        className={`text-right ${hasError ? "border-red-500" : ""}`}
+                                        style={{ width: "140px" }}
+                                      />
+                                      {hasError && validation?.error && (
+                                        <span className="text-xs text-red-600 dark:text-red-400">
+                                          {validation.error}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </Td>
+                                  <Td>{row.management || "-"}</Td>
+                                  <Td>{row.area || "-"}</Td>
+                                </tr>
+                              );
+              })}
+            </tbody>
+                          <tfoot className="bg-slate-50 dark:bg-slate-900 font-semibold">
+                            <tr>
+                              <Td colSpan={2} className="text-right">Total:</Td>
+                              <Td className="text-right">{formatNumber(monthlyTotal)}</Td>
+                              <Td colSpan={2}></Td>
+                            </tr>
+                          </tfoot>
+          </Table>
+                      </div>
+                    </>
                   )}
                 </>
               ) : null}
@@ -880,115 +1000,155 @@ export default function BudgetPage() {
           {/* ANNUAL VIEW */}
           {viewMode === "annual" && selectedYear && annualData && (
             <>
-              {annualData.rows.length === 0 ? (
+              {filteredAnnualRows.length === 0 ? (
                 <div className="text-center py-8 text-slate-500">
-                  No hay datos para mostrar con los filtros aplicados
+                  {debouncedSearch ? 
+                    `No hay datos para "${debouncedSearch}" con los filtros aplicados` :
+                    "No hay datos para mostrar con los filtros aplicados"
+                  }
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-          <Table>
-                    <thead>
-                      <tr>
-                        <Th className="sticky left-0 bg-white dark:bg-slate-950 z-10">Sustento</Th>
-                        <Th className="sticky left-[200px] bg-white dark:bg-slate-950 z-10">CECO</Th>
-                        <Th>Ene</Th>
-                        <Th>Feb</Th>
-                        <Th>Mar</Th>
-                        <Th>Abr</Th>
-                        <Th>May</Th>
-                        <Th>Jun</Th>
-                        <Th>Jul</Th>
-                        <Th>Ago</Th>
-                        <Th>Sep</Th>
-                        <Th>Oct</Th>
-                        <Th>Nov</Th>
-                        <Th>Dic</Th>
-                        <Th className="bg-slate-100 dark:bg-slate-800">Total</Th>
-                      </tr>
-                    </thead>
-            <tbody>
-                      {annualData.rows.map((row: AnnualRow, rowIdx: number) => {
-                        const months = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"];
-                        
-                        // Calculate row total with edits
-                        let rowTotal = 0;
-                        months.forEach(month => {
-                          const key = `${row.supportId}-${row.costCenterId}-${month}`;
-                          const editedVal = annualEdited.get(key);
-                          const amount = editedVal?.isValid 
-                            ? (parseFloat(editedVal.value) || 0)
-                            : (row.months[month]?.amountPen || 0);
-                          rowTotal += amount;
-                        });
+                <>
+                  <div className="mb-2 text-sm text-slate-600 dark:text-slate-400">
+                    Mostrando {filteredAnnualRows.length} fila{filteredAnnualRows.length !== 1 ? 's' : ''}
+                    {debouncedSearch && ` para "${debouncedSearch}"`}
+                  </div>
+                  {/* Two-table layout: Left table (fixed) + Right table (scrollable) */}
+                  <div style={{ display: "flex", gap: "0", width: "100%" }}>
+                    {/* LEFT TABLE: Sustento y CECO (Fixed columns) */}
+                    <div style={{ flexShrink: 0, overflowY: "hidden", overflowX: "hidden" }}>
+                      <Table style={{ tableLayout: "fixed", width: "390px", borderCollapse: "collapse" }}>
+                        <thead ref={leftTableHeaderRef}>
+                          <tr>
+                            <Th style={{ width: "260px" }}>Sustento</Th>
+                            <Th style={{ width: "130px" }}>CECO</Th>
+                          </tr>
+                        </thead>
+                        <tbody ref={leftTableBodyRef}>
+                          {filteredAnnualRows.map((row: AnnualRow) => (
+                            <tr key={`left-${row.supportId}-${row.costCenterId}`}>
+                              <Td>
+                                <div className="font-medium">{row.supportName}</div>
+                                {row.supportCode && (
+                                  <div className="text-xs text-slate-500">{row.supportCode}</div>
+                                )}
+                              </Td>
+                              <Td>
+                                <div className="font-medium">{row.costCenterCode}</div>
+                              </Td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="bg-slate-50 dark:bg-slate-900 font-semibold">
+                          <tr>
+                            <Td colSpan={2} className="text-right">Total por mes:</Td>
+                          </tr>
+                        </tfoot>
+                      </Table>
+                    </div>
 
-                        return (
-                          <tr key={`${row.supportId}-${row.costCenterId}`}>
-                            <Td className="sticky left-0 bg-white dark:bg-slate-950">
-                              <div className="font-medium">{row.supportName}</div>
-                              {row.supportCode && (
-                                <div className="text-xs text-slate-500">{row.supportCode}</div>
-                              )}
-                            </Td>
-                            <Td className="sticky left-[200px] bg-white dark:bg-slate-950">
-                              <div className="font-medium">{row.costCenterCode}</div>
-                            </Td>
-                            {months.map((month, monthIdx) => {
-                              const monthData = row.months[month];
+                    {/* RIGHT TABLE: Months + Total (Scrollable horizontally) */}
+                    <div 
+                      ref={rightScrollContainerRef}
+                      onScroll={handleRightTableScroll}
+                      style={{ 
+                        flexGrow: 1, 
+                        overflowX: "auto", 
+                        overflowY: "hidden"
+                      }}
+                    >
+                      <Table style={{ tableLayout: "fixed", borderCollapse: "collapse", minWidth: "100%" }}>
+                        <thead ref={rightTableHeaderRef}>
+                          <tr>
+                            <Th style={{ width: "150px", minWidth: "150px" }}>Ene</Th>
+                            <Th style={{ width: "150px", minWidth: "150px" }}>Feb</Th>
+                            <Th style={{ width: "150px", minWidth: "150px" }}>Mar</Th>
+                            <Th style={{ width: "150px", minWidth: "150px" }}>Abr</Th>
+                            <Th style={{ width: "150px", minWidth: "150px" }}>May</Th>
+                            <Th style={{ width: "150px", minWidth: "150px" }}>Jun</Th>
+                            <Th style={{ width: "150px", minWidth: "150px" }}>Jul</Th>
+                            <Th style={{ width: "150px", minWidth: "150px" }}>Ago</Th>
+                            <Th style={{ width: "150px", minWidth: "150px" }}>Sep</Th>
+                            <Th style={{ width: "150px", minWidth: "150px" }}>Oct</Th>
+                            <Th style={{ width: "150px", minWidth: "150px" }}>Nov</Th>
+                            <Th style={{ width: "150px", minWidth: "150px" }}>Dic</Th>
+                            <Th className="bg-slate-100 dark:bg-slate-800" style={{ width: "150px", minWidth: "150px" }}>Total</Th>
+                          </tr>
+                        </thead>
+                        <tbody ref={rightTableBodyRef}>
+                          {filteredAnnualRows.map((row: AnnualRow, rowIdx: number) => {
+                            const months = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"];
+                            
+                            // Calculate row total with edits
+                            let rowTotal = 0;
+                            months.forEach(month => {
                               const key = `${row.supportId}-${row.costCenterId}-${month}`;
-                              const validation = annualEdited.get(key);
-                              const isDirty = isCellDirty(key);
-                              const hasError = validation && !validation.isValid;
-                              const isClosed = monthData?.isClosed || false;
+                              const editedVal = annualEdited.get(key);
+                              const amount = editedVal?.isValid 
+                                ? (parseFloat(editedVal.value) || 0)
+                                : (row.months[month]?.amountPen || 0);
+                              rowTotal += amount;
+                            });
 
-                              return (
-                                <Td key={month} className={isDirty ? "bg-yellow-50 dark:bg-yellow-900/10" : ""}>
-                                  {monthData ? (
-                                    <div className="flex flex-col gap-1">
-                                      <Input
-                                        ref={el => el && inputRefs.current.set(key, el)}
-                                        type="text"
-                                        value={getAnnualCellValue(row, month)}
-                                        onChange={e => handleAnnualCellEdit(row.supportId, row.costCenterId, monthData.periodId, month, e.target.value)}
-                                        onKeyDown={e => handleKeyDown(e, key, annualData.rows, rowIdx, "annual", monthIdx)}
-                                        disabled={isClosed}
-                                        title={isClosed ? "Período cerrado" : ""}
-                                        className={`text-right ${hasError ? "border-red-500" : ""} ${isClosed ? "bg-slate-100 dark:bg-slate-800 cursor-not-allowed" : ""}`}
-                                        style={{ width: "100px" }}
-                                      />
-                                      {hasError && validation?.error && (
-                                        <span className="text-xs text-red-600 dark:text-red-400">
-                                          {validation.error}
-                                        </span>
+                            return (
+                              <tr key={`right-${row.supportId}-${row.costCenterId}`}>
+                                {months.map((month, monthIdx) => {
+                                  const monthData = row.months[month];
+                                  const key = `${row.supportId}-${row.costCenterId}-${month}`;
+                                  const validation = annualEdited.get(key);
+                                  const isDirty = isCellDirty(key);
+                                  const hasError = validation && !validation.isValid;
+                                  const isClosed = monthData?.isClosed || false;
+
+                                  return (
+                                    <Td key={month} className={isDirty ? "bg-yellow-50 dark:bg-yellow-900/10" : ""}>
+                                      {monthData ? (
+                                        <div className="flex flex-col gap-1">
+                                          <Input
+                                            ref={el => el && inputRefs.current.set(key, el)}
+                                            type="text"
+                                            value={getAnnualCellValue(row, month)}
+                                            onChange={e => handleAnnualCellEdit(row.supportId, row.costCenterId, monthData.periodId, month, e.target.value)}
+                                            onKeyDown={e => handleKeyDown(e, key, filteredAnnualRows, rowIdx, "annual", monthIdx)}
+                                            disabled={isClosed}
+                                            title={isClosed ? "Período cerrado" : ""}
+                                            className={`text-right w-full ${hasError ? "border-red-500" : ""} ${isClosed ? "bg-slate-100 dark:bg-slate-800 cursor-not-allowed" : ""}`}
+                                          />
+                                          {hasError && validation?.error && (
+                                            <span className="text-xs text-red-600 dark:text-red-400">
+                                              {validation.error}
+                                            </span>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <span className="text-xs text-slate-400">N/A</span>
                                       )}
-                                    </div>
-                                  ) : (
-                                    <span className="text-xs text-slate-400">N/A</span>
-                                  )}
+                                    </Td>
+                                  );
+                                })}
+                                <Td className="text-right font-semibold bg-slate-100 dark:bg-slate-800">
+                                  {formatNumber(rowTotal)}
                                 </Td>
-                              );
-                            })}
-                            <Td className="text-right font-semibold bg-slate-100 dark:bg-slate-800">
-                              {formatNumber(rowTotal)}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                        <tfoot className="bg-slate-50 dark:bg-slate-900 font-semibold">
+                          <tr>
+                            {["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"].map(month => (
+                              <Td key={month} className="text-right">
+                                {formatNumber(annualTotals.monthTotals[month] || 0)}
+                              </Td>
+                            ))}
+                            <Td className="text-right bg-slate-200 dark:bg-slate-700">
+                              {formatNumber(annualTotals.yearTotal)}
                             </Td>
                           </tr>
-                        );
-              })}
-            </tbody>
-                    <tfoot className="bg-slate-50 dark:bg-slate-900 font-semibold">
-                      <tr>
-                        <Td colSpan={2} className="text-right">Total por mes:</Td>
-                        {["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"].map(month => (
-                          <Td key={month} className="text-right">
-                            {formatNumber(annualTotals.monthTotals[month] || 0)}
-                          </Td>
-                        ))}
-                        <Td className="text-right bg-slate-200 dark:bg-slate-700">
-                          {formatNumber(annualTotals.yearTotal)}
-                        </Td>
-                      </tr>
-                    </tfoot>
-          </Table>
-                </div>
+                        </tfoot>
+                      </Table>
+                    </div>
+                  </div>
+                </>
               )}
             </>
           )}

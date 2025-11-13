@@ -7,6 +7,8 @@ import Select from "../components/ui/Select";
 import Button from "../components/ui/Button";
 import { Table, Th, Td } from "../components/ui/Table";
 import { toast } from "sonner";
+import YearMonthPicker from "../components/YearMonthPicker";
+import { formatPeriodLabel } from "../utils/periodFormat";
 
 const ESTADOS_OC = [
   "PENDIENTE", "PROCESAR", "PROCESADO", "APROBACION_VP",
@@ -433,30 +435,25 @@ export default function PurchaseOrdersPage() {
             <div className="grid md:grid-cols-3 gap-3">
               <div>
                 <label className="block text-sm font-medium mb-1">Periodo PPTO Desde *</label>
-                <SelectWithError 
-                  value={form.budgetPeriodFromId} 
-                  onChange={(e: any) => setForm(f => ({ ...f, budgetPeriodFromId: e.target.value }))}
+                <YearMonthPicker
+                  value={form.budgetPeriodFromId ? Number(form.budgetPeriodFromId) : null}
+                  onChange={(period) => setForm(f => ({ ...f, budgetPeriodFromId: period ? String(period.id) : "" }))}
+                  periods={periods || []}
+                  placeholder="Seleccionar período desde..."
                   error={fieldErrors.budgetPeriodFromId}
-                >
-                  <option value="">Seleccionar...</option>
-                  {periods?.map((p: any) => (
-                    <option key={p.id} value={p.id}>{p.year}-{String(p.month).padStart(2, "0")} {p.label || ""}</option>
-                  ))}
-                </SelectWithError>
+                />
               </div>
 
               <div>
                 <label className="block text-sm font-medium mb-1">Periodo PPTO Hasta *</label>
-                <SelectWithError 
-                  value={form.budgetPeriodToId} 
-                  onChange={(e: any) => setForm(f => ({ ...f, budgetPeriodToId: e.target.value }))}
+                <YearMonthPicker
+                  value={form.budgetPeriodToId ? Number(form.budgetPeriodToId) : null}
+                  onChange={(period) => setForm(f => ({ ...f, budgetPeriodToId: period ? String(period.id) : "" }))}
+                  periods={periods || []}
+                  minId={form.budgetPeriodFromId ? Number(form.budgetPeriodFromId) : undefined}
+                  placeholder="Seleccionar período hasta..."
                   error={fieldErrors.budgetPeriodToId}
-                >
-                  <option value="">Seleccionar...</option>
-                  {periods?.map((p: any) => (
-                    <option key={p.id} value={p.id}>{p.year}-{String(p.month).padStart(2, "0")} {p.label || ""}</option>
-                  ))}
-                </SelectWithError>
+                />
               </div>
 
               <div>

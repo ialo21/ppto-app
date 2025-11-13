@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api";
+import { formatPeriodLabel } from "../utils/periodFormat";
 
 export default function Reports(){
   const { data: periods } = useQuery({ queryKey:["periods"], queryFn: async()=> (await api.get("/periods")).data });
@@ -20,7 +21,7 @@ export default function Reports(){
         <select value={periodId ?? ""} onChange={e=>setPeriodId(e.target.value? Number(e.target.value): null)}>
           <option value="">-- elegir --</option>
           {(periods||[]).map((p:any)=>(
-            <option key={p.id} value={p.id}>{p.year}-{String(p.month).padStart(2,"0")} {p.label||""}</option>
+            <option key={p.id} value={p.id}>{formatPeriodLabel(p)}</option>
           ))}
         </select>
       </div>

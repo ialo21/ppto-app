@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { api } from "../api";
+import { formatPeriodLabel } from "../utils/periodFormat";
 
 export default function ControlLines() {
   const { data: periods } = useQuery({ queryKey: ["periods"], queryFn: async () => (await api.get("/periods")).data });
@@ -49,7 +50,7 @@ export default function ControlLines() {
         <select value={periodId ?? ""} onChange={e=>setPeriodId(e.target.value ? Number(e.target.value) : null)}>
           <option value="">-- elegir --</option>
           {selectedPeriods.map((p:any)=>(
-            <option key={p.id} value={p.id}>{p.year}-{String(p.month).padStart(2,"0")} {p.label||""}</option>
+            <option key={p.id} value={p.id}>{formatPeriodLabel(p)}</option>
           ))}
         </select>
       </div>
@@ -114,7 +115,7 @@ export default function ControlLines() {
           <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginTop:12 }}>
             <select value={procForm.accountingPeriodId} onChange={e=>setProcForm(f=>({ ...f, accountingPeriodId: e.target.value }))}>
               <option value="">Mes contable…</option>
-              {selectedPeriods.map((p:any)=>(<option key={p.id} value={p.id}>{p.year}-{String(p.month).padStart(2,"0")} {p.label||""}</option>))}
+              {selectedPeriods.map((p:any)=>(<option key={p.id} value={p.id}>{formatPeriodLabel(p)}</option>))}
             </select>
             <input placeholder="TC Final (USD)" value={procForm.fxRateFinal} onChange={e=>setProcForm(f=>({ ...f, fxRateFinal: e.target.value }))}/>
             <span style={{ gridColumn:"span 2" }}>(Usa estos valores para los botones de Procesar/Provisionado)</span>
@@ -125,11 +126,11 @@ export default function ControlLines() {
             <input placeholder="Support ID" value={provForm.supportId} onChange={e=>setProvForm(f=>({ ...f, supportId: e.target.value }))}/>
             <select value={provForm.periodId} onChange={e=>setProvForm(f=>({ ...f, periodId: e.target.value }))}>
               <option value="">Mes operativo…</option>
-              {selectedPeriods.map((p:any)=>(<option key={p.id} value={p.id}>{p.year}-{String(p.month).padStart(2,"0")} {p.label||""}</option>))}
+              {selectedPeriods.map((p:any)=>(<option key={p.id} value={p.id}>{formatPeriodLabel(p)}</option>))}
             </select>
             <select value={provForm.accountingPeriodId} onChange={e=>setProvForm(f=>({ ...f, accountingPeriodId: e.target.value }))}>
               <option value="">Mes contable…</option>
-              {selectedPeriods.map((p:any)=>(<option key={p.id} value={p.id}>{p.year}-{String(p.month).padStart(2,"0")} {p.label||""}</option>))}
+              {selectedPeriods.map((p:any)=>(<option key={p.id} value={p.id}>{formatPeriodLabel(p)}</option>))}
             </select>
             <input placeholder="Monto Local (+/-)" value={provForm.amountLocal} onChange={e=>setProvForm(f=>({ ...f, amountLocal: e.target.value }))}/>
             <input placeholder="Descripción" value={provForm.description} onChange={e=>setProvForm(f=>({ ...f, description: e.target.value }))}/>

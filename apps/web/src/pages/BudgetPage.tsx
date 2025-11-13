@@ -8,8 +8,10 @@ import Button from "../components/ui/Button";
 import { Table, Th, Td } from "../components/ui/Table";
 import { toast } from "sonner";
 import BulkUploader from "../components/BulkUploader";
+import YearMonthPicker from "../components/YearMonthPicker";
 import { useManagements, useAreas, useExpensePackages } from "../hooks/useCatalogData";
 import { matchesSearch, debounce } from "../utils/searchUtils";
+import { formatPeriodLabel } from "../utils/periodFormat";
 
 type ViewMode = "monthly" | "annual";
 
@@ -698,7 +700,7 @@ export default function BudgetPage() {
         <h1 className="text-2xl font-semibold">PPTO</h1>
         {budgetData?.period && viewMode === "monthly" && (
           <div className="text-sm text-slate-600 dark:text-slate-400">
-            {budgetData.period.label || `${budgetData.period.year}-${String(budgetData.period.month).padStart(2, "0")}`}
+            {formatPeriodLabel(budgetData.period)}
             {isClosed && (
               <span className="ml-2 inline-flex items-center px-2 py-1 text-xs font-medium rounded-md bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
                 Cerrado
@@ -775,27 +777,26 @@ export default function BudgetPage() {
             {viewMode === "monthly" && (
               <div>
                 <label className="block text-sm font-medium mb-1">Período (Mes)</label>
-                <Select
-                  value={selectedPeriodId ?? ""}
-                  onChange={e => {
-                    setSelectedPeriodId(e.target.value ? Number(e.target.value) : undefined);
+                <YearMonthPicker
+                  value={selectedPeriodId ?? null}
+                  onChange={(period) => {
+                    setSelectedPeriodId(period?.id);
                     setEdited(new Map());
+                    if (period) {
+                      localStorage.setItem(LOCAL_STORAGE_KEYS.periodId, String(period.id));
+                    }
                   }}
+                  periods={periodsForYear}
                   disabled={!selectedYear || isLoadingPeriods}
-                >
-                  <option value="">
-                    {!selectedYear 
+                  placeholder={
+                    !selectedYear 
                       ? "Seleccione año primero" 
                       : isLoadingPeriods 
                         ? "Cargando períodos..."
-                        : "Seleccione período..."}
-                  </option>
-                  {periodsForYear.map((p: any) => (
-                    <option key={p.id} value={p.id}>
-                      {p.year}-{String(p.month).padStart(2, "0")} {p.label || ""}
-                    </option>
-                  ))}
-                </Select>
+                        : "Seleccione período..."
+                  }
+                  clearable={false}
+                />
               </div>
             )}
 

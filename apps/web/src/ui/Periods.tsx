@@ -1,6 +1,7 @@
 import React from "react";
 import { useQuery, useMutation, QueryClient } from "@tanstack/react-query";
 import { api } from "../api";
+import { formatPeriodLabel } from "../utils/periodFormat";
 const qc = new QueryClient();
 
 export default function Periods(){
@@ -16,7 +17,7 @@ export default function Periods(){
       <ul>
         {data.map((p:any)=>(
           <li key={p.id}>
-            {p.year}-{String(p.month).padStart(2,"0")} {p.label||""}
+            {formatPeriodLabel(p)}
             <button style={{ marginLeft:8 }} onClick={()=>closeMutation.mutate(p.id)}>Recibir cierre</button>
           </li>
         ))}

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader } from "../components/ui/Card";
 import Select from "../components/ui/Select";
 import { Table, Th, Td } from "../components/ui/Table";
 import Button from "../components/ui/Button";
+import { formatPeriodLabel } from "../utils/periodFormat";
 export default function ReportsPage(){
   const { data: periods } = useQuery({ queryKey:["periods"], queryFn: async()=> (await api.get("/periods")).data });
   const [periodId, setPeriodId] = useState<number|undefined>();
@@ -15,7 +16,7 @@ export default function ReportsPage(){
       <Card><CardHeader className="flex gap-3">
         <Select value={periodId??""} onChange={e=>setPeriodId(Number(e.target.value))}>
           <option value="">Período contable…</option>
-          {(periods||[]).map((p:any)=><option key={p.id} value={p.id}>{p.year}-{String(p.month).padStart(2,"0")} {p.label||""}</option>)}
+          {(periods||[]).map((p:any)=><option key={p.id} value={p.id}>{formatPeriodLabel(p)}</option>)}
         </Select>
         {periodId && <Button onClick={()=>window.open(`http://localhost:3001/reports/execution/csv?periodId=${periodId}`,"_blank")}>Exportar CSV</Button>}
       </CardHeader><CardContent>

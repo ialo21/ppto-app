@@ -6,6 +6,7 @@ import Select from "../components/ui/Select";
 import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
 import { Table, Th, Td } from "../components/ui/Table";
+import { formatPeriodLabel } from "../utils/periodFormat";
 export default function ControlLinesPage(){
   const { data: periods } = useQuery({ queryKey:["periods"], queryFn: async()=> (await api.get("/periods")).data });
   const [periodId, setPeriodId] = useState<number|undefined>();
@@ -36,11 +37,11 @@ export default function ControlLinesPage(){
       <Card><CardHeader className="grid gap-3 md:grid-cols-4">
         <Select value={periodId??""} onChange={e=>setPeriodId(Number(e.target.value))}>
           <option value="">Período…</option>
-          {(periods||[]).map((p:any)=><option key={p.id} value={p.id}>{p.year}-{String(p.month).padStart(2,"0")} {p.label||""}</option>)}
+          {(periods||[]).map((p:any)=><option key={p.id} value={p.id}>{formatPeriodLabel(p)}</option>)}
         </Select>
         <Select value={proc.accountingPeriodId} onChange={e=>setProc(f=>({...f, accountingPeriodId: e.target.value}))}>
           <option value="">Mes contable…</option>
-          {(periods||[]).map((p:any)=><option key={p.id} value={p.id}>{p.year}-{String(p.month).padStart(2,"0")} {p.label||""}</option>)}
+          {(periods||[]).map((p:any)=><option key={p.id} value={p.id}>{formatPeriodLabel(p)}</option>)}
         </Select>
         <Input placeholder="TC Final (USD)" value={proc.fxRateFinal} onChange={e=>setProc(f=>({...f, fxRateFinal: e.target.value}))}/>
         <div className="flex gap-2">

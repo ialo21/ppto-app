@@ -2,13 +2,13 @@ import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 
 const INVOICE_STATUSES = [
-  { value: "INGRESADO", label: "Ingresado", color: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200" },
-  { value: "EN_APROBACION", label: "En Aprobación", color: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" },
-  { value: "EN_CONTABILIDAD", label: "En Contabilidad", color: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200" },
-  { value: "EN_TESORERIA", label: "En Tesorería", color: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200" },
-  { value: "EN_ESPERA_DE_PAGO", label: "En Espera de Pago", color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" },
-  { value: "PAGADO", label: "Pagado", color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" },
-  { value: "RECHAZADO", label: "Rechazado", color: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" }
+  { value: "INGRESADO", label: "Ingresado", color: "bg-gray-100 text-gray-800" },
+  { value: "EN_APROBACION", label: "En Aprobación", color: "bg-blue-100 text-blue-800" },
+  { value: "EN_CONTABILIDAD", label: "En Contabilidad", color: "bg-purple-100 text-purple-800" },
+  { value: "EN_TESORERIA", label: "En Tesorería", color: "bg-indigo-100 text-indigo-800" },
+  { value: "EN_ESPERA_DE_PAGO", label: "En Espera de Pago", color: "bg-status-warning text-yellow-900" },
+  { value: "PAGADO", label: "Pagado", color: "bg-status-success text-green-900" },
+  { value: "RECHAZADO", label: "Rechazado", color: "bg-status-error text-red-900" }
 ];
 
 interface StatusChipProps {
@@ -127,7 +127,7 @@ export default function StatusChip({ currentStatus, onStatusChange, isLoading = 
       {isOpen && !isLoading && createPortal(
         <div 
           ref={dropdownRef}
-          className="fixed z-50 w-56 rounded-lg shadow-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 py-1"
+          className="fixed z-50 w-56 rounded-lg shadow-medium bg-surface border border-border-default py-1"
           style={{ 
             top: `${position.top}px`, 
             left: `${position.left}px` 
@@ -139,18 +139,18 @@ export default function StatusChip({ currentStatus, onStatusChange, isLoading = 
               type="button"
               onClick={() => handleStatusSelect(status.value)}
               className={`
-                w-full px-4 py-2 text-left text-sm
-                hover:bg-slate-100 dark:hover:bg-slate-700
+                w-full px-4 py-2 text-left text-sm text-text-primary
+                hover:bg-surface-hover
                 transition-colors duration-150
                 flex items-center justify-between
-                ${status.value === currentStatus ? 'bg-slate-50 dark:bg-slate-750' : ''}
+                ${status.value === currentStatus ? 'bg-surface-active' : ''}
               `}
             >
               <span className={`px-2 py-0.5 text-xs rounded-full ${status.color}`}>
                 {status.label}
               </span>
               {status.value === currentStatus && (
-                <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 text-status-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               )}

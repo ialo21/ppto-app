@@ -1105,13 +1105,7 @@ async function processBudget(data: any, rowNum: number, dryRun: boolean, year?: 
         });
         continue;
       }
-      if (parsed < 0) {
-        issues.push({
-          path: [monthKey],
-          message: `Valor negativo no permitido`
-        });
-        continue;
-      }
+      // Permite montos negativos
       shouldProcess = true;
       amount = parsed;
     }

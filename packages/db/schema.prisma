@@ -246,6 +246,14 @@ model Invoice {
   totalForeign    Decimal?   // negativo si NOTA_CREDITO
   totalLocal      Decimal?   // negativo si NOTA_CREDITO
   
+  // === CAMPOS CONTABLES ===
+  mesContable          String?   // Formato YYYY-MM
+  tcEstandar           Decimal?  // TC estándar según catálogo
+  tcReal               Decimal?  // TC real (editable por usuario)
+  montoPEN_tcEstandar  Decimal?  // montoSinIgv * tcEstandar
+  montoPEN_tcReal      Decimal?  // montoSinIgv * tcReal
+  diferenciaTC         Decimal?  // montoPEN_tcReal - montoPEN_tcEstandar
+  
   statusCurrent   InvStatus  @default(INGRESADO)
   ultimusIncident String?    // Incidente Ultimus
   detalle         String?    @db.Text

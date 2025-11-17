@@ -54,6 +54,13 @@ type Invoice = {
   createdAt: string;
   periods?: { id: number; periodId: number; period: { id: number; year: number; month: number; label?: string } }[];
   costCenters?: { id: number; costCenterId: number; amount?: number; percentage?: number; costCenter: { id: number; code: string; name: string } }[];
+  // Campos contables
+  mesContable?: string | null;
+  tcEstandar?: number | null;
+  tcReal?: number | null;
+  montoPEN_tcEstandar?: number | null;
+  montoPEN_tcReal?: number | null;
+  diferenciaTC?: number | null;
 };
 
 type ConsumoOC = {
@@ -136,13 +143,18 @@ export default function InvoicesPage() {
     ultimusIncident: "",
     detalle: "",
     proveedor: "",
-    moneda: "PEN"
+    moneda: "PEN",
+    // Campos contables
+    mesContable: "",
+    tcReal: ""
   });
   const [periodFromId, setPeriodFromId] = useState<number | null>(null);
   const [periodToId, setPeriodToId] = useState<number | null>(null);
+  const [mesContablePeriodId, setMesContablePeriodId] = useState<number | null>(null);
   const [cecoSearchCode, setCecoSearchCode] = useState("");
   const [allocations, setAllocations] = useState<Allocation[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [showForm, setShowForm] = useState(false);
 
   // Query consumo de OC seleccionada
   const { data: consumoOC } = useQuery<ConsumoOC>({
@@ -301,13 +313,17 @@ export default function InvoicesPage() {
       docType: "FACTURA",
       numberNorm: "",
       montoSinIgv: "",
+      exchangeRateOverride: "",
       ultimusIncident: "",
       detalle: "",
       proveedor: "",
-      moneda: "PEN"
+      moneda: "PEN",
+      mesContable: "",
+      tcReal: ""
     });
     setPeriodFromId(null);
     setPeriodToId(null);
+    setMesContablePeriodId(null);
     setAllocations([]);
     setCecoSearchCode("");
     setFieldErrors({});
@@ -360,6 +376,15 @@ export default function InvoicesPage() {
         percentage: alloc.percentage
       }));
 
+      // Calcular mesContable en formato YYYY-MM si hay periodId
+      let mesContableStr: string | undefined = undefined;
+      if (mesContablePeriodId && periods) {
+        const mesContablePeriod = periods.find((p: any) => p.id === mesContablePeriodId);
+        if (mesContablePeriod) {
+          mesContableStr = `${mesContablePeriod.year}-${String(mesContablePeriod.month).padStart(2, '0')}`;
+        }
+      }
+
       const payload: any = {
         ocId: hasOC ? Number(form.ocId) : undefined,
         docType: form.docType,
@@ -369,7 +394,10 @@ export default function InvoicesPage() {
         periodIds,
         allocations: allocationsWithAmount,
         ultimusIncident: form.ultimusIncident.trim() || undefined,
-        detalle: form.detalle.trim() || undefined
+        detalle: form.detalle.trim() || undefined,
+        // Campos contables
+        mesContable: mesContableStr,
+        tcReal: form.tcReal ? Number(form.tcReal) : undefined
       };
 
       if (!hasOC) {
@@ -390,6 +418,7 @@ export default function InvoicesPage() {
     onSuccess: () => {
       toast.success(form.id ? "Factura actualizada" : "Factura creada");
       resetForm();
+      setShowForm(false);
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
       queryClient.invalidateQueries({ queryKey: ["ocs"] });
     },
@@ -511,10 +540,16 @@ export default function InvoicesPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Facturas</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Facturas</h1>
+        <Button onClick={() => setShowForm(!showForm)}>
+          {showForm ? "Cancelar" : "Nueva Factura"}
+        </Button>
+      </div>
 
       {/* Formulario de Creación/Edición */}
-      <Card>
+      {showForm && (
+        <Card>
         <CardHeader>
           <h2 className="text-lg font-medium">{form.id ? "Editar Factura" : "Nueva Factura"}</h2>
           {form.id && (
@@ -679,6 +714,60 @@ export default function InvoicesPage() {
               {fieldErrors.ultimusIncident && <p className="text-xs text-red-600 mt-1">{fieldErrors.ultimusIncident}</p>}
             </div>
 
+            {/* Separador */}
+            <div className="col-span-full border-t border-slate-200 pt-4">
+              <h3 className="text-md font-semibold text-slate-700 mb-3">📊 Datos Contables</h3>
+            </div>
+
+            {/* Mes Contable */}
+            <div className="w-full">
+              <label className="block text-sm font-medium mb-1">Mes Contable (opcional)</label>
+              <YearMonthPicker
+                value={mesContablePeriodId}
+                onChange={(period) => setMesContablePeriodId(period ? period.id : null)}
+                periods={periods || []}
+                placeholder="Seleccionar mes contable..."
+                error={fieldErrors.mesContable}
+                clearable={true}
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                Opcional. Al ingresar un mes contable, la factura se considera "procesada contablemente" y se habilita el campo TC Real.
+              </p>
+            </div>
+
+            {/* TC Real (solo si USD Y hay mes contable) */}
+            {form.moneda === "USD" && mesContablePeriodId && (
+              <div className="w-full">
+                <label className="block text-sm font-medium mb-1">TC Real (editable)</label>
+                <Input
+                  type="number"
+                  step="0.0001"
+                  placeholder="TC Real (ej. 3.7650)"
+                  value={form.tcReal}
+                  onChange={(e) => handleFormChange("tcReal", e.target.value)}
+                  className={fieldErrors.tcReal ? "border-red-500" : ""}
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  Si no se ingresa, se usará el TC estándar del año.
+                </p>
+                {fieldErrors.tcReal && <p className="text-xs text-red-600 mt-1">{fieldErrors.tcReal}</p>}
+              </div>
+            )}
+
+            {/* Info: Los campos calculados se mostrarán después de guardar */}
+            {form.moneda === "USD" && (
+              <div className="col-span-full">
+                <p className="text-xs text-slate-600 italic">
+                  ℹ️ Los montos en PEN (TC estándar y TC real) se calcularán automáticamente al guardar la factura.
+                </p>
+              </div>
+            )}
+
+            {/* Separador */}
+            <div className="col-span-full border-t border-slate-200 pt-4">
+              <h3 className="text-md font-semibold text-slate-700 mb-3">📅 Periodos y Distribución</h3>
+            </div>
+
             {/* Periodos (rango desde/hasta) */}
             <div>
               <label className="block text-sm font-medium mb-1">Periodo Desde *</label>
@@ -705,7 +794,7 @@ export default function InvoicesPage() {
                 error={fieldErrors.periodIds}
               />
               {periodIds.length > 0 && (
-                <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                <p className="text-xs text-slate-600 mt-1">
                   {periodIds.length} mes(es) seleccionado(s)
                 </p>
               )}
@@ -746,12 +835,12 @@ export default function InvoicesPage() {
               </div>
             ) : availableCostCenters.length === 1 ? (
               // Solo 1 CECO → 100% automático bloqueado
-              <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md">
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-md">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">
                     {availableCostCenters[0].code} - {availableCostCenters[0].name}
                   </span>
-                  <span className="text-sm font-bold text-brand-600 dark:text-brand-400">
+                  <span className="text-sm font-bold text-brand-600">
                     100%
                   </span>
                 </div>
@@ -804,7 +893,7 @@ export default function InvoicesPage() {
                             className="w-24 text-sm"
                             placeholder="%"
                           />
-                          <span className="text-xs text-slate-600 dark:text-slate-400 w-6">%</span>
+                          <span className="text-xs text-slate-600 w-6">%</span>
                         </>
                       )}
                     </div>
@@ -815,13 +904,13 @@ export default function InvoicesPage() {
 
             {/* Total de porcentajes */}
             {allocations.length > 0 && availableCostCenters.length > 1 && (
-              <div className="mt-3 p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md">
+              <div className="mt-3 p-2 bg-slate-50 border border-slate-200 rounded-md">
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-medium">Total:</span>
                   <span className={`font-bold ${
                     Math.abs(allocations.reduce((sum, a) => sum + (a.percentage || 0), 0) - 100) > 0.01
-                      ? "text-red-600 dark:text-red-400"
-                      : "text-green-600 dark:text-green-400"
+                      ? "text-red-600"
+                      : "text-green-600"
                   }`}>
                     {allocations.reduce((sum, a) => sum + (a.percentage || 0), 0).toFixed(2)}%
                   </span>
@@ -834,30 +923,30 @@ export default function InvoicesPage() {
 
           {/* Información de OC (Read-only) */}
           {selectedOC && (
-            <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg space-y-2">
-              <h3 className="font-medium text-sm text-slate-900 dark:text-slate-100">Información de la OC</h3>
+            <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+              <h3 className="font-medium text-sm text-slate-900">Información de la OC</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
                 <div>
-                  <span className="text-slate-600 dark:text-slate-400">Proveedor:</span>
-                  <p className="font-medium text-slate-900 dark:text-slate-100">{selectedOC.proveedor}</p>
+                  <span className="text-slate-600">Proveedor:</span>
+                  <p className="font-medium text-slate-900">{selectedOC.proveedor}</p>
                 </div>
                 <div>
-                  <span className="text-slate-600 dark:text-slate-400">Moneda:</span>
-                  <p className="font-medium text-slate-900 dark:text-slate-100">{selectedOC.moneda}</p>
+                  <span className="text-slate-600">Moneda:</span>
+                  <p className="font-medium text-slate-900">{selectedOC.moneda}</p>
                 </div>
                 {consumoOC && (
                   <>
                     <div>
-                      <span className="text-slate-600 dark:text-slate-400">Importe Total:</span>
-                      <p className="font-medium text-slate-900 dark:text-slate-100">{consumoOC.moneda} {consumoOC.importeTotal.toFixed(2)}</p>
+                      <span className="text-slate-600">Importe Total:</span>
+                      <p className="font-medium text-slate-900">{consumoOC.moneda} {consumoOC.importeTotal.toFixed(2)}</p>
                     </div>
                     <div>
-                      <span className="text-slate-600 dark:text-slate-400">Consumido:</span>
-                      <p className="font-medium text-slate-900 dark:text-slate-100">{consumoOC.moneda} {consumoOC.consumido.toFixed(2)}</p>
+                      <span className="text-slate-600">Consumido:</span>
+                      <p className="font-medium text-slate-900">{consumoOC.moneda} {consumoOC.consumido.toFixed(2)}</p>
                     </div>
                     <div className="md:col-span-2">
-                      <span className="text-slate-600 dark:text-slate-400">Saldo Disponible:</span>
-                      <p className={`font-medium ${consumoOC.saldoDisponible < 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
+                      <span className="text-slate-600">Saldo Disponible:</span>
+                      <p className={`font-medium ${consumoOC.saldoDisponible < 0 ? "text-red-600" : "text-green-600"}`}>
                         {consumoOC.moneda} {consumoOC.saldoDisponible.toFixed(2)}
                       </p>
                     </div>
@@ -874,6 +963,7 @@ export default function InvoicesPage() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Filtros y Tabla */}
       <Card>
@@ -940,30 +1030,30 @@ export default function InvoicesPage() {
               <Table>
                 <thead>
                   <tr>
-                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => handleSort("numberNorm")}>
+                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("numberNorm")}>
                       Número {sortConfig.key === "numberNorm" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => handleSort("docType")}>
+                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("docType")}>
                       Tipo {sortConfig.key === "docType" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => handleSort("numeroOc")}>
+                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("numeroOc")}>
                       OC {sortConfig.key === "numeroOc" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => handleSort("proveedor")}>
+                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("proveedor")}>
                       Proveedor {sortConfig.key === "proveedor" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => handleSort("currency")}>
+                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("currency")}>
                       Moneda {sortConfig.key === "currency" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => handleSort("montoSinIgv")}>
+                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("montoSinIgv")}>
                       Monto sin IGV {sortConfig.key === "montoSinIgv" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
                     <Th>Periodos</Th>
                     <Th>CECOs</Th>
-                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => handleSort("ultimusIncident")}>
+                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("ultimusIncident")}>
                       Incidente {sortConfig.key === "ultimusIncident" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => handleSort("statusCurrent")}>
+                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("statusCurrent")}>
                       Estado {sortConfig.key === "statusCurrent" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
                     <Th>Acciones</Th>
@@ -976,7 +1066,7 @@ export default function InvoicesPage() {
                       <Td>
                         <span
                           className={`px-2 py-1 text-xs rounded ${
-                            inv.docType === "FACTURA" ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" : "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
+                            inv.docType === "FACTURA" ? "bg-blue-100 text-blue-800" : "bg-orange-100 text-orange-800"
                           }`}
                         >
                           {inv.docType}
@@ -997,7 +1087,7 @@ export default function InvoicesPage() {
                             {inv.costCenters.map((cc: any) => (
                               <span
                                 key={cc.id}
-                                className="inline-block px-1.5 py-0.5 text-xs rounded bg-slate-100 dark:bg-slate-800"
+                                className="inline-block px-1.5 py-0.5 text-xs rounded bg-slate-100"
                               >
                                 {cc.costCenter.code}
                               </span>

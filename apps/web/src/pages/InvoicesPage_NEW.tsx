@@ -605,7 +605,7 @@ export default function InvoicesPage() {
                       className={`px-2 py-1 text-xs rounded ${
                         isSelected
                           ? "bg-brand-500 text-white"
-                          : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                          : "bg-slate-100 text-slate-700"
                       }`}
                     >
                       {formatPeriodLabel(period)}
@@ -680,7 +680,7 @@ export default function InvoicesPage() {
                       />
                     )}
                     {allocation && allocation.percentage !== undefined && (
-                      <span className="text-xs text-slate-600 dark:text-slate-400 w-12 text-right">
+                      <span className="text-xs text-slate-600 w-12 text-right">
                         {allocation.percentage.toFixed(1)}%
                       </span>
                     )}
@@ -690,7 +690,7 @@ export default function InvoicesPage() {
             </div>
             {fieldErrors.allocations && <p className="text-xs text-red-600 mt-1">{fieldErrors.allocations}</p>}
             {allocations.length > 0 && (
-              <div className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+              <div className="mt-2 text-sm text-slate-600">
                 Total distribuido: {allocations.reduce((sum, a) => sum + (a.amount || 0), 0).toFixed(2)} / {Number(form.montoSinIgv || 0).toFixed(2)}
               </div>
             )}
@@ -698,30 +698,30 @@ export default function InvoicesPage() {
 
           {/* Información de OC (Read-only) */}
           {selectedOC && (
-            <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg space-y-2">
-              <h3 className="font-medium text-sm text-slate-900 dark:text-slate-100">Información de la OC</h3>
+            <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+              <h3 className="font-medium text-sm text-slate-900">Información de la OC</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
                 <div>
-                  <span className="text-slate-600 dark:text-slate-400">Proveedor:</span>
-                  <p className="font-medium text-slate-900 dark:text-slate-100">{selectedOC.proveedor}</p>
+                  <span className="text-slate-600">Proveedor:</span>
+                  <p className="font-medium text-slate-900">{selectedOC.proveedor}</p>
                 </div>
                 <div>
-                  <span className="text-slate-600 dark:text-slate-400">Moneda:</span>
-                  <p className="font-medium text-slate-900 dark:text-slate-100">{selectedOC.moneda}</p>
+                  <span className="text-slate-600">Moneda:</span>
+                  <p className="font-medium text-slate-900">{selectedOC.moneda}</p>
                 </div>
                 {consumoOC && (
                   <>
                     <div>
-                      <span className="text-slate-600 dark:text-slate-400">Importe Total:</span>
-                      <p className="font-medium text-slate-900 dark:text-slate-100">{consumoOC.moneda} {consumoOC.importeTotal.toFixed(2)}</p>
+                      <span className="text-slate-600">Importe Total:</span>
+                      <p className="font-medium text-slate-900">{consumoOC.moneda} {consumoOC.importeTotal.toFixed(2)}</p>
                     </div>
                     <div>
-                      <span className="text-slate-600 dark:text-slate-400">Consumido:</span>
-                      <p className="font-medium text-slate-900 dark:text-slate-100">{consumoOC.moneda} {consumoOC.consumido.toFixed(2)}</p>
+                      <span className="text-slate-600">Consumido:</span>
+                      <p className="font-medium text-slate-900">{consumoOC.moneda} {consumoOC.consumido.toFixed(2)}</p>
                     </div>
                     <div className="md:col-span-2">
-                      <span className="text-slate-600 dark:text-slate-400">Saldo Disponible:</span>
-                      <p className={`font-medium ${consumoOC.saldoDisponible < 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
+                      <span className="text-slate-600">Saldo Disponible:</span>
+                      <p className={`font-medium ${consumoOC.saldoDisponible < 0 ? "text-red-600" : "text-green-600"}`}>
                         {consumoOC.moneda} {consumoOC.saldoDisponible.toFixed(2)}
                       </p>
                     </div>
@@ -804,30 +804,30 @@ export default function InvoicesPage() {
               <Table>
                 <thead>
                   <tr>
-                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => handleSort("numberNorm")}>
+                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("numberNorm")}>
                       Número {sortConfig.key === "numberNorm" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => handleSort("docType")}>
+                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("docType")}>
                       Tipo {sortConfig.key === "docType" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => handleSort("numeroOc")}>
+                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("numeroOc")}>
                       OC {sortConfig.key === "numeroOc" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => handleSort("proveedor")}>
+                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("proveedor")}>
                       Proveedor {sortConfig.key === "proveedor" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => handleSort("currency")}>
+                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("currency")}>
                       Moneda {sortConfig.key === "currency" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => handleSort("montoSinIgv")}>
+                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("montoSinIgv")}>
                       Monto sin IGV {sortConfig.key === "montoSinIgv" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
                     <Th>Periodos</Th>
                     <Th>CECOs</Th>
-                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => handleSort("ultimusIncident")}>
+                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("ultimusIncident")}>
                       Incidente {sortConfig.key === "ultimusIncident" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => handleSort("statusCurrent")}>
+                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("statusCurrent")}>
                       Estado {sortConfig.key === "statusCurrent" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
                     <Th>Acciones</Th>
@@ -840,7 +840,7 @@ export default function InvoicesPage() {
                       <Td>
                         <span
                           className={`px-2 py-1 text-xs rounded ${
-                            inv.docType === "FACTURA" ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" : "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
+                            inv.docType === "FACTURA" ? "bg-blue-100 text-blue-800" : "bg-orange-100 text-orange-800"
                           }`}
                         >
                           {inv.docType}
@@ -861,7 +861,7 @@ export default function InvoicesPage() {
                             {inv.costCenters.map((cc: any) => (
                               <span
                                 key={cc.id}
-                                className="inline-block px-1.5 py-0.5 text-xs rounded bg-slate-100 dark:bg-slate-800"
+                                className="inline-block px-1.5 py-0.5 text-xs rounded bg-slate-100"
                               >
                                 {cc.costCenter.code}
                               </span>

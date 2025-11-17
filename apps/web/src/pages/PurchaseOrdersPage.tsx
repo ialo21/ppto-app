@@ -743,7 +743,7 @@ export default function PurchaseOrdersPage() {
                           return ceco ? (
                             <div
                               key={cecoId}
-                              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md bg-brand-100 dark:bg-brand-900 text-brand-800 dark:text-brand-200"
+                              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md bg-brand-100 text-brand-800"
                             >
                               <span>{ceco.code} - {ceco.name}</span>
                               <button
@@ -752,7 +752,7 @@ export default function PurchaseOrdersPage() {
                                   ...f,
                                   costCenterIds: f.costCenterIds.filter(id => id !== cecoId)
                                 }))}
-                                className="hover:text-brand-600 dark:hover:text-brand-100"
+                                className="hover:text-brand-600"
                               >
                                 ×
                               </button>
@@ -867,7 +867,7 @@ export default function PurchaseOrdersPage() {
                       <Td>{oc.moneda}</Td>
                       <Td>{Number(oc.importeSinIgv).toFixed(2)}</Td>
                       <Td>
-                        <span className="text-xs px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800">
+                        <span className="text-xs px-2 py-1 rounded-full bg-slate-100">
                           {oc.estado.replace(/_/g, " ")}
                         </span>
                       </Td>
@@ -878,7 +878,7 @@ export default function PurchaseOrdersPage() {
                             {oc.costCenters.map((cc: any) => (
                               <span
                                 key={cc.id}
-                                className="inline-block px-1.5 py-0.5 text-xs rounded bg-slate-100 dark:bg-slate-800"
+                                className="inline-block px-1.5 py-0.5 text-xs rounded bg-slate-100"
                               >
                                 {cc.costCenter.code}
                               </span>

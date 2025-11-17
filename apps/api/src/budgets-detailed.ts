@@ -24,7 +24,7 @@ const batchUpsertSchema = z.object({
   items: z.array(z.object({
     supportId: z.number(),
     costCenterId: z.number(),
-    amountPen: z.number().min(0)
+    amountPen: z.number() // Permite montos negativos
   }))
 });
 

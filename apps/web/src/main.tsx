@@ -10,11 +10,11 @@ import Button from "./components/ui/Button";
 const qc = new QueryClient();
 
 function Sidebar(){
-  const link = "flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800";
-  const active = "bg-slate-200 dark:bg-slate-800";
+  const link = "flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-white/90 hover:bg-white/20 hover:text-white";
+  const active = "bg-white/30 text-white font-medium";
   return (
-    <aside className="w-64 shrink-0 p-3">
-      <div className="text-xl font-bold px-3 py-2">PPTO TI</div>
+    <aside className="sidebar-fixed">
+      <div className="text-xl font-bold px-3 py-2 text-white">PPTO TI</div>
       <nav className="space-y-1">
         <NavLink to="/" end className={({isActive})=>`${link} ${isActive?active:""}`}><Home size={18}/>Dashboard</NavLink>
         <NavLink to="/ppto" className={({isActive})=>`${link} ${isActive?active:""}`}><Wallet size={18}/>PPTO</NavLink>
@@ -30,11 +30,8 @@ function Sidebar(){
 
 function Topbar(){
   return (
-    <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/70 backdrop-blur p-3">
-      <div className="font-medium">PPTO App - MVP</div>
-      <div className="flex items-center gap-2">
-        <Button variant="secondary" onClick={()=>document.documentElement.classList.toggle("dark")}>Tema</Button>
-      </div>
+    <header className="sticky top-0 z-10 flex items-center justify-between border-b border-border-default bg-surface/80 backdrop-blur p-3">
+      <div className="font-medium text-text-primary">PPTO App - MVP</div>
     </header>
   );
 }
@@ -43,7 +40,7 @@ function AppLayout(){
   return (
     <div className="min-h-screen flex">
       <Sidebar />
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col ml-64">
         <Topbar />
         <main className="container-page">
           <Outlet />

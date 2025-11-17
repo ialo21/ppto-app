@@ -74,7 +74,7 @@ export default function BudgetPage() {
     return (saved === "monthly" || saved === "annual") ? saved as ViewMode : "annual";
   });
 
-  // Only show rows with budget > 0 (default: true)
+  // Only show rows with budget != 0 (exclude zeros, keep negatives) (default: true)
   const [onlyWithBudget, setOnlyWithBudget] = useState<boolean>(() => {
     const saved = localStorage.getItem(LOCAL_STORAGE_KEYS.onlyWithBudget);
     return saved !== null ? saved === "true" : true;
@@ -330,9 +330,7 @@ export default function BudgetPage() {
     if (isNaN(num)) {
       return { isValid: false, error: "Debe ser un número válido" };
     }
-    if (num < 0) {
-      return { isValid: false, error: "No puede ser negativo" };
-    }
+    // Permite montos negativos
     
     const parts = value.split(".");
     if (parts.length > 1 && parts[1].length > 2) {
@@ -473,7 +471,7 @@ export default function BudgetPage() {
     if (!budgetData?.rows) return [];
     let rows = [...budgetData.rows];
     
-    // Apply "only with budget" filter
+    // Apply "only with budget" filter (exclude rows with exactly 0, keep negatives)
     if (onlyWithBudget) {
       rows = rows.filter((row: BudgetRow) => {
         const key = `${row.supportId}-${row.costCenterId}`;
@@ -481,7 +479,7 @@ export default function BudgetPage() {
         const amount = editedVal?.isValid 
           ? (parseFloat(editedVal.value) || 0)
           : row.amountPen;
-        return amount > 0;
+        return amount !== 0;
       });
     }
     
@@ -517,7 +515,7 @@ export default function BudgetPage() {
     if (!annualData?.rows) return [];
     let rows = [...annualData.rows];
     
-    // Apply "only with budget" filter (sum of 12 months > 0)
+    // Apply "only with budget" filter (exclude rows with all 12 months = 0, keep negatives)
     if (onlyWithBudget) {
       rows = rows.filter((row: AnnualRow) => {
         let yearTotal = 0;
@@ -529,7 +527,7 @@ export default function BudgetPage() {
             : (row.months[month]?.amountPen || 0);
           yearTotal += amount;
         });
-        return yearTotal > 0;
+        return yearTotal !== 0;
       });
     }
     
@@ -673,7 +671,7 @@ export default function BudgetPage() {
         <Card>
           <CardContent className="py-12">
             <div className="text-center space-y-4">
-              <div className="text-slate-500 dark:text-slate-400">
+              <div className="text-slate-500">
                 <p className="text-lg font-medium">No hay períodos configurados</p>
                 <p className="text-sm mt-2">
                   Para comenzar a gestionar presupuestos, primero necesitas crear períodos.
@@ -695,14 +693,14 @@ export default function BudgetPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 budget-page-container">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">PPTO</h1>
         {budgetData?.period && viewMode === "monthly" && (
-          <div className="text-sm text-slate-600 dark:text-slate-400">
+          <div className="text-sm text-slate-600">
             {formatPeriodLabel(budgetData.period)}
             {isClosed && (
-              <span className="ml-2 inline-flex items-center px-2 py-1 text-xs font-medium rounded-md bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+              <span className="ml-2 inline-flex items-center px-2 py-1 text-xs font-medium rounded-md bg-red-100 text-red-800">
                 Cerrado
               </span>
             )}
@@ -899,7 +897,7 @@ export default function BudgetPage() {
               )}
               
               {hasInvalidMonthlyChanges && (
-                <span className="text-sm text-red-600 dark:text-red-400">
+                <span className="text-sm text-red-600">
                   Hay valores inválidos que deben corregirse
                 </span>
               )}
@@ -925,7 +923,7 @@ export default function BudgetPage() {
               )}
               
               {hasInvalidAnnualChanges && (
-                <span className="text-sm text-red-600 dark:text-red-400">
+                <span className="text-sm text-red-600">
                   Hay valores inválidos que deben corregirse
                 </span>
               )}
@@ -945,14 +943,14 @@ export default function BudgetPage() {
                 <>
                   {/* Warnings */}
                   {budgetData.supportsWithoutCostCenters?.length > 0 && (
-                    <div className="mb-4 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
-                      <p className="text-sm font-medium text-yellow-800 dark:text-yellow-400 mb-1">
+                    <div className="mb-4 p-3 rounded-lg bg-yellow-50 border border-yellow-200">
+                      <p className="text-sm font-medium text-yellow-800 mb-1">
                         ⚠️ Sustentos sin CECOs asociados
                       </p>
-                      <p className="text-xs text-yellow-700 dark:text-yellow-500">
+                      <p className="text-xs text-yellow-700">
                         Los siguientes sustentos no tienen centros de costo asignados:
                       </p>
-                      <ul className="text-xs text-yellow-700 dark:text-yellow-500 mt-1 ml-4 list-disc">
+                      <ul className="text-xs text-yellow-700 mt-1 ml-4 list-disc">
                         {budgetData.supportsWithoutCostCenters.slice(0, 5).map((s: any) => (
                           <li key={s.supportId}>{s.supportName} ({s.supportCode || "sin código"})</li>
                         ))}
@@ -972,7 +970,7 @@ export default function BudgetPage() {
                     </div>
                   ) : (
                     <>
-                      <div className="mb-2 text-sm text-slate-600 dark:text-slate-400">
+                      <div className="mb-2 text-sm text-slate-600">
                         Mostrando {filteredAndSortedMonthlyRows.length} fila{filteredAndSortedMonthlyRows.length !== 1 ? 's' : ''}
                         {debouncedSearch && ` para "${debouncedSearch}"`}
                       </div>
@@ -981,7 +979,7 @@ export default function BudgetPage() {
                           <thead>
                             <tr>
                               <Th 
-                                className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
+                                className="cursor-pointer hover:bg-slate-100"
                                 onClick={() => {
                                   if (sortBy === "support") {
                                     setSortOrder(sortOrder === "asc" ? "desc" : "asc");
@@ -994,7 +992,7 @@ export default function BudgetPage() {
                                 Sustento {sortBy === "support" && (sortOrder === "asc" ? "↑" : "↓")}
                               </Th>
                               <Th 
-                                className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
+                                className="cursor-pointer hover:bg-slate-100"
                                 onClick={() => {
                                   if (sortBy === "ceco") {
                                     setSortOrder(sortOrder === "asc" ? "desc" : "asc");
@@ -1007,7 +1005,7 @@ export default function BudgetPage() {
                                 CECO {sortBy === "ceco" && (sortOrder === "asc" ? "↑" : "↓")}
                               </Th>
                               <Th 
-                                className="text-right cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
+                                className="text-right cursor-pointer hover:bg-slate-100"
                                 onClick={() => {
                                   if (sortBy === "amount") {
                                     setSortOrder(sortOrder === "asc" ? "desc" : "asc");
@@ -1033,7 +1031,7 @@ export default function BudgetPage() {
                               return (
                                 <tr 
                                   key={key}
-                                  className={isDirty ? "bg-yellow-50 dark:bg-yellow-900/10" : ""}
+                                  className={isDirty ? "bg-yellow-50" : ""}
                                 >
                                   <Td>
                                     <div className="font-medium">{row.supportName}</div>
@@ -1060,7 +1058,7 @@ export default function BudgetPage() {
                                         style={{ width: "140px" }}
                                       />
                                       {hasError && validation?.error && (
-                                        <span className="text-xs text-red-600 dark:text-red-400">
+                                        <span className="text-xs text-red-600">
                                           {validation.error}
                                         </span>
                                       )}
@@ -1072,7 +1070,7 @@ export default function BudgetPage() {
                               );
               })}
             </tbody>
-                          <tfoot className="bg-slate-50 dark:bg-slate-900 font-semibold">
+                          <tfoot className="bg-slate-50 font-semibold">
                             <tr>
                               <Td colSpan={2} className="text-right">Total:</Td>
                               <Td className="text-right">{formatNumber(monthlyTotal)}</Td>
@@ -1100,15 +1098,15 @@ export default function BudgetPage() {
                 </div>
               ) : (
                 <>
-                  <div className="mb-2 text-sm text-slate-600 dark:text-slate-400">
+                  <div className="mb-2 text-sm text-slate-600">
                     Mostrando {filteredAnnualRows.length} fila{filteredAnnualRows.length !== 1 ? 's' : ''}
                     {debouncedSearch && ` para "${debouncedSearch}"`}
                   </div>
                   {/* Two-table layout: Left table (fixed) + Right table (scrollable) */}
-                  <div style={{ display: "flex", gap: "0", width: "100%" }}>
+                  <div className="budget-tables-container">
                     {/* LEFT TABLE: Sustento y CECO (Fixed columns) */}
-                    <div style={{ flexShrink: 0, overflowY: "hidden", overflowX: "hidden" }}>
-                      <Table style={{ tableLayout: "fixed", width: "390px", borderCollapse: "collapse" }}>
+                    <div className="budget-left-wrapper">
+                      <Table className="budget-left-table">
                         <thead ref={leftTableHeaderRef}>
                           <tr>
                             <Th style={{ width: "260px" }}>Sustento</Th>
@@ -1130,7 +1128,7 @@ export default function BudgetPage() {
                             </tr>
                           ))}
                         </tbody>
-                        <tfoot className="bg-slate-50 dark:bg-slate-900 font-semibold">
+                        <tfoot className="bg-slate-50 font-semibold">
                           <tr>
                             <Td colSpan={2} className="text-right">Total por mes:</Td>
                           </tr>
@@ -1142,13 +1140,9 @@ export default function BudgetPage() {
                     <div 
                       ref={rightScrollContainerRef}
                       onScroll={handleRightTableScroll}
-                      style={{ 
-                        flexGrow: 1, 
-                        overflowX: "auto", 
-                        overflowY: "hidden"
-                      }}
+                      className="budget-right-wrapper"
                     >
-                      <Table style={{ tableLayout: "fixed", borderCollapse: "collapse", minWidth: "100%" }}>
+                      <Table className="budget-right-table">
                         <thead ref={rightTableHeaderRef}>
                           <tr>
                             <Th style={{ width: "150px", minWidth: "150px" }}>Ene</Th>
@@ -1163,7 +1157,7 @@ export default function BudgetPage() {
                             <Th style={{ width: "150px", minWidth: "150px" }}>Oct</Th>
                             <Th style={{ width: "150px", minWidth: "150px" }}>Nov</Th>
                             <Th style={{ width: "150px", minWidth: "150px" }}>Dic</Th>
-                            <Th className="bg-slate-100 dark:bg-slate-800" style={{ width: "150px", minWidth: "150px" }}>Total</Th>
+                            <Th className="bg-slate-100" style={{ width: "150px", minWidth: "150px" }}>Total</Th>
                           </tr>
                         </thead>
                         <tbody ref={rightTableBodyRef}>
@@ -1192,7 +1186,7 @@ export default function BudgetPage() {
                                   const isClosed = monthData?.isClosed || false;
 
                                   return (
-                                    <Td key={month} className={isDirty ? "bg-yellow-50 dark:bg-yellow-900/10" : ""}>
+                                    <Td key={month} className={isDirty ? "bg-yellow-50" : ""}>
                                       {monthData ? (
                                         <div className="flex flex-col gap-1">
                                           <Input
@@ -1203,10 +1197,10 @@ export default function BudgetPage() {
                                             onKeyDown={e => handleKeyDown(e, key, filteredAnnualRows, rowIdx, "annual", monthIdx)}
                                             disabled={isClosed}
                                             title={isClosed ? "Período cerrado" : ""}
-                                            className={`text-right w-full ${hasError ? "border-red-500" : ""} ${isClosed ? "bg-slate-100 dark:bg-slate-800 cursor-not-allowed" : ""}`}
+                                            className={`text-right w-full ${hasError ? "border-red-500" : ""} ${isClosed ? "bg-slate-100 cursor-not-allowed" : ""}`}
                                           />
                                           {hasError && validation?.error && (
-                                            <span className="text-xs text-red-600 dark:text-red-400">
+                                            <span className="text-xs text-red-600">
                                               {validation.error}
                                             </span>
                                           )}
@@ -1217,21 +1211,21 @@ export default function BudgetPage() {
                                     </Td>
                                   );
                                 })}
-                                <Td className="text-right font-semibold bg-slate-100 dark:bg-slate-800">
+                                <Td className="text-right font-semibold bg-slate-100">
                                   {formatNumber(rowTotal)}
                                 </Td>
                               </tr>
                             );
                           })}
                         </tbody>
-                        <tfoot className="bg-slate-50 dark:bg-slate-900 font-semibold">
+                        <tfoot className="bg-slate-50 font-semibold">
                           <tr>
                             {["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"].map(month => (
                               <Td key={month} className="text-right">
                                 {formatNumber(annualTotals.monthTotals[month] || 0)}
                               </Td>
                             ))}
-                            <Td className="text-right bg-slate-200 dark:bg-slate-700">
+                            <Td className="text-right bg-slate-200">
                               {formatNumber(annualTotals.yearTotal)}
                             </Td>
                           </tr>

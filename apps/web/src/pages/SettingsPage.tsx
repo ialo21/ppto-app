@@ -524,7 +524,7 @@ export default function CatalogsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Catálogos</h1>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+        <p className="mt-2 text-sm text-slate-600">
           Administra los catálogos maestros que utiliza la aplicación.
         </p>
       </div>
@@ -542,7 +542,7 @@ export default function CatalogsPage() {
         ))}
       </div>
       {selectedSection && (
-        <p className="text-sm text-slate-500 dark:text-slate-400">
+        <p className="text-sm text-slate-500">
           {selectedSection.description}
         </p>
       )}
@@ -587,7 +587,7 @@ export default function CatalogsPage() {
                     {(packagesQuery.data || []).map(pkg => (
                       <tr 
                         key={pkg.id}
-                        className={selectedPackageId === pkg.id ? "bg-brand-50 dark:bg-brand-950" : ""}
+                        className={selectedPackageId === pkg.id ? "bg-brand-50" : ""}
                       >
                         <Td 
                           className="cursor-pointer hover:text-brand-600"
@@ -922,7 +922,7 @@ export default function CatalogsPage() {
                     {(managementsQuery.data || []).map(mgmt => (
                       <tr 
                         key={mgmt.id}
-                        className={selectedManagementId === mgmt.id ? "bg-brand-50 dark:bg-brand-950" : ""}
+                        className={selectedManagementId === mgmt.id ? "bg-brand-50" : ""}
                       >
                         <Td 
                           className="cursor-pointer hover:text-brand-600"
@@ -1088,7 +1088,7 @@ export default function CatalogsPage() {
               )}
             </div>
             {supportForm.id && (
-              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+              <p className="mt-2 text-sm text-slate-500">
                 Editando sustento #{supportForm.id}
                 {supportForm.code ? ` (${supportForm.code})` : ""}
               </p>
@@ -1362,7 +1362,7 @@ export default function CatalogsPage() {
         <Card>
           <CardHeader>
             <h2 className="text-xl font-semibold">Tipos de Cambio Anuales</h2>
-            <p className="text-sm text-slate-600 dark:text-slate-400">
+            <p className="text-sm text-slate-600">
               Gestiona los tipos de cambio USD → PEN por año. Se usan para facturas sin TC manual.
             </p>
           </CardHeader>
@@ -1604,7 +1604,7 @@ function BulkUploadSection({ queryClient }: { queryClient: any }) {
       <Card>
         <CardHeader>
           <h2 className="text-lg font-semibold">Carga masiva desde CSV</h2>
-          <p className="text-sm text-slate-600 dark:text-slate-300 mt-2">
+          <p className="text-sm text-slate-600 mt-2">
             Importa múltiples ítems de catálogos (Gerencias, Áreas, Paquetes, Conceptos, Centros de costo, Artículos y Sustentos) desde un archivo CSV.
           </p>
         </CardHeader>
@@ -1682,29 +1682,29 @@ function BulkUploadSection({ queryClient }: { queryClient: any }) {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="p-3 bg-green-50 dark:bg-green-950 rounded">
-                  <div className="text-2xl font-bold text-green-700 dark:text-green-300">
+                <div className="p-3 bg-green-50 rounded">
+                  <div className="text-2xl font-bold text-green-700">
                     {result.summary.created}
                   </div>
-                  <div className="text-sm text-green-600 dark:text-green-400">Creados</div>
+                  <div className="text-sm text-green-600">Creados</div>
                 </div>
-                <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded">
-                  <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">
+                <div className="p-3 bg-blue-50 rounded">
+                  <div className="text-2xl font-bold text-blue-700">
                     {result.summary.updated}
                   </div>
-                  <div className="text-sm text-blue-600 dark:text-blue-400">Actualizados</div>
+                  <div className="text-sm text-blue-600">Actualizados</div>
                 </div>
-                <div className="p-3 bg-yellow-50 dark:bg-yellow-950 rounded">
-                  <div className="text-2xl font-bold text-yellow-700 dark:text-yellow-300">
+                <div className="p-3 bg-yellow-50 rounded">
+                  <div className="text-2xl font-bold text-yellow-700">
                     {result.summary.skipped}
                   </div>
-                  <div className="text-sm text-yellow-600 dark:text-yellow-400">Omitidos</div>
+                  <div className="text-sm text-yellow-600">Omitidos</div>
                 </div>
-                <div className="p-3 bg-red-50 dark:bg-red-950 rounded">
-                  <div className="text-2xl font-bold text-red-700 dark:text-red-300">
+                <div className="p-3 bg-red-50 rounded">
+                  <div className="text-2xl font-bold text-red-700">
                     {result.summary.errors}
                   </div>
-                  <div className="text-sm text-red-600 dark:text-red-400">Errores</div>
+                  <div className="text-sm text-red-600">Errores</div>
                 </div>
               </div>
 
@@ -1713,9 +1713,9 @@ function BulkUploadSection({ queryClient }: { queryClient: any }) {
                   <h4 className="text-sm font-semibold mb-2">Por tipo de entidad:</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
                     {Object.entries(result.byType).map(([type, stats]) => (
-                      <div key={type} className="p-2 bg-slate-50 dark:bg-slate-800 rounded">
+                      <div key={type} className="p-2 bg-slate-50 rounded">
                         <div className="font-semibold">{type}</div>
-                        <div className="text-slate-600 dark:text-slate-400">
+                        <div className="text-slate-600">
                           C:{stats.created} | U:{stats.updated} | S:{stats.skipped} | E:{stats.errors}
                         </div>
                       </div>
@@ -1759,19 +1759,19 @@ function BulkUploadSection({ queryClient }: { queryClient: any }) {
                 <tbody>
                   {paginatedRows.map((row, idx) => (
                     <tr key={idx} className={
-                      row.action === "error" ? "bg-red-50 dark:bg-red-950" :
-                      row.action === "created" ? "bg-green-50 dark:bg-green-950" :
-                      row.action === "updated" ? "bg-blue-50 dark:bg-blue-950" :
-                      "bg-yellow-50 dark:bg-yellow-950"
+                      row.action === "error" ? "bg-red-50" :
+                      row.action === "created" ? "bg-green-50" :
+                      row.action === "updated" ? "bg-blue-50" :
+                      "bg-yellow-50"
                     }>
                       <Td>{row.row}</Td>
                       <Td className="font-mono text-xs">{row.type}</Td>
                       <Td>
                         <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${
-                          row.action === "created" ? "bg-green-200 text-green-800 dark:bg-green-800 dark:text-green-200" :
-                          row.action === "updated" ? "bg-blue-200 text-blue-800 dark:bg-blue-800 dark:text-blue-200" :
-                          row.action === "skipped" ? "bg-yellow-200 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-200" :
-                          "bg-red-200 text-red-800 dark:bg-red-800 dark:text-red-200"
+                          row.action === "created" ? "bg-green-200 text-green-800" :
+                          row.action === "updated" ? "bg-blue-200 text-blue-800" :
+                          row.action === "skipped" ? "bg-yellow-200 text-yellow-800" :
+                          "bg-red-200 text-red-800"
                         }`}>
                           {row.action}
                         </span>
@@ -1780,7 +1780,7 @@ function BulkUploadSection({ queryClient }: { queryClient: any }) {
                         {row.issues && row.issues.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
                             {Array.from(new Set(row.issues.map(issue => issue.path.join(".")))).map((path, i) => (
-                              <span key={i} className="inline-block px-2 py-0.5 bg-slate-200 dark:bg-slate-700 rounded text-xs font-mono">
+                              <span key={i} className="inline-block px-2 py-0.5 bg-slate-200 rounded text-xs font-mono">
                                 {path}
                               </span>
                             ))}
@@ -1792,7 +1792,7 @@ function BulkUploadSection({ queryClient }: { queryClient: any }) {
                       <Td>
                         <div className="text-sm">{row.message}</div>
                         {row.issues && row.issues.length > 0 && (
-                          <ul className="text-xs text-red-600 dark:text-red-400 mt-1 space-y-0.5">
+                          <ul className="text-xs text-red-600 mt-1 space-y-0.5">
                             {row.issues.map((issue, i) => (
                               <li key={i}>
                                 • {issue.message}

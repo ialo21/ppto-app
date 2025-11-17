@@ -275,7 +275,7 @@ export default function YearMonthPicker({
     return createPortal(
       <div
         ref={dropdownRef}
-        className="fixed z-50 bg-slate-800/95 backdrop-blur-sm border border-slate-700/60 rounded-md shadow-xl min-w-[320px]"
+        className="fixed z-50 bg-white border border-slate-300 rounded-lg shadow-xl min-w-[320px]"
         style={{
           top: `${dropdownPosition.top}px`,
           left: `${dropdownPosition.left}px`,
@@ -284,34 +284,34 @@ export default function YearMonthPicker({
         role="listbox"
       >
         {/* Header con navegación de años */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700/50 bg-slate-800/90">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-slate-200 bg-slate-50">
           <button
             type="button"
             onClick={handlePrevYear}
             disabled={!selectedYear || availableYears.indexOf(selectedYear) >= availableYears.length - 1}
-            className="p-1 rounded hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            className="p-1 rounded hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             aria-label="Año anterior"
           >
-            <ChevronLeft className="h-4 w-4 text-slate-100" />
+            <ChevronLeft className="h-4 w-4 text-slate-700" />
           </button>
-          <div className="text-sm font-semibold text-slate-100">
+          <div className="text-sm font-semibold text-slate-900">
             {selectedYear || "Seleccione año"}
           </div>
           <button
             type="button"
             onClick={handleNextYear}
             disabled={!selectedYear || availableYears.indexOf(selectedYear) <= 0}
-            className="p-1 rounded hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            className="p-1 rounded hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             aria-label="Año siguiente"
           >
-            <ChevronRight className="h-4 w-4 text-slate-100" />
+            <ChevronRight className="h-4 w-4 text-slate-700" />
           </button>
         </div>
 
         {/* Grid de meses 3x4 */}
         <div className="p-3">
           {yearPeriods.length === 0 ? (
-            <div className="py-6 text-center text-sm text-slate-400">
+            <div className="py-6 text-center text-sm text-slate-500">
               No hay períodos disponibles para {selectedYear}
             </div>
           ) : (
@@ -331,11 +331,11 @@ export default function YearMonthPicker({
                     disabled={isDisabled}
                     className={cn(
                       "px-3 py-2.5 rounded-md text-sm font-medium transition-all",
-                      "focus:outline-none focus:ring-2 focus:ring-slate-400",
-                      isSelected && "bg-brand-500 text-white shadow-md",
-                      !isSelected && !isDisabled && "bg-slate-700/50 text-slate-100 hover:bg-slate-700 hover:shadow-md",
-                      isDisabled && "bg-slate-800/30 text-slate-600 cursor-not-allowed opacity-50",
-                      isCurrent && !isSelected && "ring-1 ring-slate-500"
+                      "focus:outline-none focus:ring-2 focus:ring-brand-primary",
+                      isSelected && "bg-brand-primary text-white shadow-md",
+                      !isSelected && !isDisabled && "bg-slate-100 text-slate-900 hover:bg-slate-200 hover:shadow-sm",
+                      isDisabled && "bg-slate-50 text-slate-400 cursor-not-allowed opacity-50",
+                      isCurrent && !isSelected && "ring-1 ring-brand-primary/50"
                     )}
                     role="option"
                     aria-selected={isSelected}
@@ -343,7 +343,7 @@ export default function YearMonthPicker({
                   >
                     <div className="capitalize">{monthAbbrev}</div>
                     {isCurrent && !isSelected && (
-                      <div className="text-[10px] mt-0.5 text-slate-400">actual</div>
+                      <div className="text-[10px] mt-0.5 text-slate-600">actual</div>
                     )}
                   </button>
                 );
@@ -361,12 +361,12 @@ export default function YearMonthPicker({
       {/* Input trigger */}
       <div
         className={cn(
-          "relative flex items-center h-10 w-full rounded-xl border bg-white dark:bg-slate-900 px-3 cursor-text",
-          "outline-none transition-colors dark:border-slate-700",
-          disabled && "opacity-50 cursor-not-allowed bg-slate-50 dark:bg-slate-900/50",
+          "relative flex items-center h-10 w-full rounded-xl border bg-white px-3 cursor-text",
+          "outline-none transition-colors",
+          disabled && "opacity-50 cursor-not-allowed bg-slate-50",
           error 
             ? "border-red-500 focus-within:ring-2 focus-within:ring-red-500" 
-            : "border-slate-300 dark:border-slate-700 focus-within:ring-2 focus-within:ring-brand-500"
+            : "border-slate-300 focus-within:ring-2 focus-within:ring-brand-500"
         )}
         onClick={handleOpenDropdown}
       >
@@ -379,7 +379,7 @@ export default function YearMonthPicker({
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           disabled={disabled}
-          className="flex-1 bg-transparent outline-none text-sm dark:text-slate-100 disabled:cursor-not-allowed placeholder:text-slate-400"
+          className="flex-1 bg-transparent outline-none text-sm disabled:cursor-not-allowed placeholder:text-slate-400"
           aria-label="Búsqueda de período"
           aria-expanded={isOpen}
           aria-haspopup="listbox"
@@ -389,15 +389,15 @@ export default function YearMonthPicker({
             <button
               type="button"
               onClick={handleClear}
-              className="p-0.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+              className="p-0.5 hover:bg-slate-100 rounded transition-colors"
               aria-label="Limpiar selección"
             >
-              <X className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+              <X className="h-4 w-4 text-slate-500" />
             </button>
           )}
           <ChevronDown
             className={cn(
-              "h-4 w-4 text-slate-500 dark:text-slate-400 transition-transform",
+              "h-4 w-4 text-slate-500 transition-transform",
               isOpen && "transform rotate-180"
             )}
           />
@@ -406,7 +406,7 @@ export default function YearMonthPicker({
 
       {/* Error message */}
       {error && (
-        <p className="text-xs text-red-600 dark:text-red-400 mt-1">{error}</p>
+        <p className="text-xs text-red-600 mt-1">{error}</p>
       )}
 
       {/* Dropdown renderizado con portal */}

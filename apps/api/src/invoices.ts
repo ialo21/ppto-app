@@ -24,7 +24,10 @@ const createInvoiceSchema = z.object({
   proveedor: z.string().optional(),
   moneda: z.enum(["PEN", "USD"]).optional(),
   // Tipo de cambio override (opcional)
-  exchangeRateOverride: z.number().positive().optional()
+  exchangeRateOverride: z.number().positive().optional(),
+  // Campos contables
+  mesContable: z.string().regex(/^\d{4}-\d{2}$/).optional(),  // Formato YYYY-MM
+  tcReal: z.number().positive().optional()
 });
 
 const updateInvoiceSchema = z.object({
@@ -38,7 +41,10 @@ const updateInvoiceSchema = z.object({
   detalle: z.string().optional(),
   proveedor: z.string().optional(),
   moneda: z.enum(["PEN", "USD"]).optional(),
-  exchangeRateOverride: z.number().positive().optional()
+  exchangeRateOverride: z.number().positive().optional(),
+  // Campos contables
+  mesContable: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+  tcReal: z.number().positive().optional()
 });
 
 const updateStatusSchema = z.object({
@@ -118,6 +124,91 @@ async function calcularEffectiveRate(
   }
 
   return { effectiveRate: Number(annualRate.rate), source: "annual" };
+}
+
+/**
+ * Calcula los campos contables de una factura
+ * NUEVA LÓGICA:
+ * - mesContable: opcional (puede ser null)
+ * - tcEstandar: siempre se calcula para USD (del catálogo anual)
+ * - montoPEN_tcEstandar: siempre se calcula para USD
+ * - tcReal: solo si hay mesContable (editable por usuario)
+ * - montoPEN_tcReal: solo si hay mesContable
+ * - diferenciaTC: solo si hay mesContable
+ */
+async function calcularCamposContables(
+  currency: string,
+  montoSinIgv: number,
+  periodIds: number[],
+  mesContable?: string,
+  tcReal?: number
+): Promise<{
+  mesContable: string | null;
+  tcEstandar: number | null;
+  tcReal: number | null;
+  montoPEN_tcEstandar: number | null;
+  montoPEN_tcReal: number | null;
+  diferenciaTC: number | null;
+}> {
+  // Obtener el primer periodo
+  const firstPeriod = await prisma.period.findUnique({
+    where: { id: periodIds[0] },
+    select: { year: true, month: true }
+  });
+
+  if (!firstPeriod) {
+    throw new Error(`Periodo ${periodIds[0]} no encontrado`);
+  }
+
+  // Si moneda es PEN, no hay campos contables USD
+  if (currency === "PEN") {
+    return {
+      mesContable: mesContable || null,
+      tcEstandar: null,
+      tcReal: null,
+      montoPEN_tcEstandar: null,
+      montoPEN_tcReal: null,
+      diferenciaTC: null
+    };
+  }
+
+  // Moneda es USD: buscar TC estándar del catálogo
+  const annualRate = await prisma.exchangeRate.findUnique({
+    where: { year: firstPeriod.year }
+  });
+
+  if (!annualRate) {
+    throw new Error(`No se encontró tipo de cambio para el año ${firstPeriod.year}. Configure el TC en Catálogos.`);
+  }
+
+  const tcEstandar = Number(annualRate.rate);
+  const montoPEN_tcEstandar = montoSinIgv * tcEstandar;
+
+  // Si no hay mesContable, solo retornar tcEstandar y montoPEN_tcEstandar
+  if (!mesContable) {
+    return {
+      mesContable: null,
+      tcEstandar,
+      tcReal: null,
+      montoPEN_tcEstandar,
+      montoPEN_tcReal: null,
+      diferenciaTC: null
+    };
+  }
+
+  // Si hay mesContable, calcular también tcReal, montoPEN_tcReal y diferenciaTC
+  const tcRealFinal = tcReal !== undefined ? tcReal : tcEstandar;
+  const montoPEN_tcReal = montoSinIgv * tcRealFinal;
+  const diferenciaTC = montoPEN_tcReal - montoPEN_tcEstandar;
+
+  return {
+    mesContable,
+    tcEstandar,
+    tcReal: tcRealFinal,
+    montoPEN_tcEstandar,
+    montoPEN_tcReal,
+    diferenciaTC
+  };
 }
 
 export async function registerInvoiceRoutes(app: FastifyInstance) {
@@ -364,6 +455,15 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
       });
     }
 
+    // 3.5. Calcular campos contables
+    const camposContables = await calcularCamposContables(
+      currency,
+      data.montoSinIgv,
+      data.periodIds,
+      data.mesContable,
+      data.tcReal
+    );
+
     // 4. Crear factura + periodos + distribución en una transacción
     const created = await prisma.$transaction(async (tx) => {
       const invoice = await tx.invoice.create({
@@ -377,6 +477,13 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
           ultimusIncident: data.ultimusIncident ?? null,
           detalle: data.detalle ?? null,
           statusCurrent: "INGRESADO",
+          // Campos contables
+          mesContable: camposContables.mesContable,
+          tcEstandar: camposContables.tcEstandar !== null ? new Prisma.Decimal(camposContables.tcEstandar) : null,
+          tcReal: camposContables.tcReal !== null ? new Prisma.Decimal(camposContables.tcReal) : null,
+          montoPEN_tcEstandar: camposContables.montoPEN_tcEstandar !== null ? new Prisma.Decimal(camposContables.montoPEN_tcEstandar) : null,
+          montoPEN_tcReal: camposContables.montoPEN_tcReal !== null ? new Prisma.Decimal(camposContables.montoPEN_tcReal) : null,
+          diferenciaTC: camposContables.diferenciaTC !== null ? new Prisma.Decimal(camposContables.diferenciaTC) : null,
           // Legacy: mantener null
           vendorId: null,
           totalForeign: null,
@@ -615,6 +722,18 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
       }
     }
 
+    // Recalcular campos contables si es necesario
+    let camposContables = null;
+    if (data.montoSinIgv !== undefined || data.periodIds || data.moneda || data.tcReal !== undefined || data.mesContable !== undefined) {
+      camposContables = await calcularCamposContables(
+        finalCurrency,
+        finalMonto,
+        finalPeriodIds,
+        data.mesContable ?? existing.mesContable ?? undefined,
+        data.tcReal ?? (existing.tcReal ? Number(existing.tcReal) : undefined)
+      );
+    }
+
     // Actualizar factura + periodos + distribución en una transacción
     const updated = await prisma.$transaction(async (tx) => {
       // Actualizar campos de Invoice
@@ -631,7 +750,16 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
           ...(data.ultimusIncident !== undefined && { ultimusIncident: data.ultimusIncident }),
           ...(data.detalle !== undefined && { detalle: data.detalle }),
           ...(data.proveedor !== undefined && !data.ocId && { /* campo proveedor si se agrega */ }),
-          ...(data.moneda !== undefined && !data.ocId && { currency: data.moneda })
+          ...(data.moneda !== undefined && !data.ocId && { currency: data.moneda }),
+          // Campos contables (si se recalcularon)
+          ...(camposContables && {
+            mesContable: camposContables.mesContable,
+            tcEstandar: camposContables.tcEstandar !== null ? new Prisma.Decimal(camposContables.tcEstandar) : null,
+            tcReal: camposContables.tcReal !== null ? new Prisma.Decimal(camposContables.tcReal) : null,
+            montoPEN_tcEstandar: camposContables.montoPEN_tcEstandar !== null ? new Prisma.Decimal(camposContables.montoPEN_tcEstandar) : null,
+            montoPEN_tcReal: camposContables.montoPEN_tcReal !== null ? new Prisma.Decimal(camposContables.montoPEN_tcReal) : null,
+            diferenciaTC: camposContables.diferenciaTC !== null ? new Prisma.Decimal(camposContables.diferenciaTC) : null
+          })
         }
       });
 
@@ -741,6 +869,27 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
       orderBy: { changedAt: "asc" }
     });
     return rows;
+  });
+
+  // Obtener TC estándar sugerido para una factura
+  app.get("/invoices/tc-estandar/:year", async (req, reply) => {
+    const year = Number((req.params as any).year);
+    
+    if (!year || year < 2020 || year > 2050) {
+      return reply.code(400).send({ error: "Año inválido" });
+    }
+
+    const exchangeRate = await prisma.exchangeRate.findUnique({
+      where: { year }
+    });
+
+    if (!exchangeRate) {
+      return reply.code(404).send({ 
+        error: `No se encontró tipo de cambio para el año ${year}. Configure el TC en Catálogos.` 
+      });
+    }
+
+    return { year, tcEstandar: Number(exchangeRate.rate) };
   });
 
   // Consumo de una OC (útil para el frontend)

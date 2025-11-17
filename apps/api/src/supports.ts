@@ -244,15 +244,53 @@ export async function registerSupportRoutes(app: FastifyInstance) {
   app.delete("/supports/:id", async (req, reply) => {
     const id = Number((req.params as any).id);
     try {
-      await prisma.support.delete({ where: { id }});
+      // Eliminar en cascada: facturas, OCs, asignaciones, líneas de control, vínculos M:N
+      await prisma.$transaction(async (tx) => {
+        // 1. Obtener IDs de OCs del sustento
+        const ocs = await tx.oC.findMany({ where: { supportId: id }, select: { id: true } });
+        const ocIds = ocs.map(o => o.id);
+
+        // 2. Obtener IDs de facturas ligadas al sustento (con OC o sin OC pero de un futuro campo supportId)
+        const invoices = await tx.invoice.findMany({
+          where: {
+            OR: [
+              { ocId: { in: ocIds } }
+              // Agregar { supportId: id } si se implementa supportId directo en Invoice
+            ]
+          },
+          select: { id: true }
+        });
+        const invoiceIds = invoices.map(inv => inv.id);
+
+        // 3. Eliminar distribuciones de facturas (InvoiceCostCenter, InvoicePeriod, InvoiceStatusHistory)
+        if (invoiceIds.length > 0) {
+          await tx.invoiceCostCenter.deleteMany({ where: { invoiceId: { in: invoiceIds } } });
+          await tx.invoicePeriod.deleteMany({ where: { invoiceId: { in: invoiceIds } } });
+          await tx.invoiceStatusHistory.deleteMany({ where: { invoiceId: { in: invoiceIds } } });
+          await tx.invoice.deleteMany({ where: { id: { in: invoiceIds } } });
+        }
+
+        // 4. Eliminar distribuciones de OCs (OCCostCenter) y OCs
+        if (ocIds.length > 0) {
+          await tx.oCCostCenter.deleteMany({ where: { ocId: { in: ocIds } } });
+          await tx.oC.deleteMany({ where: { id: { in: ocIds } } });
+        }
+
+        // 5. Eliminar asignaciones de presupuesto (BudgetAllocation)
+        await tx.budgetAllocation.deleteMany({ where: { supportId: id } });
+
+        // 6. Eliminar líneas de control (ControlLine)
+        await tx.controlLine.deleteMany({ where: { supportId: id } });
+
+        // 7. Eliminar vínculos M:N (SupportCostCenter)
+        await tx.supportCostCenter.deleteMany({ where: { supportId: id } });
+
+        // 8. Eliminar el Support
+        await tx.support.delete({ where: { id } });
+      });
+
       return { ok: true };
     } catch (err) {
-      // Error específico de FK constraint
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
-        return reply.code(409).send({ 
-          error: "El sustento tiene registros asociados (OCs, líneas de control o asignaciones presupuestales). Elimínelos primero." 
-        });
-      }
       // Error de registro no encontrado
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
         return reply.code(404).send({ error: "Sustento no encontrado" });

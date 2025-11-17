@@ -11,6 +11,7 @@ import { registerDetailedBudgetRoutes } from "./budgets-detailed";
 import { registerMasterRoutes } from "./masters";
 import { registerOcRoutes } from "./oc";
 import { registerBulkRoutes } from "./bulk";
+import { registerExchangeRateRoutes } from "./exchange-rates";
 import { ensureYearPeriods } from "./periods";
 
 const app = Fastify({ logger: true });
@@ -72,6 +73,7 @@ await registerOcRoutes(app);
 await registerReportRoutes(app);
 await registerMasterRoutes(app);
 await registerBulkRoutes(app);
+await registerExchangeRateRoutes(app);
 
 const port = Number(process.env.API_PORT || 3001);
 app.listen({ port, host: "0.0.0.0" });

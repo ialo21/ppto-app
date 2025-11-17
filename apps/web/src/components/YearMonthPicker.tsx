@@ -80,9 +80,15 @@ export default function YearMonthPicker({
   useEffect(() => {
     if (isOpen && !selectedYear) {
       if (selectedPeriod) {
+        // Si ya hay un valor seleccionado, respetar ese año
         setSelectedYear(selectedPeriod.year);
       } else if (availableYears.length > 0) {
-        setSelectedYear(availableYears[0]);
+        // Si no hay valor, anclar al año actual (o el más cercano disponible)
+        const currentYear = new Date().getFullYear();
+        const closestYear = availableYears.reduce((prev, curr) => 
+          Math.abs(curr - currentYear) < Math.abs(prev - currentYear) ? curr : prev
+        );
+        setSelectedYear(closestYear);
       }
     }
   }, [isOpen, selectedYear, selectedPeriod, availableYears]);
@@ -107,8 +113,23 @@ export default function YearMonthPicker({
 
   // Verificar si un período está deshabilitado
   const isPeriodDisabled = (period: Period) => {
-    if (minId !== undefined && period.id < minId) return true;
-    if (maxId !== undefined && period.id > maxId) return true;
+    // Comparar por fecha cronológica (año-mes), no por ID
+    if (minId !== undefined) {
+      const minPeriod = sortedPeriods.find(p => p.id === minId);
+      if (minPeriod) {
+        const periodValue = period.year * 100 + period.month;
+        const minValue = minPeriod.year * 100 + minPeriod.month;
+        if (periodValue < minValue) return true;
+      }
+    }
+    if (maxId !== undefined) {
+      const maxPeriod = sortedPeriods.find(p => p.id === maxId);
+      if (maxPeriod) {
+        const periodValue = period.year * 100 + period.month;
+        const maxValue = maxPeriod.year * 100 + maxPeriod.month;
+        if (periodValue > maxValue) return true;
+      }
+    }
     return false;
   };
 

@@ -64,6 +64,7 @@ model Period {
   budgetAllocations BudgetAllocation[]
   oc_periodFrom OC[] @relation("OC_PERIOD_FROM")
   oc_periodTo   OC[] @relation("OC_PERIOD_TO")
+  invoicePeriods InvoicePeriod[] @relation("InvoicePeriod")
 }
 
 model AccountingClosure {
@@ -80,6 +81,12 @@ model FxReference {
   rate          Decimal
   effectiveFrom DateTime
   effectiveTo   DateTime?
+}
+
+model ExchangeRate {
+  id   Int     @id @default(autoincrement())
+  year Int     @unique
+  rate Decimal
 }
 
 model Support {
@@ -121,8 +128,10 @@ model CostCenter {
   code     String    @unique
   name     String?
   supports Support[] @relation("LegacySupportCostCenter")  // DEPRECATED: relación 1:N legacy
-  ocs      OC[]
+  ocs      OC[]      @relation("LegacyOCCostCenter")       // DEPRECATED: relación 1:N legacy
   supportLinks SupportCostCenter[]  // M:N con Support
+  ocLinks  OCCostCenter[]           // M:N con OC
+  invoiceLinks InvoiceCostCenter[] @relation("InvoiceCostCenter")  // M:N con Invoice
   budgetAllocations BudgetAllocation[]
 }
 
@@ -230,6 +239,9 @@ model Invoice {
   // NUEVO: Monto principal (sin IGV)
   montoSinIgv     Decimal?
   
+  // NUEVO: Tipo de cambio override (opcional, para sobrescribir el anual)
+  exchangeRateOverride Decimal?
+  
   // DEPRECATED: campos legacy (mantener para compatibilidad)
   totalForeign    Decimal?   // negativo si NOTA_CREDITO
   totalLocal      Decimal?   // negativo si NOTA_CREDITO
@@ -244,6 +256,8 @@ model Invoice {
   
   statusHistory   InvoiceStatusHistory[]
   controlLines    ControlLine[]
+  periods         InvoicePeriod[]         // M:N con Period (meses de registro)
+  costCenters     InvoiceCostCenter[]     // M:N con CostCenter (distribución)
   
   @@index([ocId], name: "ix_invoice_oc")
 }
@@ -256,6 +270,36 @@ model InvoiceStatusHistory {
   changedAt DateTime  @default(now())
   changedBy Int?
   note      String?
+}
+
+// Tabla pivot: Factura ↔ Periodo (meses de registro)
+model InvoicePeriod {
+  id        Int      @id @default(autoincrement())
+  invoiceId Int
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  periodId  Int
+  period    Period   @relation("InvoicePeriod", fields: [periodId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([invoiceId, periodId], name: "ux_invoice_period_pair")
+  @@index([invoiceId], name: "ix_invoiceperiod_invoice")
+  @@index([periodId], name: "ix_invoiceperiod_period")
+}
+
+// Tabla pivot: Factura ↔ CostCenter (distribución)
+model InvoiceCostCenter {
+  id           Int        @id @default(autoincrement())
+  invoiceId    Int
+  invoice      Invoice    @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  costCenterId Int
+  costCenter   CostCenter @relation("InvoiceCostCenter", fields: [costCenterId], references: [id], onDelete: Cascade)
+  amount       Decimal?   // Monto asignado a este CECO
+  percentage   Decimal?   // Porcentaje asignado (0-100)
+  createdAt    DateTime   @default(now())
+
+  @@unique([invoiceId, costCenterId], name: "ux_invoice_costcenter_pair")
+  @@index([invoiceId], name: "ix_invoicecostcenter_invoice")
+  @@index([costCenterId], name: "ix_invoicecostcenter_costcenter")
 }
 
 model ControlLine {
@@ -330,16 +374,17 @@ model OC {
   articuloId             Int?
   articulo               Articulo? @relation(fields: [articuloId], references: [id])
   
-  cecoId                 Int?
-  ceco                   CostCenter? @relation(fields: [cecoId], references: [id])
+  cecoId                 Int?  // DEPRECATED: usar costCenters (M:N)
+  ceco                   CostCenter? @relation("LegacyOCCostCenter", fields: [cecoId], references: [id])
   
   linkCotizacion         String?
   
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
   
-  // NUEVO: Relación con Facturas
+  // Relaciones
   invoices               Invoice[]
+  costCenters            OCCostCenter[]  // M:N con CostCenter
   
   @@index([supportId], name: "ix_oc_support")
   @@index([estado], name: "ix_oc_estado")
@@ -357,4 +402,17 @@ model SupportCostCenter {
   @@unique([supportId, costCenterId], name: "ux_support_costcenter_pair")
   @@index([supportId], name: "ix_supportcostcenter_support")
   @@index([costCenterId], name: "ix_supportcostcenter_costcenter")
+}
+
+model OCCostCenter {
+  id           Int        @id @default(autoincrement())
+  ocId         Int
+  oc           OC         @relation(fields: [ocId], references: [id], onDelete: Cascade)
+  costCenterId Int
+  costCenter   CostCenter @relation(fields: [costCenterId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@unique([ocId, costCenterId], name: "ux_oc_costcenter_pair")
+  @@index([ocId], name: "ix_occostcenter_oc")
+  @@index([costCenterId], name: "ix_occostcenter_costcenter")
 }

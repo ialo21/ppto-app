@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { Card, CardContent, CardHeader } from "../components/ui/Card";
@@ -9,6 +9,22 @@ import { Table, Th, Td } from "../components/ui/Table";
 import { toast } from "sonner";
 import YearMonthPicker from "../components/YearMonthPicker";
 import { formatPeriodLabel } from "../utils/periodFormat";
+
+// Función auxiliar para formatear rango de períodos
+const formatPeriodRange = (periodFrom: any, periodTo: any): string => {
+  if (!periodFrom || !periodTo) return "-";
+  
+  const fromLabel = formatPeriodLabel(periodFrom);
+  const toLabel = formatPeriodLabel(periodTo);
+  
+  // Si son el mismo período, mostrar solo uno
+  if (periodFrom.id === periodTo.id) {
+    return fromLabel;
+  }
+  
+  // Si son diferentes, mostrar el rango
+  return `${fromLabel} → ${toLabel}`;
+};
 
 const ESTADOS_OC = [
   "PENDIENTE", "PROCESAR", "PROCESADO", "APROBACION_VP",
@@ -174,7 +190,8 @@ export default function PurchaseOrdersPage() {
     numeroOc: "",
     comentario: "",
     articuloId: "",
-    cecoId: "",
+    cecoId: "",  // DEPRECATED: mantener por compatibilidad
+    costCenterIds: [] as number[],  // NUEVO: múltiples CECOs
     linkCotizacion: ""
   });
 
@@ -187,6 +204,39 @@ export default function PurchaseOrdersPage() {
   });
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  // Filtrar CECOs según el sustento seleccionado
+  const availableCostCenters = React.useMemo(() => {
+    if (!form.supportId || !supports || !costCenters) return costCenters || [];
+    
+    const selectedSupport = supports.find((s: any) => s.id === Number(form.supportId));
+    if (!selectedSupport) return costCenters || [];
+    
+    // Si el sustento tiene CECOs asociados (M:N), filtrar solo esos
+    if (selectedSupport.costCenters && selectedSupport.costCenters.length > 0) {
+      const cecoIds = new Set(selectedSupport.costCenters.map((cc: any) => cc.costCenterId));
+      return costCenters.filter((cc: any) => cecoIds.has(cc.id));
+    }
+    
+    // Si no tiene CECOs asociados, mostrar todos (compatibilidad legacy)
+    return costCenters || [];
+  }, [form.supportId, supports, costCenters]);
+
+  // Limpiar CECOs si cambia el sustento y ya no son válidos
+  useEffect(() => {
+    if (form.supportId && form.costCenterIds.length > 0 && costCenters && supports) {
+      const selectedSupport = supports.find((s: any) => s.id === Number(form.supportId));
+      if (selectedSupport && selectedSupport.costCenters && selectedSupport.costCenters.length > 0) {
+        const validCecoIds = new Set(selectedSupport.costCenters.map((cc: any) => cc.costCenterId));
+        const filteredCecoIds = form.costCenterIds.filter(id => validCecoIds.has(id));
+        
+        // Solo actualizar si hay cambios
+        if (filteredCecoIds.length !== form.costCenterIds.length) {
+          setForm(f => ({ ...f, costCenterIds: filteredCecoIds }));
+        }
+      }
+    }
+  }, [form.supportId, form.costCenterIds, costCenters, supports]);
 
   const resetForm = () => {
     setForm({
@@ -209,6 +259,7 @@ export default function PurchaseOrdersPage() {
       comentario: "",
       articuloId: "",
       cecoId: "",
+      costCenterIds: [],
       linkCotizacion: ""
     });
     setEditingId(null);
@@ -222,8 +273,37 @@ export default function PurchaseOrdersPage() {
 
     if (!form.budgetPeriodFromId) errors.budgetPeriodFromId = "Periodo desde es requerido";
     if (!form.budgetPeriodToId) errors.budgetPeriodToId = "Periodo hasta es requerido";
+    
+    // Validar rango de períodos cronológicamente
+    if (form.budgetPeriodFromId && form.budgetPeriodToId && periods) {
+      const fromPeriod = periods.find((p: any) => p.id === Number(form.budgetPeriodFromId));
+      const toPeriod = periods.find((p: any) => p.id === Number(form.budgetPeriodToId));
+      if (fromPeriod && toPeriod) {
+        const fromValue = fromPeriod.year * 100 + fromPeriod.month;
+        const toValue = toPeriod.year * 100 + toPeriod.month;
+        if (fromValue > toValue) {
+          errors.budgetPeriodToId = "El período hasta debe ser posterior o igual al período desde";
+        }
+      }
+    }
+    
     if (!form.supportId) errors.supportId = "Sustento es requerido";
     if (!form.nombreSolicitante.trim()) errors.nombreSolicitante = "Nombre solicitante es requerido";
+
+    // Validar que haya al menos un CECO seleccionado
+    if (!form.costCenterIds || form.costCenterIds.length === 0) {
+      errors.costCenterIds = "Debe seleccionar al menos un CECO";
+    } else if (form.supportId && supports && costCenters) {
+      // Validar que todos los CECOs seleccionados estén asociados al sustento
+      const selectedSupport = supports.find((s: any) => s.id === Number(form.supportId));
+      if (selectedSupport && selectedSupport.costCenters && selectedSupport.costCenters.length > 0) {
+        const validCecoIds = new Set(selectedSupport.costCenters.map((cc: any) => cc.costCenterId));
+        const invalidCecos = form.costCenterIds.filter(id => !validCecoIds.has(id));
+        if (invalidCecos.length > 0) {
+          errors.costCenterIds = "Algunos CECOs seleccionados no están asociados al sustento";
+        }
+      }
+    }
     
     // Fecha de registro
     if (!form.fechaRegistro || !form.fechaRegistro.trim()) {
@@ -303,7 +383,7 @@ export default function PurchaseOrdersPage() {
         numeroOc: form.numeroOc.trim() || undefined,
         comentario: form.comentario.trim() || undefined,
         articuloId: form.articuloId ? Number(form.articuloId) : null,
-        cecoId: form.cecoId ? Number(form.cecoId) : null,
+        costCenterIds: form.costCenterIds,  // NUEVO: array de CECOs
         linkCotizacion: form.linkCotizacion.trim() || undefined
       };
 
@@ -320,6 +400,7 @@ export default function PurchaseOrdersPage() {
     },
     onSuccess: () => {
       toast.success(editingId ? "OC actualizada exitosamente" : "OC creada exitosamente");
+      queryClient.invalidateQueries({ queryKey: ["ocs"] });
       refetch();
       resetForm();
     },
@@ -359,12 +440,16 @@ export default function PurchaseOrdersPage() {
     mutationFn: async (id: number) => (await api.delete(`/ocs/${id}`)).data,
     onSuccess: () => {
       toast.success("OC eliminada");
+      queryClient.invalidateQueries({ queryKey: ["ocs"] });
       refetch();
     },
     onError: () => toast.error("No se pudo eliminar la OC")
   });
 
   const handleEdit = (oc: any) => {
+    // Extraer IDs de CECOs de la relación M:N
+    const costCenterIds = oc.costCenters?.map((cc: any) => cc.costCenterId) || [];
+    
     setForm({
       budgetPeriodFromId: oc.budgetPeriodFromId?.toString() || "",
       budgetPeriodToId: oc.budgetPeriodToId?.toString() || "",
@@ -385,6 +470,7 @@ export default function PurchaseOrdersPage() {
       comentario: oc.comentario || "",
       articuloId: oc.articuloId?.toString() || "",
       cecoId: oc.cecoId?.toString() || "",
+      costCenterIds: costCenterIds,
       linkCotizacion: oc.linkCotizacion || ""
     });
     setEditingId(oc.id);
@@ -624,18 +710,62 @@ export default function PurchaseOrdersPage() {
                 </SelectWithError>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1">Centro de Costo (CECO)</label>
-                <SelectWithError 
-                  value={form.cecoId} 
-                  onChange={(e: any) => setForm(f => ({ ...f, cecoId: e.target.value }))}
-                  error={fieldErrors.cecoId}
-                >
-                  <option value="">Sin CECO</option>
-                  {costCenters?.map((cc: any) => (
-                    <option key={cc.id} value={cc.id}>{cc.code} - {cc.name}</option>
-                  ))}
-                </SelectWithError>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium mb-1">Centros de Costo (CECO) *</label>
+                {!form.supportId ? (
+                  <div className="text-sm text-slate-500 italic py-2">
+                    Selecciona un sustento primero
+                  </div>
+                ) : (
+                  <>
+                    <Select
+                      value=""
+                      onChange={(e: any) => {
+                        const cecoId = Number(e.target.value);
+                        if (cecoId && !form.costCenterIds.includes(cecoId)) {
+                          setForm(f => ({ ...f, costCenterIds: [...f.costCenterIds, cecoId] }));
+                        }
+                      }}
+                      className={fieldErrors.costCenterIds ? "border-red-500" : ""}
+                    >
+                      <option value="">Selecciona uno o más CECOs...</option>
+                      {availableCostCenters
+                        ?.filter((cc: any) => !form.costCenterIds.includes(cc.id))
+                        .map((cc: any) => (
+                          <option key={cc.id} value={cc.id}>{cc.code} - {cc.name}</option>
+                        ))}
+                    </Select>
+                    {/* Chips de CECOs seleccionados */}
+                    {form.costCenterIds.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {form.costCenterIds.map(cecoId => {
+                          const ceco = costCenters?.find((cc: any) => cc.id === cecoId);
+                          return ceco ? (
+                            <div
+                              key={cecoId}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md bg-brand-100 dark:bg-brand-900 text-brand-800 dark:text-brand-200"
+                            >
+                              <span>{ceco.code} - {ceco.name}</span>
+                              <button
+                                type="button"
+                                onClick={() => setForm(f => ({
+                                  ...f,
+                                  costCenterIds: f.costCenterIds.filter(id => id !== cecoId)
+                                }))}
+                                className="hover:text-brand-600 dark:hover:text-brand-100"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ) : null;
+                        })}
+                      </div>
+                    )}
+                    {fieldErrors.costCenterIds && (
+                      <p className="text-xs text-red-600 mt-1">{fieldErrors.costCenterIds}</p>
+                    )}
+                  </>
+                )}
               </div>
 
               <div className="md:col-span-3">
@@ -723,6 +853,7 @@ export default function PurchaseOrdersPage() {
                     <Th>Importe sin IGV</Th>
                     <Th>Estado</Th>
                     <Th>Sustento</Th>
+                    <Th>CECOs</Th>
                     <Th>Periodo</Th>
                     <Th>Fecha</Th>
                     <Th>Acciones</Th>
@@ -742,7 +873,23 @@ export default function PurchaseOrdersPage() {
                       </Td>
                       <Td className="text-xs">{oc.support?.name || "-"}</Td>
                       <Td className="text-xs">
-                        {oc.budgetPeriodFrom?.label || ""} - {oc.budgetPeriodTo?.label || ""}
+                        {oc.costCenters && oc.costCenters.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {oc.costCenters.map((cc: any) => (
+                              <span
+                                key={cc.id}
+                                className="inline-block px-1.5 py-0.5 text-xs rounded bg-slate-100 dark:bg-slate-800"
+                              >
+                                {cc.costCenter.code}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          "-"
+                        )}
+                      </Td>
+                      <Td className="text-xs">
+                        {formatPeriodRange(oc.budgetPeriodFrom, oc.budgetPeriodTo)}
                       </Td>
                       <Td className="text-xs">{new Date(oc.fechaRegistro).toLocaleDateString()}</Td>
                       <Td>

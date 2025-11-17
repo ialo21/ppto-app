@@ -5,13 +5,26 @@ import { z } from "zod";
 const prisma = new PrismaClient();
 
 // Schemas
+const allocationSchema = z.object({
+  costCenterId: z.number().int().positive(),
+  amount: z.number().nonnegative().optional(),
+  percentage: z.number().min(0).max(100).optional()
+});
+
 const createInvoiceSchema = z.object({
-  ocId: z.number().int().positive({ message: "OC es requerida" }),
+  ocId: z.number().int().positive({ message: "OC es requerida" }).optional(),  // Ahora opcional (sin OC)
   docType: z.enum(["FACTURA", "NOTA_CREDITO"], { message: "Tipo inválido" }).default("FACTURA"),
   numberNorm: z.string().min(1, "Número es requerido"),
   montoSinIgv: z.number().nonnegative({ message: "Monto debe ser mayor o igual a 0" }),
+  periodIds: z.array(z.number().int().positive()).min(1, "Debe seleccionar al menos un periodo"),
+  allocations: z.array(allocationSchema).min(1, "Debe seleccionar al menos un CECO"),
   ultimusIncident: z.string().optional(),
-  detalle: z.string().optional()
+  detalle: z.string().optional(),
+  // Campos para "sin OC"
+  proveedor: z.string().optional(),
+  moneda: z.enum(["PEN", "USD"]).optional(),
+  // Tipo de cambio override (opcional)
+  exchangeRateOverride: z.number().positive().optional()
 });
 
 const updateInvoiceSchema = z.object({
@@ -19,8 +32,13 @@ const updateInvoiceSchema = z.object({
   docType: z.enum(["FACTURA", "NOTA_CREDITO"]).optional(),
   numberNorm: z.string().min(1).optional(),
   montoSinIgv: z.number().nonnegative().optional(),
+  periodIds: z.array(z.number().int().positive()).min(1).optional(),
+  allocations: z.array(allocationSchema).min(1).optional(),
   ultimusIncident: z.string().optional(),
-  detalle: z.string().optional()
+  detalle: z.string().optional(),
+  proveedor: z.string().optional(),
+  moneda: z.enum(["PEN", "USD"]).optional(),
+  exchangeRateOverride: z.number().positive().optional()
 });
 
 const updateStatusSchema = z.object({
@@ -60,8 +78,50 @@ async function calcularConsumoOC(ocId: number, excludeInvoiceId?: number): Promi
   return consumo;
 }
 
+/**
+ * Calcula el tipo de cambio efectivo para una factura
+ * - Si currency=PEN → 1
+ * - Si currency=USD y hay override → override
+ * - Si currency=USD y no hay override → buscar TC anual del primer periodo
+ * - Si currency=USD, no hay override y no hay TC anual → lanzar error
+ */
+async function calcularEffectiveRate(
+  currency: string,
+  periodIds: number[],
+  exchangeRateOverride?: number
+): Promise<{ effectiveRate: number; source: "PEN" | "override" | "annual" | "error" }> {
+  if (currency === "PEN") {
+    return { effectiveRate: 1, source: "PEN" };
+  }
+
+  // Moneda = USD
+  if (exchangeRateOverride !== undefined) {
+    return { effectiveRate: exchangeRateOverride, source: "override" };
+  }
+
+  // Buscar TC anual del primer periodo
+  const firstPeriod = await prisma.period.findUnique({
+    where: { id: periodIds[0] },
+    select: { year: true }
+  });
+
+  if (!firstPeriod) {
+    throw new Error(`Periodo ${periodIds[0]} no encontrado`);
+  }
+
+  const annualRate = await prisma.exchangeRate.findUnique({
+    where: { year: firstPeriod.year }
+  });
+
+  if (!annualRate) {
+    return { effectiveRate: 0, source: "error" };  // Indicador para bloqueo
+  }
+
+  return { effectiveRate: Number(annualRate.rate), source: "annual" };
+}
+
 export async function registerInvoiceRoutes(app: FastifyInstance) {
-  // List (con OC incluida + Paquete, Concepto, CECO)
+  // List (con OC incluida + Paquete, Concepto, CECO + periodos y CECOs M:N)
   app.get("/invoices", async (req, reply) => {
     const items = await prisma.invoice.findMany({
       orderBy: [{ createdAt: "desc" }],
@@ -75,10 +135,28 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
                 costCenter: true
               }
             },
-            ceco: true  // CECO directo de OC (si existe)
+            ceco: true,  // CECO directo de OC (legacy)
+            costCenters: {  // CECOs M:N de OC
+              include: {
+                costCenter: { select: { id: true, code: true, name: true } }
+              }
+            },
+            budgetPeriodFrom: { select: { id: true, year: true, month: true, label: true } },
+            budgetPeriodTo: { select: { id: true, year: true, month: true, label: true } }
           }
         },
-        vendor: true  // Legacy
+        vendor: true,  // Legacy
+        periods: {  // Periodos de la factura (M:N)
+          include: {
+            period: { select: { id: true, year: true, month: true, label: true } }
+          },
+          orderBy: { period: { year: 'asc' } }
+        },
+        costCenters: {  // CECOs de la factura (M:N con distribución)
+          include: {
+            costCenter: { select: { id: true, code: true, name: true } }
+          }
+        }
       }
     });
     return items;
@@ -92,11 +170,28 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
       include: {
         oc: {
           include: {
-            support: true
+            support: true,
+            costCenters: {
+              include: {
+                costCenter: { select: { id: true, code: true, name: true } }
+              }
+            },
+            budgetPeriodFrom: { select: { id: true, year: true, month: true, label: true } },
+            budgetPeriodTo: { select: { id: true, year: true, month: true, label: true } }
           }
         },
         vendor: true,
-        statusHistory: { orderBy: { changedAt: "asc" } }
+        statusHistory: { orderBy: { changedAt: "asc" } },
+        periods: {
+          include: {
+            period: { select: { id: true, year: true, month: true, label: true } }
+          }
+        },
+        costCenters: {
+          include: {
+            costCenter: { select: { id: true, code: true, name: true } }
+          }
+        }
       }
     });
     if (!inv) return reply.code(404).send({ error: "Factura no encontrada" });
@@ -126,97 +221,220 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
 
     const data = parsed.data;
 
-    // 1. Verificar que la OC existe
-    const oc = await prisma.oC.findUnique({
-      where: { id: data.ocId }
-    }).catch(err => {
-      if (process.env.NODE_ENV === "development") {
-        console.error("❌ Error al buscar OC:", err);
-      }
-      throw err;
-    });
+    // 1. Determinar si es "Con OC" o "Sin OC"
+    let oc: any = null;
+    let currency = data.moneda || "PEN";
+    let proveedor = data.proveedor || "";
 
-    if (!oc) {
-      if (process.env.NODE_ENV === "development") {
-        console.error(`❌ OC con ID ${data.ocId} no encontrada`);
+    if (data.ocId) {
+      // Con OC: cargar y validar
+      oc = await prisma.oC.findUnique({
+        where: { id: data.ocId },
+        include: {
+          budgetPeriodFrom: true,
+          budgetPeriodTo: true,
+          costCenters: {
+            include: { costCenter: true }
+          }
+        }
+      }).catch(err => {
+        if (process.env.NODE_ENV === "development") {
+          console.error("❌ Error al buscar OC:", err);
+        }
+        throw err;
+      });
+
+      if (!oc) {
+        if (process.env.NODE_ENV === "development") {
+          console.error(`❌ OC con ID ${data.ocId} no encontrada`);
+        }
+        return reply.code(422).send({
+          error: "VALIDATION_ERROR",
+          issues: [{ path: ["ocId"], message: "OC no encontrada" }]
+        });
       }
+
+      currency = oc.moneda;
+      proveedor = oc.proveedor;
+
+      // Validar saldo OC
+      const consumoActual = await calcularConsumoOC(data.ocId);
+      const importeOC = Number(oc.importeSinIgv);
+      const saldoDisponible = importeOC - consumoActual;
+
+      if (data.docType === "FACTURA") {
+        if (data.montoSinIgv > saldoDisponible) {
+          return reply.code(422).send({
+            error: "VALIDATION_ERROR",
+            issues: [{
+              path: ["montoSinIgv"],
+              message: `El monto (${data.montoSinIgv.toFixed(2)}) excede el saldo disponible de la OC (${saldoDisponible.toFixed(2)} ${oc.moneda})`
+            }]
+          });
+        }
+      } else if (data.docType === "NOTA_CREDITO") {
+        if (data.montoSinIgv > consumoActual) {
+          return reply.code(422).send({
+            error: "VALIDATION_ERROR",
+            issues: [{
+              path: ["montoSinIgv"],
+              message: `La nota de crédito (${data.montoSinIgv.toFixed(2)}) no puede ser mayor al consumo actual (${consumoActual.toFixed(2)} ${oc.moneda})`
+            }]
+          });
+        }
+      }
+
+      // Validar periodos ⊆ periodo OC
+      if (oc.budgetPeriodFromId && oc.budgetPeriodToId) {
+        const fromValue = oc.budgetPeriodFrom.year * 100 + oc.budgetPeriodFrom.month;
+        const toValue = oc.budgetPeriodTo.year * 100 + oc.budgetPeriodTo.month;
+
+        const periods = await prisma.period.findMany({
+          where: { id: { in: data.periodIds } }
+        });
+
+        for (const period of periods) {
+          const periodValue = period.year * 100 + period.month;
+          if (periodValue < fromValue || periodValue > toValue) {
+            return reply.code(422).send({
+              error: "VALIDATION_ERROR",
+              issues: [{
+                path: ["periodIds"],
+                message: `El periodo ${period.year}-${String(period.month).padStart(2, '0')} está fuera del rango de la OC (${oc.budgetPeriodFrom.year}-${String(oc.budgetPeriodFrom.month).padStart(2, '0')} → ${oc.budgetPeriodTo.year}-${String(oc.budgetPeriodTo.month).padStart(2, '0')})`
+              }]
+            });
+          }
+        }
+      }
+
+      // Validar CECOs ⊆ CECOs de OC
+      const ocCecoIds = new Set(oc.costCenters.map((cc: any) => cc.costCenterId));
+      const invalidCecos = data.allocations.filter(a => !ocCecoIds.has(a.costCenterId));
+      if (invalidCecos.length > 0) {
+        return reply.code(422).send({
+          error: "VALIDATION_ERROR",
+          issues: [{
+            path: ["allocations"],
+            message: `Algunos CECOs seleccionados no están asociados a la OC: ${invalidCecos.map(a => a.costCenterId).join(", ")}`
+          }]
+        });
+      }
+    } else {
+      // Sin OC: validar que se proporcionen proveedor y moneda
+      if (!data.proveedor) {
+        return reply.code(422).send({
+          error: "VALIDATION_ERROR",
+          issues: [{ path: ["proveedor"], message: "Proveedor es requerido cuando no hay OC" }]
+        });
+      }
+      if (!data.moneda) {
+        return reply.code(422).send({
+          error: "VALIDATION_ERROR",
+          issues: [{ path: ["moneda"], message: "Moneda es requerida cuando no hay OC" }]
+        });
+      }
+    }
+
+    // 2. Validar tipo de cambio y calcular effectiveRate
+    const rateResult = await calcularEffectiveRate(currency, data.periodIds, data.exchangeRateOverride);
+    if (rateResult.source === "error") {
+      const firstPeriod = await prisma.period.findUnique({
+        where: { id: data.periodIds[0] },
+        select: { year: true }
+      });
       return reply.code(422).send({
         error: "VALIDATION_ERROR",
-        issues: [{ path: ["ocId"], message: "OC no encontrada" }]
+        issues: [{
+          path: ["exchangeRateOverride"],
+          message: `Configura tipo de cambio anual para ${firstPeriod?.year} o ingresa TC manual`
+        }]
       });
     }
 
-    // 2. Calcular consumo actual de la OC
-    const consumoActual = await calcularConsumoOC(data.ocId);
-    const importeOC = Number(oc.importeSinIgv);
-    const saldoDisponible = importeOC - consumoActual;
-
-    // 3. Validar según tipo de documento
-    if (data.docType === "FACTURA") {
-      // FACTURA: no puede exceder saldo disponible
-      if (data.montoSinIgv > saldoDisponible) {
-        return reply.code(422).send({
-          error: "VALIDATION_ERROR",
-          issues: [{
-            path: ["montoSinIgv"],
-            message: `El monto (${data.montoSinIgv.toFixed(2)}) excede el saldo disponible de la OC (${saldoDisponible.toFixed(2)} ${oc.moneda})`
-          }]
-        });
-      }
-    } else if (data.docType === "NOTA_CREDITO") {
-      // NOTA_CREDITO: no puede restar más de lo consumido
-      if (data.montoSinIgv > consumoActual) {
-        return reply.code(422).send({
-          error: "VALIDATION_ERROR",
-          issues: [{
-            path: ["montoSinIgv"],
-            message: `La nota de crédito (${data.montoSinIgv.toFixed(2)}) no puede ser mayor al consumo actual (${consumoActual.toFixed(2)} ${oc.moneda})`
-          }]
-        });
-      }
+    // 3. Validar distribución (suma = monto total)
+    const totalAllocated = data.allocations.reduce((sum, a) => sum + (a.amount || 0), 0);
+    const tolerance = 0.01;  // Tolerancia de 1 centavo por redondeo
+    if (Math.abs(totalAllocated - data.montoSinIgv) > tolerance) {
+      return reply.code(422).send({
+        error: "VALIDATION_ERROR",
+        issues: [{
+          path: ["allocations"],
+          message: `La suma de las distribuciones (${totalAllocated.toFixed(2)}) no coincide con el monto total (${data.montoSinIgv.toFixed(2)})`
+        }]
+      });
     }
 
-    // 4. Crear factura (heredando moneda de OC)
-    const created = await prisma.invoice.create({
-      data: {
-        ocId: data.ocId,
-        docType: data.docType as any,
-        numberNorm: data.numberNorm,
-        currency: oc.moneda,  // Heredar moneda de OC
-        montoSinIgv: new Prisma.Decimal(data.montoSinIgv),
-        ultimusIncident: data.ultimusIncident ?? null,
-        detalle: data.detalle ?? null,
-        statusCurrent: "INGRESADO",
-        // Legacy: mantener null
-        vendorId: null,
-        totalForeign: null,
-        totalLocal: null
-      }
-    }).catch(err => {
-      if (process.env.NODE_ENV === "development") {
-        console.error("❌ Error al crear factura en DB:", err);
-      }
-      throw err;
+    // 4. Crear factura + periodos + distribución en una transacción
+    const created = await prisma.$transaction(async (tx) => {
+      const invoice = await tx.invoice.create({
+        data: {
+          ocId: data.ocId ?? null,
+          docType: data.docType as any,
+          numberNorm: data.numberNorm,
+          currency,
+          montoSinIgv: new Prisma.Decimal(data.montoSinIgv),
+          exchangeRateOverride: data.exchangeRateOverride ? new Prisma.Decimal(data.exchangeRateOverride) : null,
+          ultimusIncident: data.ultimusIncident ?? null,
+          detalle: data.detalle ?? null,
+          statusCurrent: "INGRESADO",
+          // Legacy: mantener null
+          vendorId: null,
+          totalForeign: null,
+          totalLocal: null
+        }
+      });
+
+      // Crear relaciones con periodos
+      await tx.invoicePeriod.createMany({
+        data: data.periodIds.map(periodId => ({
+          invoiceId: invoice.id,
+          periodId
+        }))
+      });
+
+      // Crear relaciones con CECOs (distribución)
+      await tx.invoiceCostCenter.createMany({
+        data: data.allocations.map(alloc => ({
+          invoiceId: invoice.id,
+          costCenterId: alloc.costCenterId,
+          amount: alloc.amount ? new Prisma.Decimal(alloc.amount) : null,
+          percentage: alloc.percentage ? new Prisma.Decimal(alloc.percentage) : null
+        }))
+      });
+
+      // Crear primer estado en historial
+      await tx.invoiceStatusHistory.create({
+        data: {
+          invoiceId: invoice.id,
+          status: "INGRESADO"
+        }
+      });
+
+      return invoice;
     });
 
-    // 5. Crear primer estado en historial
-    await prisma.invoiceStatusHistory.create({
-      data: {
-        invoiceId: created.id,
-        status: "INGRESADO"
+    // 5. Retornar con includes
+    const result = await prisma.invoice.findUnique({
+      where: { id: created.id },
+      include: {
+        periods: {
+          include: {
+            period: { select: { id: true, year: true, month: true, label: true } }
+          }
+        },
+        costCenters: {
+          include: {
+            costCenter: { select: { id: true, code: true, name: true } }
+          }
+        }
       }
-    }).catch(err => {
-      if (process.env.NODE_ENV === "development") {
-        console.error("❌ Error al crear historial de estado:", err);
-      }
-      // No lanzar error aquí, la factura ya fue creada
     });
 
     if (process.env.NODE_ENV === "development") {
       console.log("✅ Factura creada exitosamente:", created.id);
     }
 
-    return created;
+    return result;
   });
 
   // Update (editar factura)
@@ -239,7 +457,17 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
     // Verificar que la factura existe
     const existing = await prisma.invoice.findUnique({
       where: { id },
-      include: { oc: true }
+      include: {
+        oc: {
+          include: {
+            budgetPeriodFrom: true,
+            budgetPeriodTo: true,
+            costCenters: {
+              include: { costCenter: true }
+            }
+          }
+        }
+      }
     });
 
     if (!existing) {
@@ -249,7 +477,16 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
     // Si cambia la OC, validar la nueva
     let targetOC = existing.oc;
     if (data.ocId && data.ocId !== existing.ocId) {
-      const newOC = await prisma.oC.findUnique({ where: { id: data.ocId } });
+      const newOC = await prisma.oC.findUnique({
+        where: { id: data.ocId },
+        include: {
+          budgetPeriodFrom: true,
+          budgetPeriodTo: true,
+          costCenters: {
+            include: { costCenter: true }
+          }
+        }
+      });
       if (!newOC) {
         return reply.code(422).send({
           error: "VALIDATION_ERROR",
@@ -290,22 +527,159 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
           });
         }
       }
+
+      // Validar periodos ⊆ periodo OC (si se proporcionan nuevos periodos)
+      if (data.periodIds && targetOC.budgetPeriodFromId && targetOC.budgetPeriodToId) {
+        const fromValue = targetOC.budgetPeriodFrom.year * 100 + targetOC.budgetPeriodFrom.month;
+        const toValue = targetOC.budgetPeriodTo.year * 100 + targetOC.budgetPeriodTo.month;
+
+        const periods = await prisma.period.findMany({
+          where: { id: { in: data.periodIds } }
+        });
+
+        for (const period of periods) {
+          const periodValue = period.year * 100 + period.month;
+          if (periodValue < fromValue || periodValue > toValue) {
+            return reply.code(422).send({
+              error: "VALIDATION_ERROR",
+              issues: [{
+                path: ["periodIds"],
+                message: `El periodo ${period.year}-${String(period.month).padStart(2, '0')} está fuera del rango de la OC`
+              }]
+            });
+          }
+        }
+      }
+
+      // Validar CECOs ⊆ CECOs de OC (si se proporcionan nuevas allocations)
+      if (data.allocations) {
+        const ocCecoIds = new Set(targetOC.costCenters.map((cc: any) => cc.costCenterId));
+        const invalidCecos = data.allocations.filter(a => !ocCecoIds.has(a.costCenterId));
+        if (invalidCecos.length > 0) {
+          return reply.code(422).send({
+            error: "VALIDATION_ERROR",
+            issues: [{
+              path: ["allocations"],
+              message: `Algunos CECOs seleccionados no están asociados a la OC`
+            }]
+          });
+        }
+      }
     }
 
-    // Actualizar factura
-    const updated = await prisma.invoice.update({
+    // Validar tipo de cambio si se proporciona nuevo
+    const finalCurrency = data.moneda ?? existing.currency;
+    let finalPeriodIds = data.periodIds || [];
+    if (finalPeriodIds.length === 0) {
+      // Si no se proporcionan nuevos periodos, usar los existentes
+      const existingPeriods = await prisma.invoicePeriod.findMany({
+        where: { invoiceId: id },
+        select: { periodId: true }
+      });
+      finalPeriodIds = existingPeriods.map(p => p.periodId);
+    }
+
+    if (data.exchangeRateOverride !== undefined || data.moneda || data.periodIds) {
+      const rateResult = await calcularEffectiveRate(
+        finalCurrency,
+        finalPeriodIds,
+        data.exchangeRateOverride ?? (existing.exchangeRateOverride ? Number(existing.exchangeRateOverride) : undefined)
+      );
+      if (rateResult.source === "error") {
+        const firstPeriod = await prisma.period.findUnique({
+          where: { id: finalPeriodIds[0] },
+          select: { year: true }
+        });
+        return reply.code(422).send({
+          error: "VALIDATION_ERROR",
+          issues: [{
+            path: ["exchangeRateOverride"],
+            message: `Configura tipo de cambio anual para ${firstPeriod?.year} o ingresa TC manual`
+          }]
+        });
+      }
+    }
+
+    // Validar distribución si se proporciona (suma = monto total)
+    if (data.allocations) {
+      const totalAllocated = data.allocations.reduce((sum, a) => sum + (a.amount || 0), 0);
+      const tolerance = 0.01;
+      if (Math.abs(totalAllocated - finalMonto) > tolerance) {
+        return reply.code(422).send({
+          error: "VALIDATION_ERROR",
+          issues: [{
+            path: ["allocations"],
+            message: `La suma de las distribuciones (${totalAllocated.toFixed(2)}) no coincide con el monto total (${finalMonto.toFixed(2)})`
+          }]
+        });
+      }
+    }
+
+    // Actualizar factura + periodos + distribución en una transacción
+    const updated = await prisma.$transaction(async (tx) => {
+      // Actualizar campos de Invoice
+      const invoice = await tx.invoice.update({
+        where: { id },
+        data: {
+          ...(data.ocId !== undefined && { ocId: data.ocId, currency: targetOC?.moneda }),
+          ...(data.docType && { docType: data.docType as any }),
+          ...(data.numberNorm && { numberNorm: data.numberNorm }),
+          ...(data.montoSinIgv !== undefined && { montoSinIgv: new Prisma.Decimal(data.montoSinIgv) }),
+          ...(data.exchangeRateOverride !== undefined && {
+            exchangeRateOverride: data.exchangeRateOverride ? new Prisma.Decimal(data.exchangeRateOverride) : null
+          }),
+          ...(data.ultimusIncident !== undefined && { ultimusIncident: data.ultimusIncident }),
+          ...(data.detalle !== undefined && { detalle: data.detalle }),
+          ...(data.proveedor !== undefined && !data.ocId && { /* campo proveedor si se agrega */ }),
+          ...(data.moneda !== undefined && !data.ocId && { currency: data.moneda })
+        }
+      });
+
+      // Actualizar periodos si se proporcionan
+      if (data.periodIds) {
+        await tx.invoicePeriod.deleteMany({ where: { invoiceId: id } });
+        await tx.invoicePeriod.createMany({
+          data: data.periodIds.map(periodId => ({
+            invoiceId: id,
+            periodId
+          }))
+        });
+      }
+
+      // Actualizar distribución si se proporciona
+      if (data.allocations) {
+        await tx.invoiceCostCenter.deleteMany({ where: { invoiceId: id } });
+        await tx.invoiceCostCenter.createMany({
+          data: data.allocations.map(alloc => ({
+            invoiceId: id,
+            costCenterId: alloc.costCenterId,
+            amount: alloc.amount ? new Prisma.Decimal(alloc.amount) : null,
+            percentage: alloc.percentage ? new Prisma.Decimal(alloc.percentage) : null
+          }))
+        });
+      }
+
+      return invoice;
+    });
+
+    // Retornar con includes
+    const result = await prisma.invoice.findUnique({
       where: { id },
-      data: {
-        ...(data.ocId && { ocId: data.ocId, currency: targetOC!.moneda }),
-        ...(data.docType && { docType: data.docType as any }),
-        ...(data.numberNorm && { numberNorm: data.numberNorm }),
-        ...(data.montoSinIgv !== undefined && { montoSinIgv: new Prisma.Decimal(data.montoSinIgv) }),
-        ...(data.ultimusIncident !== undefined && { ultimusIncident: data.ultimusIncident }),
-        ...(data.detalle !== undefined && { detalle: data.detalle })
+      include: {
+        periods: {
+          include: {
+            period: { select: { id: true, year: true, month: true, label: true } }
+          }
+        },
+        costCenters: {
+          include: {
+            costCenter: { select: { id: true, code: true, name: true } }
+          }
+        }
       }
     });
 
-    return updated;
+    return result;
   });
 
   // Delete

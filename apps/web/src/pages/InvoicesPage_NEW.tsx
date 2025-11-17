@@ -8,7 +8,6 @@ import Select from "../components/ui/Select";
 import Button from "../components/ui/Button";
 import { Table, Th, Td } from "../components/ui/Table";
 import StatusChip from "../components/StatusChip";
-import YearMonthPicker from "../components/YearMonthPicker";
 
 type OC = {
   id: number;
@@ -47,7 +46,6 @@ type Invoice = {
   numberNorm: string | null;
   currency: string;
   montoSinIgv: number | null;
-  exchangeRateOverride: number | null;
   statusCurrent: string;
   ultimusIncident: string | null;
   detalle: string | null;
@@ -110,11 +108,6 @@ export default function InvoicesPage() {
     queryFn: async () => (await api.get("/cost-centers")).data
   });
 
-  const { data: supports } = useQuery({
-    queryKey: ["supports"],
-    queryFn: async () => (await api.get("/supports")).data
-  });
-
   // Estados
   const [filters, setFilters] = useState({ status: "", docType: "", numeroOc: "" });
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" | null }>({
@@ -128,19 +121,15 @@ export default function InvoicesPage() {
   const [form, setForm] = useState({
     id: "",
     ocId: "",
-    supportId: "",  // Para modo sin OC
     docType: "FACTURA",
     numberNorm: "",
     montoSinIgv: "",
-    exchangeRateOverride: "",
     ultimusIncident: "",
     detalle: "",
     proveedor: "",
     moneda: "PEN"
   });
-  const [periodFromId, setPeriodFromId] = useState<number | null>(null);
-  const [periodToId, setPeriodToId] = useState<number | null>(null);
-  const [cecoSearchCode, setCecoSearchCode] = useState("");
+  const [periodIds, setPeriodIds] = useState<number[]>([]);
   const [allocations, setAllocations] = useState<Allocation[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -157,62 +146,27 @@ export default function InvoicesPage() {
     return (ocsQuery.data || []).find(oc => oc.id === Number(form.ocId));
   }, [form.ocId, ocsQuery.data]);
 
-  // Support seleccionado (modo sin OC)
-  const selectedSupport = useMemo(() => {
-    if (!form.supportId || hasOC) return null;
-    return (supports || []).find((s: any) => s.id === Number(form.supportId));
-  }, [form.supportId, hasOC, supports]);
-
-  // CECOs disponibles
+  // CECOs disponibles (desde OC seleccionada o todos si sin OC)
   const availableCostCenters = useMemo(() => {
     if (hasOC && selectedOC && selectedOC.costCenters) {
       return selectedOC.costCenters.map(cc => cc.costCenter);
     }
-    if (!hasOC && selectedSupport && selectedSupport.costCenters) {
-      return selectedSupport.costCenters.map((sc: any) => sc.costCenter);
-    }
-    return [];
-  }, [hasOC, selectedOC, selectedSupport]);
+    return costCenters || [];
+  }, [hasOC, selectedOC, costCenters]);
 
-  // CECOs filtrados por búsqueda de código
-  const filteredCostCenters = useMemo(() => {
-    if (!cecoSearchCode.trim()) return availableCostCenters;
-    const searchLower = cecoSearchCode.toLowerCase();
-    return availableCostCenters.filter((cc: any) => 
-      cc.code?.toLowerCase().includes(searchLower)
-    );
-  }, [availableCostCenters, cecoSearchCode]);
-
-  // Generar periodIds desde el rango (desde → hasta)
-  const periodIds = useMemo(() => {
-    if (!periodFromId || !periodToId || !periods) return [];
-    
-    const fromPeriod = periods.find((p: any) => p.id === periodFromId);
-    const toPeriod = periods.find((p: any) => p.id === periodToId);
-    if (!fromPeriod || !toPeriod) return [];
-    
-    const fromValue = fromPeriod.year * 100 + fromPeriod.month;
-    const toValue = toPeriod.year * 100 + toPeriod.month;
-    
-    return periods
-      .filter((p: any) => {
+  // Periodos disponibles (desde OC seleccionada o todos si sin OC)
+  const availablePeriods = useMemo(() => {
+    if (!periods) return [];
+    if (hasOC && selectedOC && selectedOC.budgetPeriodFrom && selectedOC.budgetPeriodTo) {
+      const fromValue = selectedOC.budgetPeriodFrom.year * 100 + selectedOC.budgetPeriodFrom.month;
+      const toValue = selectedOC.budgetPeriodTo.year * 100 + selectedOC.budgetPeriodTo.month;
+      return periods.filter((p: any) => {
         const pValue = p.year * 100 + p.month;
         return pValue >= fromValue && pValue <= toValue;
-      })
-      .sort((a: any, b: any) => (a.year * 100 + a.month) - (b.year * 100 + b.month))
-      .map((p: any) => p.id);
-  }, [periodFromId, periodToId, periods]);
-
-  // Min/Max para selector de periodos según OC o global
-  const periodMinMax = useMemo(() => {
-    if (hasOC && selectedOC && selectedOC.budgetPeriodFrom && selectedOC.budgetPeriodTo) {
-      return {
-        minId: selectedOC.budgetPeriodFrom.id,
-        maxId: selectedOC.budgetPeriodTo.id
-      };
+      });
     }
-    return { minId: undefined, maxId: undefined };
-  }, [hasOC, selectedOC]);
+    return periods;
+  }, [hasOC, selectedOC, periods]);
 
   // Facturas filtradas y ordenadas
   const filteredInvoices = useMemo(() => {
@@ -297,7 +251,6 @@ export default function InvoicesPage() {
     setForm({
       id: "",
       ocId: "",
-      supportId: "",
       docType: "FACTURA",
       numberNorm: "",
       montoSinIgv: "",
@@ -306,24 +259,20 @@ export default function InvoicesPage() {
       proveedor: "",
       moneda: "PEN"
     });
-    setPeriodFromId(null);
-    setPeriodToId(null);
+    setPeriodIds([]);
     setAllocations([]);
-    setCecoSearchCode("");
     setFieldErrors({});
     setHasOC(true);
   };
 
-  // Auto-distribuir porcentajes entre CECOs
-  const distributePercentages = (cecoIds: number[]) => {
+  // Auto-distribuir monto entre CECOs
+  const distributeAmount = (amount: number, cecoIds: number[]) => {
     if (cecoIds.length === 0) return [];
-    if (cecoIds.length === 1) {
-      return [{ costCenterId: cecoIds[0], percentage: 100 }];
-    }
-    const perCeco = 100 / cecoIds.length;
+    const perCeco = amount / cecoIds.length;
     return cecoIds.map(id => ({
       costCenterId: id,
-      percentage: Math.round(perCeco * 100) / 100
+      amount: Math.round(perCeco * 100) / 100,
+      percentage: Math.round((100 / cecoIds.length) * 100) / 100
     }));
   };
 
@@ -333,18 +282,16 @@ export default function InvoicesPage() {
       // Validación frontend
       const errors: Record<string, string> = {};
       if (hasOC && !form.ocId) errors.ocId = "OC es requerida";
-      if (!hasOC && !form.supportId) errors.supportId = "Sustento es requerido";
       if (!hasOC && !form.proveedor.trim()) errors.proveedor = "Proveedor es requerido";
       if (!form.numberNorm.trim()) errors.numberNorm = "Número es requerido";
       if (!form.montoSinIgv || Number(form.montoSinIgv) < 0) errors.montoSinIgv = "Monto inválido";
-      if (!periodFromId || !periodToId) errors.periodIds = "Debe seleccionar rango de periodos (desde → hasta)";
-      if (periodIds.length === 0) errors.periodIds = "Rango de periodos inválido";
+      if (periodIds.length === 0) errors.periodIds = "Debe seleccionar al menos un periodo";
       if (allocations.length === 0) errors.allocations = "Debe seleccionar al menos un CECO";
 
-      // Validar porcentajes suman 100%
-      const totalPercent = allocations.reduce((sum, a) => sum + (a.percentage || 0), 0);
-      if (Math.abs(totalPercent - 100) > 0.01) {
-        errors.allocations = `El total de porcentajes debe ser 100% (actualmente: ${totalPercent.toFixed(2)}%)`;
+      const totalAllocated = allocations.reduce((sum, a) => sum + (a.amount || 0), 0);
+      const tolerance = 0.01;
+      if (Math.abs(totalAllocated - Number(form.montoSinIgv)) > tolerance) {
+        errors.allocations = `La suma de las distribuciones (${totalAllocated.toFixed(2)}) no coincide con el monto total (${Number(form.montoSinIgv).toFixed(2)})`;
       }
 
       if (Object.keys(errors).length > 0) {
@@ -352,22 +299,13 @@ export default function InvoicesPage() {
         throw new Error("FRONTEND_VALIDATION_ERROR");
       }
 
-      // Convertir porcentajes a montos para el backend
-      const montoTotal = Number(form.montoSinIgv);
-      const allocationsWithAmount = allocations.map(alloc => ({
-        costCenterId: alloc.costCenterId,
-        amount: Math.round((montoTotal * (alloc.percentage || 0) / 100) * 100) / 100,
-        percentage: alloc.percentage
-      }));
-
       const payload: any = {
         ocId: hasOC ? Number(form.ocId) : undefined,
         docType: form.docType,
         numberNorm: form.numberNorm.trim(),
-        montoSinIgv: montoTotal,
-        exchangeRateOverride: form.exchangeRateOverride ? Number(form.exchangeRateOverride) : undefined,
+        montoSinIgv: Number(form.montoSinIgv),
         periodIds,
-        allocations: allocationsWithAmount,
+        allocations,
         ultimusIncident: form.ultimusIncident.trim() || undefined,
         detalle: form.detalle.trim() || undefined
       };
@@ -485,29 +423,27 @@ export default function InvoicesPage() {
   // Cuando se selecciona OC, auto-cargar periodos y CECOs
   useEffect(() => {
     if (hasOC && selectedOC && !form.id) {
-      // Auto-cargar rango de periodos (desde/hasta)
-      if (selectedOC.budgetPeriodFrom && selectedOC.budgetPeriodTo) {
-        setPeriodFromId(selectedOC.budgetPeriodFrom.id);
-        setPeriodToId(selectedOC.budgetPeriodTo.id);
+      // Auto-cargar periodos (desde hasta)
+      if (selectedOC.budgetPeriodFrom && selectedOC.budgetPeriodTo && periods) {
+        const fromValue = selectedOC.budgetPeriodFrom.year * 100 + selectedOC.budgetPeriodFrom.month;
+        const toValue = selectedOC.budgetPeriodTo.year * 100 + selectedOC.budgetPeriodTo.month;
+        const relevantPeriods = periods.filter((p: any) => {
+          const pValue = p.year * 100 + p.month;
+          return pValue >= fromValue && pValue <= toValue;
+        });
+        setPeriodIds(relevantPeriods.map((p: any) => p.id));
       }
 
-      // Auto-cargar CECOs con distribución de porcentajes
+      // Auto-cargar CECOs
       if (selectedOC.costCenters && selectedOC.costCenters.length > 0) {
         const cecoIds = selectedOC.costCenters.map(cc => cc.costCenterId);
-        setAllocations(distributePercentages(cecoIds));
+        const amount = Number(form.montoSinIgv) || 0;
+        if (amount > 0) {
+          setAllocations(distributeAmount(amount, cecoIds));
+        }
       }
     }
-  }, [hasOC, selectedOC, form.id]);
-
-  // Auto-asignar 100% si solo hay 1 CECO disponible
-  useEffect(() => {
-    if (availableCostCenters.length === 1 && allocations.length === 0 && !form.id) {
-      setAllocations([{
-        costCenterId: availableCostCenters[0].id,
-        percentage: 100
-      }]);
-    }
-  }, [availableCostCenters, allocations.length, form.id]);
+  }, [hasOC, selectedOC, form.id, form.montoSinIgv, periods]);
 
   return (
     <div className="space-y-4">
@@ -580,24 +516,6 @@ export default function InvoicesPage() {
             ) : (
               <>
                 <div className="w-full">
-                  <label className="block text-sm font-medium mb-1">Sustento *</label>
-                  <Select
-                    value={form.supportId}
-                    onChange={(e) => {
-                      handleFormChange("supportId", e.target.value);
-                      // Limpiar allocations al cambiar sustento
-                      setAllocations([]);
-                    }}
-                    className={fieldErrors.supportId ? "border-red-500" : ""}
-                  >
-                    <option value="">Selecciona sustento</option>
-                    {(supports || []).map((sup: any) => (
-                      <option key={sup.id} value={sup.id}>{sup.name}</option>
-                    ))}
-                  </Select>
-                  {fieldErrors.supportId && <p className="text-xs text-red-600 mt-1">{fieldErrors.supportId}</p>}
-                </div>
-                <div className="w-full">
                   <label className="block text-sm font-medium mb-1">Proveedor *</label>
                   <Input
                     placeholder="Proveedor"
@@ -642,30 +560,18 @@ export default function InvoicesPage() {
                 step="0.01"
                 placeholder="Monto sin IGV"
                 value={form.montoSinIgv}
-                onChange={(e) => handleFormChange("montoSinIgv", e.target.value)}
+                onChange={(e) => {
+                  handleFormChange("montoSinIgv", e.target.value);
+                  // Redistribuir si ya hay CECOs seleccionados
+                  if (allocations.length > 0 && Number(e.target.value) > 0) {
+                    const cecoIds = allocations.map(a => a.costCenterId);
+                    setAllocations(distributeAmount(Number(e.target.value), cecoIds));
+                  }
+                }}
                 className={fieldErrors.montoSinIgv ? "border-red-500" : ""}
               />
               {fieldErrors.montoSinIgv && <p className="text-xs text-red-600 mt-1">{fieldErrors.montoSinIgv}</p>}
             </div>
-
-            {/* Tipo de cambio override (solo si moneda ≠ PEN) */}
-            {form.moneda !== "PEN" && (
-              <div className="w-full">
-                <label className="block text-sm font-medium mb-1">TC (opcional)</label>
-                <Input
-                  type="number"
-                  step="0.0001"
-                  placeholder="Tipo de cambio USD → PEN (ej. 3.7500)"
-                  value={form.exchangeRateOverride}
-                  onChange={(e) => handleFormChange("exchangeRateOverride", e.target.value)}
-                  className={fieldErrors.exchangeRateOverride ? "border-red-500" : ""}
-                />
-                {fieldErrors.exchangeRateOverride && <p className="text-xs text-red-600 mt-1">{fieldErrors.exchangeRateOverride}</p>}
-                <p className="text-xs text-slate-500 mt-1">
-                  Si no se ingresa, se usará el TC anual configurado
-                </p>
-              </div>
-            )}
 
             {/* Incidente Ultimus */}
             <div className="w-full">
@@ -679,36 +585,35 @@ export default function InvoicesPage() {
               {fieldErrors.ultimusIncident && <p className="text-xs text-red-600 mt-1">{fieldErrors.ultimusIncident}</p>}
             </div>
 
-            {/* Periodos (rango desde/hasta) */}
-            <div>
-              <label className="block text-sm font-medium mb-1">Periodo Desde *</label>
-              <YearMonthPicker
-                value={periodFromId}
-                onChange={(period) => setPeriodFromId(period ? period.id : null)}
-                periods={periods || []}
-                minId={periodMinMax.minId}
-                maxId={periodToId || periodMinMax.maxId}
-                placeholder="Seleccionar período desde..."
-                error={fieldErrors.periodIds}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Periodo Hasta *</label>
-              <YearMonthPicker
-                value={periodToId}
-                onChange={(period) => setPeriodToId(period ? period.id : null)}
-                periods={periods || []}
-                minId={periodFromId || periodMinMax.minId}
-                maxId={periodMinMax.maxId}
-                placeholder="Seleccionar período hasta..."
-                error={fieldErrors.periodIds}
-              />
-              {periodIds.length > 0 && (
-                <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
-                  {periodIds.length} mes(es) seleccionado(s)
-                </p>
-              )}
+            {/* Periodos (múltiple) */}
+            <div className="md:col-span-2 w-full">
+              <label className="block text-sm font-medium mb-1">Meses de Registro *</label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {availablePeriods.map((period: any) => {
+                  const isSelected = periodIds.includes(period.id);
+                  return (
+                    <button
+                      key={period.id}
+                      type="button"
+                      onClick={() => {
+                        if (isSelected) {
+                          setPeriodIds(prev => prev.filter(id => id !== period.id));
+                        } else {
+                          setPeriodIds(prev => [...prev, period.id]);
+                        }
+                      }}
+                      className={`px-2 py-1 text-xs rounded ${
+                        isSelected
+                          ? "bg-brand-500 text-white"
+                          : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                      }`}
+                    >
+                      {formatPeriodLabel(period)}
+                    </button>
+                  );
+                })}
+              </div>
+              {fieldErrors.periodIds && <p className="text-xs text-red-600 mt-1">{fieldErrors.periodIds}</p>}
             </div>
 
             {/* Detalle */}
@@ -727,109 +632,68 @@ export default function InvoicesPage() {
           {/* Distribución por CECO */}
           <div className="mt-4">
             <h3 className="text-md font-medium mb-2">Distribución por CECO *</h3>
-            
-            {/* Buscador de CECO por código (solo sin OC) */}
-            {!hasOC && (
-              <div className="mb-3">
-                <Input
-                  placeholder="Buscar CECO por código..."
-                  value={cecoSearchCode}
-                  onChange={(e) => setCecoSearchCode(e.target.value)}
-                  className="max-w-xs"
-                />
-              </div>
-            )}
-
-            {availableCostCenters.length === 0 ? (
-              <div className="text-sm text-slate-500 italic py-2">
-                {hasOC ? "Selecciona una OC primero" : "Selecciona un sustento primero"}
-              </div>
-            ) : availableCostCenters.length === 1 ? (
-              // Solo 1 CECO → 100% automático bloqueado
-              <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">
-                    {availableCostCenters[0].code} - {availableCostCenters[0].name}
-                  </span>
-                  <span className="text-sm font-bold text-brand-600 dark:text-brand-400">
-                    100%
-                  </span>
-                </div>
-              </div>
-            ) : (
-              // Múltiples CECOs → inputs de porcentaje
-              <div className="space-y-2">
-                {filteredCostCenters.map((ceco: any) => {
-                  const allocation = allocations.find(a => a.costCenterId === ceco.id);
-                  return (
-                    <div key={ceco.id} className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={!!allocation}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            const currentAllocations = allocations.filter(a => a.costCenterId !== ceco.id);
-                            const newCecoIds = [...currentAllocations.map(a => a.costCenterId), ceco.id];
-                            setAllocations(distributePercentages(newCecoIds));
-                          } else {
-                            const filtered = allocations.filter(a => a.costCenterId !== ceco.id);
-                            if (filtered.length > 0) {
-                              setAllocations(distributePercentages(filtered.map(a => a.costCenterId)));
-                            } else {
-                              setAllocations([]);
+            <div className="space-y-2">
+              {availableCostCenters.map((ceco: any) => {
+                const allocation = allocations.find(a => a.costCenterId === ceco.id);
+                return (
+                  <div key={ceco.id} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={!!allocation}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          const amount = Number(form.montoSinIgv) || 0;
+                          const currentAllocations = allocations.filter(a => a.costCenterId !== ceco.id);
+                          const newCecoIds = [...currentAllocations.map(a => a.costCenterId), ceco.id];
+                          setAllocations(distributeAmount(amount, newCecoIds));
+                        } else {
+                          setAllocations(prev => {
+                            const filtered = prev.filter(a => a.costCenterId !== ceco.id);
+                            const amount = Number(form.montoSinIgv) || 0;
+                            if (filtered.length > 0 && amount > 0) {
+                              return distributeAmount(amount, filtered.map(a => a.costCenterId));
                             }
-                          }
+                            return filtered;
+                          });
+                        }
+                      }}
+                      className="rounded"
+                    />
+                    <span className="flex-1 text-sm">{ceco.code} - {ceco.name}</span>
+                    {allocation && (
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={allocation.amount || ""}
+                        onChange={(e) => {
+                          const newAmount = Number(e.target.value) || 0;
+                          setAllocations(prev =>
+                            prev.map(a =>
+                              a.costCenterId === ceco.id
+                                ? { ...a, amount: newAmount, percentage: (newAmount / Number(form.montoSinIgv)) * 100 }
+                                : a
+                            )
+                          );
                         }}
-                        className="rounded"
+                        className="w-32 text-sm"
+                        placeholder="Monto"
                       />
-                      <span className="flex-1 text-sm">{ceco.code} - {ceco.name}</span>
-                      {allocation && (
-                        <>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            max="100"
-                            value={allocation.percentage || ""}
-                            onChange={(e) => {
-                              const newPercent = Number(e.target.value) || 0;
-                              setAllocations(prev =>
-                                prev.map(a =>
-                                  a.costCenterId === ceco.id
-                                    ? { ...a, percentage: newPercent }
-                                    : a
-                                )
-                              );
-                            }}
-                            className="w-24 text-sm"
-                            placeholder="%"
-                          />
-                          <span className="text-xs text-slate-600 dark:text-slate-400 w-6">%</span>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Total de porcentajes */}
-            {allocations.length > 0 && availableCostCenters.length > 1 && (
-              <div className="mt-3 p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium">Total:</span>
-                  <span className={`font-bold ${
-                    Math.abs(allocations.reduce((sum, a) => sum + (a.percentage || 0), 0) - 100) > 0.01
-                      ? "text-red-600 dark:text-red-400"
-                      : "text-green-600 dark:text-green-400"
-                  }`}>
-                    {allocations.reduce((sum, a) => sum + (a.percentage || 0), 0).toFixed(2)}%
-                  </span>
-                </div>
-              </div>
-            )}
-
+                    )}
+                    {allocation && allocation.percentage !== undefined && (
+                      <span className="text-xs text-slate-600 dark:text-slate-400 w-12 text-right">
+                        {allocation.percentage.toFixed(1)}%
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
             {fieldErrors.allocations && <p className="text-xs text-red-600 mt-1">{fieldErrors.allocations}</p>}
+            {allocations.length > 0 && (
+              <div className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                Total distribuido: {allocations.reduce((sum, a) => sum + (a.amount || 0), 0).toFixed(2)} / {Number(form.montoSinIgv || 0).toFixed(2)}
+              </div>
+            )}
           </div>
 
           {/* Información de OC (Read-only) */}
@@ -1026,43 +890,22 @@ export default function InvoicesPage() {
                               setForm({
                                 id: String(inv.id),
                                 ocId: inv.ocId ? String(inv.ocId) : "",
-                                supportId: inv.oc?.support?.id ? String(inv.oc.support.id) : "",
                                 docType: inv.docType,
                                 numberNorm: inv.numberNorm || "",
                                 montoSinIgv: inv.montoSinIgv ? String(inv.montoSinIgv) : "",
-                                exchangeRateOverride: inv.exchangeRateOverride ? String(inv.exchangeRateOverride) : "",
                                 ultimusIncident: inv.ultimusIncident || "",
                                 detalle: inv.detalle || "",
                                 proveedor: inv.oc?.proveedor || "",
                                 moneda: inv.currency || "PEN"
                               });
                               setHasOC(!!inv.ocId);
-                              
-                              // Establecer rango de periodos desde/hasta
-                              if (inv.periods && inv.periods.length > 0) {
-                                const sortedPeriods = [...inv.periods].sort((a, b) => {
-                                  const aVal = a.period.year * 100 + a.period.month;
-                                  const bVal = b.period.year * 100 + b.period.month;
-                                  return aVal - bVal;
-                                });
-                                setPeriodFromId(sortedPeriods[0].periodId);
-                                setPeriodToId(sortedPeriods[sortedPeriods.length - 1].periodId);
-                              }
-                              
-                              // Cargar allocations (convertir montos a porcentajes si es necesario)
-                              const montoTotal = inv.montoSinIgv ? Number(inv.montoSinIgv) : 0;
+                              setPeriodIds(inv.periods?.map(p => p.periodId) || []);
                               setAllocations(
-                                inv.costCenters?.map(cc => {
-                                  let percentage = cc.percentage ? Number(cc.percentage) : undefined;
-                                  // Si no hay percentage pero hay amount, calcularlo
-                                  if (!percentage && cc.amount && montoTotal > 0) {
-                                    percentage = (Number(cc.amount) / montoTotal) * 100;
-                                  }
-                                  return {
-                                    costCenterId: cc.costCenterId,
-                                    percentage: percentage || 0
-                                  };
-                                }) || []
+                                inv.costCenters?.map(cc => ({
+                                  costCenterId: cc.costCenterId,
+                                  amount: cc.amount ? Number(cc.amount) : undefined,
+                                  percentage: cc.percentage ? Number(cc.percentage) : undefined
+                                })) || []
                               );
                             }}
                           >

@@ -30,6 +30,7 @@ type Support = {
   expensePackage: { id: number; name: string } | null;
   expenseConcept: { id: number; name: string; packageId: number } | null;
 };
+type ExchangeRate = { id: number; year: number; rate: number };
 
 type ManagementOption = { management: string; areas: string[] };
 
@@ -40,7 +41,7 @@ const expenseTypes = [
   { label: "Distribuible", value: "DISTRIBUIBLE" }
 ];
 
-type SectionKey = "packages" | "costCenters" | "articulos" | "managements" | "supports" | "bulk";
+type SectionKey = "packages" | "costCenters" | "articulos" | "managements" | "supports" | "exchangeRates" | "bulk";
 
 const sections: Array<{ key: SectionKey; label: string; description: string }> = [
   { key: "packages", label: "Paquetes & Conceptos", description: "Gestiona paquetes y sus conceptos de gasto asociados." },
@@ -48,6 +49,7 @@ const sections: Array<{ key: SectionKey; label: string; description: string }> =
   { key: "articulos", label: "Artículos", description: "Gestiona el catálogo de artículos para las órdenes de compra." },
   { key: "managements", label: "Gerencias & Áreas", description: "Gestiona gerencias y sus áreas organizacionales." },
   { key: "supports", label: "Sustentos", description: "Administra el catálogo completo de sustentos." },
+  { key: "exchangeRates", label: "Tipos de cambio (TC)", description: "Gestiona tipos de cambio anuales para conversión USD → PEN." },
   { key: "bulk", label: "Carga masiva (CSV)", description: "Importa múltiples ítems de catálogos desde un archivo CSV." }
 ];
 
@@ -95,6 +97,13 @@ function useAreas() {
   });
 }
 
+function useExchangeRates() {
+  return useQuery({
+    queryKey: ["exchange-rates"],
+    queryFn: async () => (await api.get("/exchange-rates")).data as ExchangeRate[]
+  });
+}
+
 export default function CatalogsPage() {
   const queryClient = useQueryClient();
 
@@ -136,6 +145,7 @@ export default function CatalogsPage() {
   
   const [supportForm, setSupportForm] = useState(INITIAL_SUPPORT_FORM);
   const [costCenterSearchSupport, setCostCenterSearchSupport] = useState("");  // Para búsqueda en selector de CECOs de Sustentos
+  const [exchangeRateForm, setExchangeRateForm] = useState({ id: "", year: "", rate: "" });
 
   const conceptRows = useMemo(() => {
     const list: Array<ExpenseConcept & { packageName: string }> = [];
@@ -438,6 +448,40 @@ export default function CatalogsPage() {
     },
     onError: (error: any) => {
       const errorMsg = error.response?.data?.error || "No se pudo eliminar el sustento";
+      toast.error(errorMsg);
+    }
+  });
+
+  // Exchange Rates mutations
+  const exchangeRatesQuery = useExchangeRates();
+  
+  const saveExchangeRate = useMutation({
+    mutationFn: async (data: { id?: number; year: number; rate: number }) => {
+      if (data.id) {
+        return (await api.put(`/exchange-rates/${data.id}`, data)).data;
+      }
+      return (await api.post("/exchange-rates", data)).data;
+    },
+    onSuccess: () => {
+      toast.success("Tipo de cambio guardado");
+      setExchangeRateForm({ id: "", year: "", rate: "" });
+      queryClient.invalidateQueries({ queryKey: ["exchange-rates"] });
+    },
+    onError: (error: any) => {
+      const errorMsg = error.response?.data?.error || "No se pudo guardar el tipo de cambio";
+      toast.error(errorMsg);
+    }
+  });
+
+  const deleteExchangeRate = useMutation({
+    mutationFn: async (id: number) => (await api.delete(`/exchange-rates/${id}`)).data,
+    onSuccess: () => {
+      toast.success("Tipo de cambio eliminado");
+      setExchangeRateForm({ id: "", year: "", rate: "" });
+      queryClient.invalidateQueries({ queryKey: ["exchange-rates"] });
+    },
+    onError: (error: any) => {
+      const errorMsg = error.response?.data?.error || "No se pudo eliminar el tipo de cambio";
       toast.error(errorMsg);
     }
   });
@@ -1294,15 +1338,126 @@ export default function CatalogsPage() {
                             size="sm" 
                             onClick={() => {
                               if (confirm(
-                                `⚠️ ELIMINAR SUSTENTO: "${support.name}"\n\n` +
-                                `Esta acción eliminará el sustento y TODOS los registros asociados:\n` +
-                                `• Órdenes de compra\n` +
-                                `• Líneas de control\n` +
-                                `• Asignaciones presupuestales\n\n` +
-                                `Esta operación NO se puede deshacer.\n\n` +
-                                `¿Deseas continuar?`
+                                `¿Eliminar el sustento "${support.name}"?\n\n` +
+                                `Se eliminarán también OCs y Facturas asociadas. ¿Seguro?`
                               )) {
                                 deleteSupport.mutate(support.id);
+                              }
+                            }}
+                          >
+                            Eliminar
+                          </Button>
+                        </div>
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {section === "exchangeRates" && (
+        <Card>
+          <CardHeader>
+            <h2 className="text-xl font-semibold">Tipos de Cambio Anuales</h2>
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Gestiona los tipos de cambio USD → PEN por año. Se usan para facturas sin TC manual.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="mb-6 border-b pb-4">
+              <h3 className="text-sm font-medium mb-3">
+                {exchangeRateForm.id ? "Editar tipo de cambio" : "Nuevo tipo de cambio"}
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <Input
+                  type="number"
+                  placeholder="Año (ej. 2025)"
+                  value={exchangeRateForm.year}
+                  onChange={(e: any) => setExchangeRateForm({ ...exchangeRateForm, year: e.target.value })}
+                />
+                <Input
+                  type="number"
+                  step="0.0001"
+                  placeholder="Tasa (ej. 3.7500)"
+                  value={exchangeRateForm.rate}
+                  onChange={(e: any) => setExchangeRateForm({ ...exchangeRateForm, rate: e.target.value })}
+                />
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => {
+                      const year = Number(exchangeRateForm.year);
+                      const rate = Number(exchangeRateForm.rate);
+                      if (!year || year < 2020 || year > 2050) {
+                        toast.error("Año debe estar entre 2020 y 2050");
+                        return;
+                      }
+                      if (!rate || rate <= 0) {
+                        toast.error("Tasa debe ser mayor a 0");
+                        return;
+                      }
+                      saveExchangeRate.mutate({
+                        id: exchangeRateForm.id ? Number(exchangeRateForm.id) : undefined,
+                        year,
+                        rate
+                      });
+                    }}
+                  >
+                    {exchangeRateForm.id ? "Actualizar" : "Crear"}
+                  </Button>
+                  {exchangeRateForm.id && (
+                    <Button
+                      variant="ghost"
+                      onClick={() => setExchangeRateForm({ id: "", year: "", rate: "" })}
+                    >
+                      Cancelar
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {exchangeRatesQuery.isLoading && <div className="text-center py-4">Cargando...</div>}
+            {exchangeRatesQuery.data && exchangeRatesQuery.data.length === 0 && (
+              <div className="text-center py-4 text-slate-500">
+                No hay tipos de cambio configurados
+              </div>
+            )}
+            {exchangeRatesQuery.data && exchangeRatesQuery.data.length > 0 && (
+              <Table>
+                <thead>
+                  <tr>
+                    <Th>Año</Th>
+                    <Th>Tasa (USD → PEN)</Th>
+                    <Th>Acciones</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {exchangeRatesQuery.data.map((rate: ExchangeRate) => (
+                    <tr key={rate.id}>
+                      <Td>{rate.year}</Td>
+                      <Td>{Number(rate.rate).toFixed(4)}</Td>
+                      <Td>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setExchangeRateForm({
+                              id: rate.id.toString(),
+                              year: rate.year.toString(),
+                              rate: rate.rate.toString()
+                            })}
+                          >
+                            Editar
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              if (confirm(`¿Eliminar tipo de cambio para ${rate.year}?`)) {
+                                deleteExchangeRate.mutate(rate.id);
                               }
                             }}
                           >

@@ -121,6 +121,7 @@ model Support {
   controlLines      ControlLine[]
   ocs               OC[]
   costCenters       SupportCostCenter[]  // M:N con CostCenter
+  provisions        Provision[]          // Provisiones asociadas
 }
 
 model CostCenter {
@@ -423,4 +424,20 @@ model OCCostCenter {
   @@unique([ocId, costCenterId], name: "ux_oc_costcenter_pair")
   @@index([ocId], name: "ix_occostcenter_oc")
   @@index([costCenterId], name: "ix_occostcenter_costcenter")
+}
+
+model Provision {
+  id               Int       @id @default(autoincrement())
+  sustentoId       Int
+  sustento         Support   @relation(fields: [sustentoId], references: [id], onDelete: Cascade)
+  periodoPpto      String    // Formato YYYY-MM (mes del presupuesto al que afecta)
+  periodoContable  String    // Formato YYYY-MM (mes contable del cierre)
+  montoPen         Decimal   // Monto en soles (positivo=provisión, negativo=liberación/extorno)
+  detalle          String?   @db.Text
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([sustentoId], name: "ix_provision_sustento")
+  @@index([periodoPpto], name: "ix_provision_periodo_ppto")
+  @@index([periodoContable], name: "ix_provision_periodo_contable")
 }

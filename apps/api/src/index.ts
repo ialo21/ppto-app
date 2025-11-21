@@ -12,6 +12,7 @@ import { registerMasterRoutes } from "./masters";
 import { registerOcRoutes } from "./oc";
 import { registerBulkRoutes } from "./bulk";
 import { registerExchangeRateRoutes } from "./exchange-rates";
+import { registerProvisionRoutes } from "./provisions";
 import { ensureYearPeriods } from "./periods";
 
 const app = Fastify({ logger: true });
@@ -70,6 +71,7 @@ await registerDetailedBudgetRoutes(app);
 await registerControlLineRoutes(app);
 await registerInvoiceRoutes(app);
 await registerOcRoutes(app);
+await registerProvisionRoutes(app);
 await registerReportRoutes(app);
 await registerMasterRoutes(app);
 await registerBulkRoutes(app);

@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createBrowserRouter, RouterProvider, NavLink, Outlet } from "react-router-dom";
 import "./index.css";
 import { Toaster } from "sonner";
-import { Home, Wallet, ListChecks, FileText, BarChart3, Archive, ShoppingCart } from "lucide-react";
+import { Home, Wallet, ListChecks, FileText, BarChart3, Archive, ShoppingCart, Calendar } from "lucide-react";
 import Button from "./components/ui/Button";
 
 const qc = new QueryClient();
@@ -21,6 +21,7 @@ function Sidebar(){
         <NavLink to="/control-lines" className={({isActive})=>`${link} ${isActive?active:""}`}><ListChecks size={18}/>Lineas</NavLink>
         <NavLink to="/purchase-orders" className={({isActive})=>`${link} ${isActive?active:""}`}><ShoppingCart size={18}/>Órdenes de Compra</NavLink>
         <NavLink to="/invoices" className={({isActive})=>`${link} ${isActive?active:""}`}><FileText size={18}/>Facturas</NavLink>
+        <NavLink to="/provisions" className={({isActive})=>`${link} ${isActive?active:""}`}><Calendar size={18}/>Provisiones</NavLink>
         <NavLink to="/reports" className={({isActive})=>`${link} ${isActive?active:""}`}><BarChart3 size={18}/>Reportes</NavLink>
         <NavLink to="/settings" className={({isActive})=>`${link} ${isActive?active:""}`}><Archive size={18}/>Catálogos</NavLink>
       </nav>
@@ -57,6 +58,7 @@ import BudgetPage from "./pages/BudgetPage";
 import ControlLinesPage from "./pages/ControlLinesPage";
 import PurchaseOrdersPage from "./pages/PurchaseOrdersPage";
 import InvoicesPage from "./pages/InvoicesPage";
+import ProvisionsPage from "./pages/ProvisionsPage";
 import ReportsPage from "./pages/ReportsPage";
 import CatalogsPage from "./pages/SettingsPage";
 
@@ -67,6 +69,7 @@ const router = createBrowserRouter([
     { path: "/control-lines", element: <ControlLinesPage /> },
     { path: "/purchase-orders", element: <PurchaseOrdersPage /> },
     { path: "/invoices", element: <InvoicesPage /> },
+    { path: "/provisions", element: <ProvisionsPage /> },
     { path: "/reports", element: <ReportsPage /> },
     { path: "/settings", element: <CatalogsPage /> }
   ] }

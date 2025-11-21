@@ -155,6 +155,21 @@ export default function InvoicesPage() {
   const [allocations, setAllocations] = useState<Allocation[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [showForm, setShowForm] = useState(false);
+  
+  /**
+   * Modo del formulario: 'create' | 'edit' | null
+   * 
+   * DIFERENCIACIÓN ENTRE CREAR Y EDITAR:
+   * - 'create': Formulario en modo creación (formulario limpio, sin datos previos)
+   * - 'edit': Formulario en modo edición (cargado con datos de una factura existente)
+   * - null: Formulario cerrado o sin modo definido
+   * 
+   * Esta separación evita que se mezclen estados entre crear y editar:
+   * - Al hacer clic en "Nueva Factura" → se llama openCreateForm() → formMode = 'create'
+   * - Al hacer clic en "Editar" → se llama openEditForm() → formMode = 'edit'
+   * - Al cancelar o resetear → formMode = null
+   */
+  const [formMode, setFormMode] = useState<'create' | 'edit' | null>(null);
 
   // Query consumo de OC seleccionada
   const { data: consumoOC } = useQuery<ConsumoOC>({
@@ -168,6 +183,14 @@ export default function InvoicesPage() {
     if (!form.ocId) return null;
     return (ocsQuery.data || []).find(oc => oc.id === Number(form.ocId));
   }, [form.ocId, ocsQuery.data]);
+  
+  // Moneda actual: viene de OC si hay OC, sino del formulario
+  const currentCurrency = useMemo(() => {
+    if (hasOC && selectedOC) {
+      return selectedOC.moneda;
+    }
+    return form.moneda || "PEN";
+  }, [hasOC, selectedOC, form.moneda]);
 
   // Support seleccionado (modo sin OC)
   const selectedSupport = useMemo(() => {
@@ -328,6 +351,74 @@ export default function InvoicesPage() {
     setCecoSearchCode("");
     setFieldErrors({});
     setHasOC(true);
+    setFormMode(null);
+  };
+  
+  // Función para abrir formulario en modo creación
+  const openCreateForm = () => {
+    resetForm();
+    setFormMode('create');
+    setShowForm(true);
+  };
+  
+  // Función para abrir formulario en modo edición
+  const openEditForm = (invoice: Invoice) => {
+    // Cargar datos de la factura en el formulario
+    setForm({
+      id: String(invoice.id),
+      ocId: invoice.ocId ? String(invoice.ocId) : "",
+      supportId: invoice.oc?.support?.id ? String(invoice.oc.support.id) : "",
+      docType: invoice.docType,
+      numberNorm: invoice.numberNorm || "",
+      montoSinIgv: invoice.montoSinIgv ? String(invoice.montoSinIgv) : "",
+      exchangeRateOverride: invoice.exchangeRateOverride ? String(invoice.exchangeRateOverride) : "",
+      ultimusIncident: invoice.ultimusIncident || "",
+      detalle: invoice.detalle || "",
+      proveedor: invoice.oc?.proveedor || "",
+      moneda: invoice.currency || "PEN",
+      mesContable: invoice.mesContable || "",
+      tcReal: invoice.tcReal ? String(invoice.tcReal) : ""
+    });
+    setHasOC(!!invoice.ocId);
+    
+    // Establecer rango de periodos desde/hasta
+    if (invoice.periods && invoice.periods.length > 0) {
+      const sortedPeriods = [...invoice.periods].sort((a, b) => {
+        const aVal = a.period.year * 100 + a.period.month;
+        const bVal = b.period.year * 100 + b.period.month;
+        return aVal - bVal;
+      });
+      setPeriodFromId(sortedPeriods[0].periodId);
+      setPeriodToId(sortedPeriods[sortedPeriods.length - 1].periodId);
+    }
+    
+    // Cargar mes contable si existe
+    if (invoice.mesContable && periods) {
+      const [year, month] = invoice.mesContable.split('-').map(Number);
+      const mesContablePeriod = periods.find((p: any) => p.year === year && p.month === month);
+      if (mesContablePeriod) {
+        setMesContablePeriodId(mesContablePeriod.id);
+      }
+    }
+    
+    // Cargar allocations (convertir montos a porcentajes si es necesario)
+    const montoTotal = invoice.montoSinIgv ? Number(invoice.montoSinIgv) : 0;
+    setAllocations(
+      invoice.costCenters?.map(cc => {
+        let percentage = cc.percentage ? Number(cc.percentage) : undefined;
+        // Si no hay percentage pero hay amount, calcularlo
+        if (!percentage && cc.amount && montoTotal > 0) {
+          percentage = (Number(cc.amount) / montoTotal) * 100;
+        }
+        return {
+          costCenterId: cc.costCenterId,
+          percentage: percentage || 0
+        };
+      }) || []
+    );
+    
+    setFormMode('edit');
+    setShowForm(true);
   };
 
   // Auto-distribuir porcentajes entre CECOs
@@ -416,7 +507,7 @@ export default function InvoicesPage() {
       }
     },
     onSuccess: () => {
-      toast.success(form.id ? "Factura actualizada" : "Factura creada");
+      toast.success(formMode === 'edit' ? "Factura actualizada" : "Factura creada");
       resetForm();
       setShowForm(false);
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
@@ -511,9 +602,9 @@ export default function InvoicesPage() {
     });
   }, []);
 
-  // Cuando se selecciona OC, auto-cargar periodos y CECOs
+  // Cuando se selecciona OC, auto-cargar periodos y CECOs (solo en modo creación)
   useEffect(() => {
-    if (hasOC && selectedOC && !form.id) {
+    if (hasOC && selectedOC && formMode === 'create') {
       // Auto-cargar rango de periodos (desde/hasta)
       if (selectedOC.budgetPeriodFrom && selectedOC.budgetPeriodTo) {
         setPeriodFromId(selectedOC.budgetPeriodFrom.id);
@@ -526,23 +617,30 @@ export default function InvoicesPage() {
         setAllocations(distributePercentages(cecoIds));
       }
     }
-  }, [hasOC, selectedOC, form.id]);
+  }, [hasOC, selectedOC, formMode]);
 
-  // Auto-asignar 100% si solo hay 1 CECO disponible
+  // Auto-asignar 100% si solo hay 1 CECO disponible (solo en modo creación)
   useEffect(() => {
-    if (availableCostCenters.length === 1 && allocations.length === 0 && !form.id) {
+    if (availableCostCenters.length === 1 && allocations.length === 0 && formMode === 'create') {
       setAllocations([{
         costCenterId: availableCostCenters[0].id,
         percentage: 100
       }]);
     }
-  }, [availableCostCenters, allocations.length, form.id]);
+  }, [availableCostCenters, allocations.length, formMode]);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Facturas</h1>
-        <Button onClick={() => setShowForm(!showForm)}>
+        <Button onClick={() => {
+          if (showForm) {
+            resetForm();
+            setShowForm(false);
+          } else {
+            openCreateForm();
+          }
+        }}>
           {showForm ? "Cancelar" : "Nueva Factura"}
         </Button>
       </div>
@@ -551,9 +649,12 @@ export default function InvoicesPage() {
       {showForm && (
         <Card>
         <CardHeader>
-          <h2 className="text-lg font-medium">{form.id ? "Editar Factura" : "Nueva Factura"}</h2>
-          {form.id && (
-            <Button variant="ghost" size="sm" onClick={resetForm} className="ml-auto">
+          <h2 className="text-lg font-medium">{formMode === 'edit' ? "Editar Factura" : "Nueva Factura"}</h2>
+          {formMode === 'edit' && (
+            <Button variant="ghost" size="sm" onClick={() => {
+              resetForm();
+              setShowForm(false);
+            }} className="ml-auto">
               Cancelar
             </Button>
           )}
@@ -684,7 +785,7 @@ export default function InvoicesPage() {
             </div>
 
             {/* Tipo de cambio override (solo si moneda ≠ PEN) */}
-            {form.moneda !== "PEN" && (
+            {currentCurrency !== "PEN" && (
               <div className="w-full">
                 <label className="block text-sm font-medium mb-1">TC (opcional)</label>
                 <Input
@@ -736,7 +837,20 @@ export default function InvoicesPage() {
             </div>
 
             {/* TC Real (solo si USD Y hay mes contable) */}
-            {form.moneda === "USD" && mesContablePeriodId && (
+            {/* 
+              CONDICIÓN PARA MOSTRAR EL CAMPO TC REAL:
+              - currentCurrency === "USD": La moneda debe ser USD
+                (viene de selectedOC.moneda si hay OC, sino de form.moneda)
+              - mesContablePeriodId !== null: Debe haber un mes contable seleccionado
+              
+              Esta lógica funciona tanto en CREACIÓN como en EDICIÓN:
+              - En CREACIÓN: El usuario selecciona un mes contable → aparece el campo TC Real
+              - En EDICIÓN: Si la factura ya tiene mes contable → aparece el campo TC Real
+              
+              El campo se muestra cuando la factura se considera "procesada contablemente"
+              (es decir, cuando tiene un mes contable asignado).
+            */}
+            {currentCurrency === "USD" && mesContablePeriodId && (
               <div className="w-full">
                 <label className="block text-sm font-medium mb-1">TC Real (editable)</label>
                 <Input
@@ -755,7 +869,7 @@ export default function InvoicesPage() {
             )}
 
             {/* Info: Los campos calculados se mostrarán después de guardar */}
-            {form.moneda === "USD" && (
+            {currentCurrency === "USD" && (
               <div className="col-span-full">
                 <p className="text-xs text-slate-600 italic">
                   ℹ️ Los montos en PEN (TC estándar y TC real) se calcularán automáticamente al guardar la factura.
@@ -958,7 +1072,7 @@ export default function InvoicesPage() {
 
           <div className="mt-4">
             <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending}>
-              {form.id ? "Actualizar Factura" : "Crear Factura"}
+              {formMode === 'edit' ? "Actualizar Factura" : "Crear Factura"}
             </Button>
           </div>
         </CardContent>
@@ -1112,49 +1226,7 @@ export default function InvoicesPage() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => {
-                              setForm({
-                                id: String(inv.id),
-                                ocId: inv.ocId ? String(inv.ocId) : "",
-                                supportId: inv.oc?.support?.id ? String(inv.oc.support.id) : "",
-                                docType: inv.docType,
-                                numberNorm: inv.numberNorm || "",
-                                montoSinIgv: inv.montoSinIgv ? String(inv.montoSinIgv) : "",
-                                exchangeRateOverride: inv.exchangeRateOverride ? String(inv.exchangeRateOverride) : "",
-                                ultimusIncident: inv.ultimusIncident || "",
-                                detalle: inv.detalle || "",
-                                proveedor: inv.oc?.proveedor || "",
-                                moneda: inv.currency || "PEN"
-                              });
-                              setHasOC(!!inv.ocId);
-                              
-                              // Establecer rango de periodos desde/hasta
-                              if (inv.periods && inv.periods.length > 0) {
-                                const sortedPeriods = [...inv.periods].sort((a, b) => {
-                                  const aVal = a.period.year * 100 + a.period.month;
-                                  const bVal = b.period.year * 100 + b.period.month;
-                                  return aVal - bVal;
-                                });
-                                setPeriodFromId(sortedPeriods[0].periodId);
-                                setPeriodToId(sortedPeriods[sortedPeriods.length - 1].periodId);
-                              }
-                              
-                              // Cargar allocations (convertir montos a porcentajes si es necesario)
-                              const montoTotal = inv.montoSinIgv ? Number(inv.montoSinIgv) : 0;
-                              setAllocations(
-                                inv.costCenters?.map(cc => {
-                                  let percentage = cc.percentage ? Number(cc.percentage) : undefined;
-                                  // Si no hay percentage pero hay amount, calcularlo
-                                  if (!percentage && cc.amount && montoTotal > 0) {
-                                    percentage = (Number(cc.amount) / montoTotal) * 100;
-                                  }
-                                  return {
-                                    costCenterId: cc.costCenterId,
-                                    percentage: percentage || 0
-                                  };
-                                }) || []
-                              );
-                            }}
+                            onClick={() => openEditForm(inv)}
                           >
                             Editar
                           </Button>

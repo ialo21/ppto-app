@@ -309,7 +309,8 @@ export async function registerDetailedBudgetRoutes(app: FastifyInstance) {
           }
         },
         managementRef: true,
-        areaRef: true
+        areaRef: true,
+        expensePackage: true
       },
       orderBy: { name: "asc" }
     });
@@ -373,8 +374,12 @@ export async function registerDetailedBudgetRoutes(app: FastifyInstance) {
           costCenterId: scc.costCenter.id,
           costCenterCode: scc.costCenter.code,
           costCenterName: scc.costCenter.name,
+          managementId: support.managementId,
           managementName: support.managementRef?.name,
+          areaId: support.areaId,
           areaName: support.areaRef?.name,
+          expensePackageId: support.expensePackageId,
+          expensePackageName: support.expensePackage?.name,
           months,
           totalYear: totalRow
         });

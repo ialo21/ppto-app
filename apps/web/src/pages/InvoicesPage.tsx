@@ -239,15 +239,21 @@ export default function InvoicesPage() {
   }, [periodFromId, periodToId, periods]);
 
   // Min/Max para selector de periodos según OC o global
+  // IMPORTANTE: Regla de negocio - las facturas pueden usar periodos en retrospectiva.
+  // Solo aplicamos restricciones de OC en modo CREACIÓN. En modo EDICIÓN, el usuario
+  // puede seleccionar cualquier periodo del catálogo, sin limitarse a la fecha actual
+  // ni a los periodos originales de la OC. El cierre contable se gestiona en backend.
   const periodMinMax = useMemo(() => {
-    if (hasOC && selectedOC && selectedOC.budgetPeriodFrom && selectedOC.budgetPeriodTo) {
+    // Solo aplicar restricciones de OC si estamos en modo creación
+    if (formMode === 'create' && hasOC && selectedOC && selectedOC.budgetPeriodFrom && selectedOC.budgetPeriodTo) {
       return {
         minId: selectedOC.budgetPeriodFrom.id,
         maxId: selectedOC.budgetPeriodTo.id
       };
     }
+    // En modo edición o sin OC: sin restricciones (cualquier periodo disponible)
     return { minId: undefined, maxId: undefined };
-  }, [hasOC, selectedOC]);
+  }, [formMode, hasOC, selectedOC]);
 
   // Facturas filtradas y ordenadas
   const filteredInvoices = useMemo(() => {
@@ -392,13 +398,18 @@ export default function InvoicesPage() {
       setPeriodToId(sortedPeriods[sortedPeriods.length - 1].periodId);
     }
     
-    // Cargar mes contable si existe
+    // Cargar mes contable si existe, o limpiarlo si es null/vacío
+    // IMPORTANTE: Al editar, si mesContable es null, debemos limpiar el estado
     if (invoice.mesContable && periods) {
       const [year, month] = invoice.mesContable.split('-').map(Number);
       const mesContablePeriod = periods.find((p: any) => p.year === year && p.month === month);
       if (mesContablePeriod) {
         setMesContablePeriodId(mesContablePeriod.id);
+      } else {
+        setMesContablePeriodId(null);
       }
+    } else {
+      setMesContablePeriodId(null);
     }
     
     // Cargar allocations (convertir montos a porcentajes si es necesario)
@@ -468,7 +479,9 @@ export default function InvoicesPage() {
       }));
 
       // Calcular mesContable en formato YYYY-MM si hay periodId
-      let mesContableStr: string | undefined = undefined;
+      // IMPORTANTE: Si el usuario borra el mes contable, debemos enviar null explícitamente
+      // para que la factura deje de estar procesada contablemente en el backend.
+      let mesContableStr: string | null = null;
       if (mesContablePeriodId && periods) {
         const mesContablePeriod = periods.find((p: any) => p.id === mesContablePeriodId);
         if (mesContablePeriod) {
@@ -487,7 +500,9 @@ export default function InvoicesPage() {
         ultimusIncident: form.ultimusIncident.trim() || undefined,
         detalle: form.detalle.trim() || undefined,
         // Campos contables
+        // IMPORTANTE: mesContable se envía explícitamente como null si se borró
         mesContable: mesContableStr,
+        // tcReal solo tiene sentido si hay mesContable; si no hay, enviamos undefined (backend lo ignora)
         tcReal: form.tcReal ? Number(form.tcReal) : undefined
       };
 

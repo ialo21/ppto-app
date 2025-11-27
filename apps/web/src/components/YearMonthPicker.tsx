@@ -134,12 +134,14 @@ export default function YearMonthPicker({
   };
 
   // Calcular posición del dropdown
+  // IMPORTANTE: Con position: fixed, usamos coordenadas relativas al viewport (sin scroll)
+  // getBoundingClientRect() ya devuelve posición relativa al viewport
   const updateDropdownPosition = () => {
     if (containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       setDropdownPosition({
-        top: rect.bottom + window.scrollY + 4,
-        left: rect.left + window.scrollX,
+        top: rect.bottom + 4,  // ✅ Solo viewport (sin window.scrollY)
+        left: rect.left,       // ✅ Solo viewport (sin window.scrollX)
         width: Math.max(rect.width, 320)
       });
     }

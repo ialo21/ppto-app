@@ -36,7 +36,13 @@ app.get("/periods", async (req, reply) => {
     });
   }
   
-  // Otherwise return all periods
+  // IMPORTANTE: Sin filtro de año, auto-crear periodos del año actual
+  // para que las facturas/OCs puedan usar cualquier mes (incluso retrospectivo).
+  // Las facturas no se limitan por fecha actual, pueden crearse para meses pasados.
+  const currentYear = new Date().getFullYear();
+  await ensureYearPeriods(currentYear);
+  
+  // Return all periods from all years
   return prisma.period.findMany({ orderBy: [{ year: "asc" }, { month: "asc" }] });
 });
 

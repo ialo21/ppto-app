@@ -26,8 +26,8 @@ const createInvoiceSchema = z.object({
   // Tipo de cambio override (opcional)
   exchangeRateOverride: z.number().positive().optional(),
   // Campos contables
-  mesContable: z.string().regex(/^\d{4}-\d{2}$/).optional(),  // Formato YYYY-MM
-  tcReal: z.number().positive().optional()
+  mesContable: z.string().regex(/^\d{4}-\d{2}$/).nullish(),  // Formato YYYY-MM, acepta null/undefined
+  tcReal: z.number().positive().nullish()
 });
 
 const updateInvoiceSchema = z.object({
@@ -43,8 +43,9 @@ const updateInvoiceSchema = z.object({
   moneda: z.enum(["PEN", "USD"]).optional(),
   exchangeRateOverride: z.number().positive().optional(),
   // Campos contables
-  mesContable: z.string().regex(/^\d{4}-\d{2}$/).optional(),
-  tcReal: z.number().positive().optional()
+  // IMPORTANTE: .nullish() permite null y undefined, necesario para que el usuario pueda borrar el mes contable
+  mesContable: z.string().regex(/^\d{4}-\d{2}$/).nullish(),
+  tcReal: z.number().positive().nullish()
 });
 
 const updateStatusSchema = z.object({
@@ -456,12 +457,13 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
     }
 
     // 3.5. Calcular campos contables
+    // Convertir null a undefined para la función (acepta string | undefined)
     const camposContables = await calcularCamposContables(
       currency,
       data.montoSinIgv,
       data.periodIds,
-      data.mesContable,
-      data.tcReal
+      data.mesContable ?? undefined,
+      data.tcReal ?? undefined
     );
 
     // 4. Crear factura + periodos + distribución en una transacción
@@ -725,12 +727,18 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
     // Recalcular campos contables si es necesario
     let camposContables = null;
     if (data.montoSinIgv !== undefined || data.periodIds || data.moneda || data.tcReal !== undefined || data.mesContable !== undefined) {
+      // IMPORTANTE: Si mesContable o tcReal vienen en el request (incluso como null para borrar),
+      // deben tener prioridad sobre los valores existentes. El operador ?? no funciona para este caso
+      // porque null ?? existing daría existing (no es lo que queremos).
+      const finalMesContable = 'mesContable' in data ? data.mesContable : existing.mesContable;
+      const finalTcReal = 'tcReal' in data ? data.tcReal : (existing.tcReal ? Number(existing.tcReal) : undefined);
+      
       camposContables = await calcularCamposContables(
         finalCurrency,
         finalMonto,
         finalPeriodIds,
-        data.mesContable ?? existing.mesContable ?? undefined,
-        data.tcReal ?? (existing.tcReal ? Number(existing.tcReal) : undefined)
+        finalMesContable ?? undefined,  // Convertir null a undefined para la función
+        finalTcReal ?? undefined
       );
     }
 

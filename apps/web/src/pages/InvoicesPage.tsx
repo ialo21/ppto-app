@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { toast } from "sonner";
@@ -151,6 +151,9 @@ export default function InvoicesPage() {
   const [periodFromId, setPeriodFromId] = useState<number | null>(null);
   const [periodToId, setPeriodToId] = useState<number | null>(null);
   const [mesContablePeriodId, setMesContablePeriodId] = useState<number | null>(null);
+  
+  // Ref para rastrear cambios programáticos (ej. al seleccionar OC)
+  const isProgrammaticChangeRef = useRef(false);
   const [cecoSearchCode, setCecoSearchCode] = useState("");
   const [allocations, setAllocations] = useState<Allocation[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -622,8 +625,10 @@ export default function InvoicesPage() {
     if (hasOC && selectedOC && formMode === 'create') {
       // Auto-cargar rango de periodos (desde/hasta)
       if (selectedOC.budgetPeriodFrom && selectedOC.budgetPeriodTo) {
+        isProgrammaticChangeRef.current = true;
         setPeriodFromId(selectedOC.budgetPeriodFrom.id);
         setPeriodToId(selectedOC.budgetPeriodTo.id);
+        isProgrammaticChangeRef.current = false;
       }
 
       // Auto-cargar CECOs con distribución de porcentajes
@@ -902,11 +907,20 @@ export default function InvoicesPage() {
               <label className="block text-sm font-medium mb-1">Periodo Desde *</label>
               <YearMonthPicker
                 value={periodFromId}
-                onChange={(period) => setPeriodFromId(period ? period.id : null)}
+                onChange={(period) => {
+                  const newFromId = period ? period.id : null;
+                  setPeriodFromId(newFromId);
+                  
+                  // Lógica: Si es cambio manual Y periodToId está vacío → copiar Desde a Hasta
+                  if (!isProgrammaticChangeRef.current && newFromId !== null && periodToId === null) {
+                    setPeriodToId(newFromId);
+                  }
+                }}
                 periods={periods || []}
                 minId={periodMinMax.minId}
                 maxId={periodToId || periodMinMax.maxId}
                 placeholder="Seleccionar período desde..."
+                clearable={false}
                 error={fieldErrors.periodIds}
               />
             </div>

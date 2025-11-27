@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { Card, CardContent, CardHeader } from "../components/ui/Card";
@@ -170,6 +170,9 @@ export default function PurchaseOrdersPage() {
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  
+  // Ref para rastrear cambios programáticos
+  const isProgrammaticChangeRef = useRef(false);
 
   const [form, setForm] = useState({
     budgetPeriodFromId: "",
@@ -523,7 +526,15 @@ export default function PurchaseOrdersPage() {
                 <label className="block text-sm font-medium mb-1">Periodo PPTO Desde *</label>
                 <YearMonthPicker
                   value={form.budgetPeriodFromId ? Number(form.budgetPeriodFromId) : null}
-                  onChange={(period) => setForm(f => ({ ...f, budgetPeriodFromId: period ? String(period.id) : "" }))}
+                  onChange={(period) => {
+                    const newFromId = period ? String(period.id) : "";
+                    setForm(f => ({ ...f, budgetPeriodFromId: newFromId }));
+                    
+                    // Lógica: Si es cambio manual Y budgetPeriodToId está vacío → copiar Desde a Hasta
+                    if (!isProgrammaticChangeRef.current && newFromId !== "" && form.budgetPeriodToId === "") {
+                      setForm(f => ({ ...f, budgetPeriodToId: newFromId }));
+                    }
+                  }}
                   periods={periods || []}
                   placeholder="Seleccionar período desde..."
                   error={fieldErrors.budgetPeriodFromId}

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { Card, CardContent, CardHeader } from "../components/ui/Card";
@@ -6,6 +6,7 @@ import Input from "../components/ui/Input";
 import Select from "../components/ui/Select";
 import Button from "../components/ui/Button";
 import { Table, Th, Td } from "../components/ui/Table";
+import YearMonthPicker from "../components/YearMonthPicker";
 import { formatPeriodLabel } from "../utils/periodFormat";
 import {
   calculatePresupuestalReport,
@@ -129,6 +130,9 @@ export default function ReportsPage() {
   const [currency, setCurrency] = useState<string>("PEN");
   const [showOnlyDeviation, setShowOnlyDeviation] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  
+  // Ref para rastrear cambios programáticos (para futuras funcionalidades)
+  const isProgrammaticChangeRef = useRef(false);
 
   // Queries para datos de reportes
   const { data: invoices = [] } = useQuery({
@@ -278,12 +282,21 @@ export default function ReportsPage() {
       // Convertir Map a array ordenado por mes contable
       const rows: ReportRow[] = [];
       contableData.forEach((data, mesContable) => {
+        // REGLA DE NEGOCIO: Solo mostrar meses con registros contables reales
+        // (facturas con mesContable o provisiones con periodoContable)
+        const hasRealActivity = data.ejecutadoContable > 0 || data.provisiones !== 0;
+        if (!hasRealActivity) return; // Omitir meses sin actividad contable
+        
         // Parsear mesContable para poder ordenar
         const [year, month] = mesContable.split('-').map(Number);
         const period = filteredPeriods.find(p => p.year === year && p.month === month) || { id: 0, year, month };
 
         const resultadoContable = data.ejecutadoContable + data.provisiones;
-        const variacionAbs = resultadoContable - data.pptoAsociado;
+        // ⚠️ REGLA DE NEGOCIO CRÍTICA:
+        // Variación = PPTO - Resultado Contable
+        // Si Resultado < PPTO → ahorro → variación positiva
+        // Si Resultado > PPTO → sobregasto → variación negativa
+        const variacionAbs = data.pptoAsociado - resultadoContable;
         const variacionPct = data.pptoAsociado > 0 ? (variacionAbs / data.pptoAsociado) * 100 : 0;
 
         rows.push({
@@ -358,7 +371,7 @@ export default function ReportsPage() {
     const detailMap = new Map<number, Map<number | null, PackageDetail>>();
     
     // Agrupar budget allocations por período y paquete
-    budgetAllocations.forEach(alloc => {
+    budgetAllocations.forEach((alloc: any) => {
       if (!alloc.periodId) return;
       
       // Aplicar filtros
@@ -390,8 +403,8 @@ export default function ReportsPage() {
     });
     
     // Agregar facturas (ejecutado) al detalle por paquete
-    invoices.forEach(inv => {
-      const periodIds = inv.periods?.map(p => p.periodId) || [];
+    invoices.forEach((inv: any) => {
+      const periodIds = inv.periods?.map((p: any) => p.periodId) || [];
       if (periodIds.length === 0) return;
       
       // Aplicar filtros
@@ -405,7 +418,7 @@ export default function ReportsPage() {
       const amountPEN = Number(inv.montoPEN_tcReal ?? inv.montoPEN_tcEstandar ?? 0);
       const amountPerPeriod = amountPEN / periodIds.length;
       
-      periodIds.forEach(periodId => {
+      periodIds.forEach((periodId: any) => {
         if (!detailMap.has(periodId)) {
           detailMap.set(periodId, new Map());
         }
@@ -672,30 +685,43 @@ export default function ReportsPage() {
           </div>
 
           {/* Fila 4: Rango de períodos (según modo) */}
+          {/* IMPORTANTE: Selectores modernos consistentes con Facturas/OCs */}
           {mode !== 'mixto' && (
             <div className="grid md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-1">
                   {mode === 'presupuestal' ? 'Período Desde' : 'Mes Contable Desde'}
                 </label>
-                <Select value={periodFromId || ""} onChange={(e) => setPeriodFromId(Number(e.target.value) || null)}>
-                  <option value="">Todos los meses</option>
-                  {yearPeriods.map(p => (
-                    <option key={p.id} value={p.id}>{formatPeriodLabel(p)}</option>
-                  ))}
-                </Select>
+                <YearMonthPicker
+                  value={periodFromId}
+                  onChange={(period) => {
+                    const newFromId = period ? period.id : null;
+                    setPeriodFromId(newFromId);
+                    
+                    // Lógica: Si es cambio manual Y periodToId está vacío → copiar Desde a Hasta
+                    if (!isProgrammaticChangeRef.current && newFromId !== null && periodToId === null) {
+                      setPeriodToId(newFromId);
+                    }
+                  }}
+                  periods={periods || []}
+                  maxId={periodToId || undefined}
+                  placeholder="Todos los meses"
+                  clearable={true}
+                />
               </div>
 
               <div>
                 <label className="block text-sm font-medium mb-1">
                   {mode === 'presupuestal' ? 'Período Hasta' : 'Mes Contable Hasta'}
                 </label>
-                <Select value={periodToId || ""} onChange={(e) => setPeriodToId(Number(e.target.value) || null)}>
-                  <option value="">Todos los meses</option>
-                  {yearPeriods.map(p => (
-                    <option key={p.id} value={p.id}>{formatPeriodLabel(p)}</option>
-                  ))}
-                </Select>
+                <YearMonthPicker
+                  value={periodToId}
+                  onChange={(period) => setPeriodToId(period ? period.id : null)}
+                  periods={periods || []}
+                  minId={periodFromId || undefined}
+                  placeholder="Todos los meses"
+                  clearable={true}
+                />
               </div>
             </div>
           )}
@@ -801,7 +827,7 @@ export default function ReportsPage() {
                                 {currency} {formatNumber(row.provisiones)}
                               </Td>
                               <Td className="text-right font-medium">{currency} {formatNumber(row.resultadoContable)}</Td>
-                              <Td className={`text-right ${row.variacionAbs >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                              <Td className={`text-right ${row.variacionAbs >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                 {currency} {formatNumber(row.variacionAbs)}
                               </Td>
                             </>
@@ -904,7 +930,7 @@ export default function ReportsPage() {
                             {currency} {formatNumber(totals.provisiones)}
                           </Td>
                           <Td className="text-right">{currency} {formatNumber(totals.resultadoContable)}</Td>
-                          <Td className={`text-right ${totals.variacionAbs >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          <Td className={`text-right ${totals.variacionAbs >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                             {currency} {formatNumber(totals.variacionAbs)}
                           </Td>
                         </>

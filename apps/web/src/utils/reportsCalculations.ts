@@ -185,6 +185,12 @@ export function calculatePresupuestalReport(
 /**
  * MODO CONTABLE
  * Agrupa por mes contable y calcula Ejecutado Contable + Provisiones
+ * 
+ * REGLA DE NEGOCIO CRÍTICA:
+ * - PPTO Asociado = PPTO del mes contable (no derivado de facturas/provisiones)
+ * - Ejecutado Contable = facturas con mesContable definido
+ * - Provisiones = provisiones con periodoContable definido
+ * - Solo se muestran meses con registros contables reales (ejecutado > 0 o provisiones !== 0)
  */
 export function calculateContableReport(
   budgetAllocations: BudgetAllocation[],
@@ -224,18 +230,6 @@ export function calculateContableReport(
     
     const row = result.get(mesContable)!;
     row.ejecutadoContable += amountPEN;
-    
-    // PPTO asociado: sumar PPTO de los períodos de esta factura
-    const periodIds = inv.periods?.map(p => p.periodId) || [];
-    periodIds.forEach(periodId => {
-      budgetAllocations.forEach(alloc => {
-        if (alloc.periodId === periodId) {
-          if (!matchesFilters(alloc.support, filters)) return;
-          if (filters.costCenterId && alloc.costCenterId !== filters.costCenterId) return;
-          row.pptoAsociado += alloc.amountPen / periodIds.length; // Distribuir proporcionalmente
-        }
-      });
-    });
   });
   
   // 2. Sumar provisiones por período contable
@@ -255,22 +249,26 @@ export function calculateContableReport(
     
     const row = result.get(mesContable)!;
     row.provisiones += prov.montoPen; // Ya viene con signo correcto
+  });
+  
+  // 3. Calcular PPTO Asociado para cada mes contable
+  // IMPORTANTE: El PPTO es el del MES CONTABLE, no derivado de facturas/provisiones
+  result.forEach((row, mesContable) => {
+    const mesContableData = parsePeriodString(mesContable);
+    if (!mesContableData) return;
     
-    // PPTO asociado de la provisión: usar el periodoPpto
-    const periodoPptoData = parsePeriodString(prov.periodoPpto);
-    if (periodoPptoData) {
-      const period = periods.find(p => p.year === periodoPptoData.year && p.month === periodoPptoData.month);
-      if (period) {
-        budgetAllocations.forEach(alloc => {
-          if (alloc.periodId === period.id) {
-            if (!matchesFilters(alloc.support, filters)) return;
-            if (alloc.supportId === prov.sustentoId) {
-              row.pptoAsociado += alloc.amountPen; // TODO: revisar si esto es correcto
-            }
-          }
-        });
-      }
-    }
+    // Buscar el periodo correspondiente al mes contable
+    const period = periods.find(p => p.year === mesContableData.year && p.month === mesContableData.month);
+    if (!period) return;
+    
+    // Sumar todo el PPTO de ese mes con los filtros aplicados
+    budgetAllocations.forEach(alloc => {
+      if (alloc.periodId !== period.id) return;
+      if (!matchesFilters(alloc.support, filters)) return;
+      if (filters.costCenterId && alloc.costCenterId !== filters.costCenterId) return;
+      
+      row.pptoAsociado += alloc.amountPen;
+    });
   });
   
   return result;
@@ -386,4 +384,3 @@ export function filterPeriodsByRange(
     return true;
   });
 }
-

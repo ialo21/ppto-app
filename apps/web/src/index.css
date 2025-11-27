@@ -18,8 +18,15 @@ body {
   overflow-x: hidden;
 }
 
+/**
+ * 🎨 Manual de Marca - Background Dashboard
+ * Color: #F2F4F4 (Background Dashboard del Manual de Marca)
+ * Uso: Fondo principal de la aplicación
+ */
 body { 
   @apply bg-dashboard text-text-primary;
+  /* O usando la nueva nomenclatura semántica: */
+  /* @apply bg-brand-background text-brand-text-primary; */
 }
 
 /* Layout principal - prevenir overflow */
@@ -96,11 +103,11 @@ body {
 }
 
 .container-page { 
-  /* Responsive max-width: crece progresivamente en pantallas más grandes */
-  @apply mx-auto;
+  /* Ancho completo sin restricciones */
+  width: 100%;
   max-width: 100%;
-  /* Padding lateral: más pequeño en desktop para aprovechar espacio */
-  @apply px-4 py-4 md:px-4 md:py-4 lg:px-4 xl:px-4;
+  /* Padding lateral consistente: suficiente para respirar pero no excesivo */
+  @apply px-4 py-4 md:px-6 md:py-5 lg:px-6 xl:px-8 2xl:px-10;
   overflow-x: hidden;
 }
 

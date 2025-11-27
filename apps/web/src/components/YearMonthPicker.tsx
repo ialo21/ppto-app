@@ -277,7 +277,7 @@ export default function YearMonthPicker({
     return createPortal(
       <div
         ref={dropdownRef}
-        className="fixed z-50 bg-white border border-slate-300 rounded-lg shadow-xl min-w-[320px]"
+        className="fixed z-[9999] bg-white border border-slate-300 rounded-lg shadow-xl min-w-[320px]"
         style={{
           top: `${dropdownPosition.top}px`,
           left: `${dropdownPosition.left}px`,

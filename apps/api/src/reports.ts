@@ -226,4 +226,281 @@ export async function registerReportRoutes(app: FastifyInstance) {
 
     return { year, versionId, series, totals };
   });
+
+  /**
+   * GET /reports/dashboard
+   * Endpoint mejorado para Dashboard Financiero con soporte completo de filtros
+   * 
+   * Query params:
+   * - year: Año a consultar (default: año actual)
+   * - mode: "execution" | "contable" (default: "execution")
+   * - versionId: ID de versión de presupuesto (default: versión ACTIVE)
+   * - supportId: Filtro por sustento
+   * - costCenterId: Filtro por centro de costo
+   * - managementId: Filtro por gerencia
+   * - areaId: Filtro por área
+   * - packageId: Filtro por paquete de gasto
+   * 
+   * Response:
+   * - year, versionId, mode
+   * - series: Array de datos mensuales
+   * - totals: Totales YTD
+   */
+  app.get("/reports/dashboard", async (req, reply) => {
+    const q = req.query as any;
+    const year = Number(q.year) || new Date().getFullYear();
+    const mode = q.mode === "contable" ? "contable" : "execution";
+
+    // Versión activa por defecto
+    let versionId: number | null = q.versionId ? Number(q.versionId) : null;
+    if (!versionId) {
+      const active = await prisma.budgetVersion.findFirst({ where: { status: "ACTIVE" } });
+      versionId = active?.id ?? null;
+    }
+
+    // Filtros opcionales
+    const supportId = q.supportId ? Number(q.supportId) : null;
+    const costCenterId = q.costCenterId ? Number(q.costCenterId) : null;
+    const managementId = q.managementId ? Number(q.managementId) : null;
+    const areaId = q.areaId ? Number(q.areaId) : null;
+    const packageId = q.packageId ? Number(q.packageId) : null;
+    
+    // Filtros de rango de períodos (mes desde/hasta)
+    const periodFromId = q.periodFromId ? Number(q.periodFromId) : null;
+    const periodToId = q.periodToId ? Number(q.periodToId) : null;
+
+    // Traer todos los períodos del año en orden
+    const allPeriods = await prisma.period.findMany({
+      where: { year },
+      orderBy: { month: "asc" }
+    });
+    
+    // Filtrar períodos por rango si se especifica
+    let periods = allPeriods;
+    if (periodFromId && periodToId) {
+      const fromPeriod = allPeriods.find(p => p.id === periodFromId);
+      const toPeriod = allPeriods.find(p => p.id === periodToId);
+      
+      if (fromPeriod && toPeriod) {
+        const fromValue = fromPeriod.year * 100 + fromPeriod.month;
+        const toValue = toPeriod.year * 100 + toPeriod.month;
+        
+        periods = allPeriods.filter(p => {
+          const pValue = p.year * 100 + p.month;
+          return pValue >= fromValue && pValue <= toValue;
+        });
+      }
+    } else if (periodFromId) {
+      const fromPeriod = allPeriods.find(p => p.id === periodFromId);
+      if (fromPeriod) {
+        const fromValue = fromPeriod.year * 100 + fromPeriod.month;
+        periods = allPeriods.filter(p => {
+          const pValue = p.year * 100 + p.month;
+          return pValue >= fromValue;
+        });
+      }
+    } else if (periodToId) {
+      const toPeriod = allPeriods.find(p => p.id === periodToId);
+      if (toPeriod) {
+        const toValue = toPeriod.year * 100 + toPeriod.month;
+        periods = allPeriods.filter(p => {
+          const pValue = p.year * 100 + p.month;
+          return pValue <= toValue;
+        });
+      }
+    }
+
+    const series = [];
+
+    for (const p of periods) {
+      // ──────────────────────────────────────────────────────────────
+      // PRESUPUESTO con filtros aplicados
+      // ──────────────────────────────────────────────────────────────
+      const budgetWhere: any = { versionId, periodId: p.id };
+      if (costCenterId) budgetWhere.costCenterId = costCenterId;
+
+      // Filtros que requieren JOIN con support
+      let budgetAllocations = versionId
+        ? await prisma.budgetAllocation.findMany({
+            where: budgetWhere,
+            include: { support: true }
+          })
+        : [];
+
+      // Aplicar filtros de support
+      if (supportId || managementId || areaId || packageId) {
+        budgetAllocations = budgetAllocations.filter(alloc => {
+          if (supportId && alloc.supportId !== supportId) return false;
+          if (managementId && alloc.support?.managementId !== managementId) return false;
+          if (areaId && alloc.support?.areaId !== areaId) return false;
+          if (packageId && alloc.support?.expensePackageId !== packageId) return false;
+          return true;
+        });
+      }
+
+      const budget = budgetAllocations.reduce((sum, alloc) => 
+        sum + Number(alloc.amountLocal ?? 0), 0
+      );
+
+      // ──────────────────────────────────────────────────────────────
+      // EJECUTADO Y PROVISIONES según modo
+      // ──────────────────────────────────────────────────────────────
+      let executed = 0;
+      let provisions = 0;
+
+      if (mode === "execution") {
+        // ──────────────────────────────────────────────────────────────
+        // Modo Ejecución (OPERATIVO, NO CONTABLE)
+        // ──────────────────────────────────────────────────────────────
+        // Usa distribución de facturas por períodos PPTO (InvoicePeriod)
+        // NO considera provisiones (solo PPTO vs Ejecutado Real)
+        // ──────────────────────────────────────────────────────────────
+        
+        // Traer todas las facturas que tienen este período en su distribución
+        let invoices = await prisma.invoice.findMany({
+          where: {
+            periods: {
+              some: { periodId: p.id }
+            }
+          },
+          include: {
+            periods: true,
+            oc: {
+              include: { support: true }
+            }
+          }
+        });
+
+        // Filtrar por support
+        invoices = invoices.filter(inv => {
+          const support = inv.oc?.support;
+          if (!support) return false;
+          if (supportId && support.id !== supportId) return false;
+          if (managementId && support.managementId !== managementId) return false;
+          if (areaId && support.areaId !== areaId) return false;
+          if (packageId && support.expensePackageId !== packageId) return false;
+          return true;
+        });
+
+        // Calcular ejecutado distribuyendo el monto de cada factura entre sus períodos
+        executed = invoices.reduce((sum, inv) => {
+          // Monto en PEN (usar montoPEN_tcReal si existe, sino montoPEN_tcEstandar)
+          const montoPEN = Number(inv.montoPEN_tcReal ?? inv.montoPEN_tcEstandar ?? 0);
+          
+          // Número de períodos en los que se distribuye esta factura
+          const numPeriods = inv.periods.length || 1;
+          
+          // Monto prorrateado a este período
+          const amountThisPeriod = montoPEN / numPeriods;
+          
+          return sum + amountThisPeriod;
+        }, 0);
+
+        // En modo Ejecución NO se consideran provisiones
+        provisions = 0;
+
+      } else {
+        // Modo Contable: usa mes contable de facturas
+        const mesContable = `${p.year}-${String(p.month).padStart(2, "0")}`;
+
+        // Ejecutado contable desde facturas
+        const invoicesWhere: any = { mesContable };
+        
+        let invoices = await prisma.invoice.findMany({
+          where: invoicesWhere,
+          include: { 
+            oc: { 
+              include: { support: true } 
+            } 
+          }
+        });
+
+        // Filtros de sustento/área/gerencia/paquete
+        invoices = invoices.filter(inv => {
+          const support = inv.oc?.support;
+          if (!support) return false;
+          if (supportId && support.id !== supportId) return false;
+          if (managementId && support.managementId !== managementId) return false;
+          if (areaId && support.areaId !== areaId) return false;
+          if (packageId && support.expensePackageId !== packageId) return false;
+          return true;
+        });
+
+        executed = invoices.reduce((sum, inv) => 
+          sum + Number(inv.montoPEN_tcReal ?? inv.montoPEN_tcEstandar ?? 0), 0
+        );
+
+        // Provisiones desde tabla provisions
+        const provisionsWhere: any = { periodoContable: mesContable };
+        
+        let provs = await prisma.provision.findMany({
+          where: provisionsWhere,
+          include: { sustento: true }
+        });
+
+        // Filtros
+        provs = provs.filter(prov => {
+          const sustento = prov.sustento;
+          if (!sustento) return false;
+          if (supportId && sustento.id !== supportId) return false;
+          if (managementId && sustento.managementId !== managementId) return false;
+          if (areaId && sustento.areaId !== areaId) return false;
+          if (packageId && sustento.expensePackageId !== packageId) return false;
+          return true;
+        });
+
+        provisions = provs.reduce((sum, prov) => 
+          sum + Number(prov.montoPen ?? 0), 0
+        );
+      }
+
+      // ──────────────────────────────────────────────────────────────
+      // CALCULAR MÉTRICAS
+      // ──────────────────────────────────────────────────────────────
+      const available = budget - executed - provisions;
+      const resultadoContable = executed + provisions; // Para modo contable
+
+      series.push({
+        periodId: p.id,
+        label: p.label ?? `${p.year}-${String(p.month).padStart(2, "0")}`,
+        budget,
+        executed,
+        provisions,
+        available,
+        resultadoContable
+      });
+    }
+
+    // Totales YTD
+    const totals = series.reduce((acc, r) => ({
+      budget: acc.budget + r.budget,
+      executed: acc.executed + r.executed,
+      provisions: acc.provisions + r.provisions,
+      available: acc.available + r.available,
+      resultadoContable: acc.resultadoContable + r.resultadoContable
+    }), { 
+      budget: 0, 
+      executed: 0, 
+      provisions: 0, 
+      available: 0,
+      resultadoContable: 0
+    });
+
+    return { 
+      year, 
+      versionId, 
+      mode,
+      filters: {
+        supportId,
+        costCenterId,
+        managementId,
+        areaId,
+        packageId,
+        periodFromId,
+        periodToId
+      },
+      series, 
+      totals 
+    };
+  });
 }

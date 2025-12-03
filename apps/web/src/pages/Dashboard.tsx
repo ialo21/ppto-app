@@ -100,6 +100,31 @@ interface DashboardData {
   };
 }
 
+interface DetailRow {
+  supportId: number;
+  supportCode: string;
+  supportName: string;
+  managementName: string;
+  areaName: string;
+  budget: number;
+  executed: number;
+  provisions: number;
+  diferencia: number;
+}
+
+interface DashboardDetailData {
+  year: number;
+  versionId: number | null;
+  mode: DashboardMode;
+  rows: DetailRow[];
+  totals: {
+    budget: number;
+    executed: number;
+    provisions: number;
+    diferencia: number;
+  };
+}
+
 interface Period {
   id: number;
   year: number;
@@ -423,6 +448,26 @@ export default function Dashboard() {
   });
 
   // ══════════════════════════════════════════════════════════════
+  // QUERY - Dashboard Detail Data
+  // ══════════════════════════════════════════════════════════════
+  const { data: detailData } = useQuery<DashboardDetailData>({
+    queryKey: ["dashboard-detail", year, mode, supportId, costCenterId, managementId, areaId, packageId, periodFromId, periodToId],
+    queryFn: async () => {
+      const params: any = { year, mode };
+      if (supportId) params.supportId = supportId;
+      if (costCenterId) params.costCenterId = costCenterId;
+      if (managementId) params.managementId = managementId;
+      if (areaId) params.areaId = areaId;
+      if (packageId) params.packageId = packageId;
+      if (periodFromId) params.periodFromId = periodFromId;
+      if (periodToId) params.periodToId = periodToId;
+      
+      return (await api.get("/reports/dashboard/detail", { params })).data;
+    },
+    enabled: !!data, // Solo cargar detalles si ya tenemos datos principales
+  });
+
+  // ══════════════════════════════════════════════════════════════
   // COMPUTED
   // ══════════════════════════════════════════════════════════════
   // Años disponibles (basado en períodos existentes)
@@ -516,6 +561,51 @@ export default function Dashboard() {
       topMonths
     };
   }, [data]);
+
+  // Agrupar datos por gerencia con subtotales
+  const groupedDetailData = useMemo(() => {
+    if (!detailData || !detailData.rows) return [];
+
+    // Agrupar por gerencia
+    const groups = new Map<string, DetailRow[]>();
+    
+    detailData.rows.forEach(row => {
+      const managementName = row.managementName || 'Sin Gerencia';
+      if (!groups.has(managementName)) {
+        groups.set(managementName, []);
+      }
+      groups.get(managementName)!.push(row);
+    });
+
+    // Crear estructura con subtotales
+    const result: Array<{
+      managementName: string;
+      rows: DetailRow[];
+      subtotal: {
+        budget: number;
+        executed: number;
+        provisions: number;
+        diferencia: number;
+      };
+    }> = [];
+
+    groups.forEach((rows, managementName) => {
+      const subtotal = rows.reduce((acc, row) => ({
+        budget: acc.budget + row.budget,
+        executed: acc.executed + row.executed,
+        provisions: acc.provisions + row.provisions,
+        diferencia: acc.diferencia + row.diferencia
+      }), { budget: 0, executed: 0, provisions: 0, diferencia: 0 });
+
+      result.push({
+        managementName,
+        rows,
+        subtotal
+      });
+    });
+
+    return result;
+  }, [detailData]);
 
   // ══════════════════════════════════════════════════════════════
   // RENDER - Layout FIJO: ancho completo entre sidebar y borde
@@ -1056,6 +1146,262 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
+
+            {/* ══════════════════════════════════════════════════════════════
+                SECCIÓN 4: TABLA DE DETALLES POR SUSTENTO
+                ══════════════════════════════════════════════════════════════ */}
+            {detailData && detailData.rows.length > 0 && (
+              <div className="bg-white border border-brand-border rounded-xl overflow-hidden">
+                <div className="p-4 xl:p-5 border-b border-brand-border-light">
+                  <div className="flex items-center gap-2">
+                    <BarChart3 size={18} className="text-brand-primary" />
+                    <h3 className="text-[14px] lg:text-[15px] font-semibold text-brand-text-primary uppercase tracking-wide">
+                      Detalle PPTO {year}
+                    </h3>
+                  </div>
+                  <p className="text-xs text-brand-text-secondary mt-1">
+                    Desglose por sustento {mode === "execution" ? "(Vista de Ejecución)" : "(Vista Contable)"}
+                  </p>
+                </div>
+                
+                {/* Contenedor con scroll interno y footer sticky */}
+                <div className="relative">
+                  {/* Contenedor scrolleable con max-height */}
+                  <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+                    <table className="w-full table-fixed">
+                      <colgroup>
+                        <col className="w-[20%]" />
+                        <col className="w-[30%]" />
+                        <col className="w-[15%]" />
+                        <col className="w-[15%]" />
+                        {mode === "contable" && <col className="w-[15%]" />}
+                        <col className="w-[20%]" />
+                      </colgroup>
+                      {/* Header sticky */}
+                      <thead className="bg-brand-background sticky top-0 z-10 shadow-sm">
+                        <tr>
+                          <th className="text-left text-[10px] sm:text-xs font-semibold text-brand-text-secondary uppercase tracking-wide p-3 border-b border-brand-border-light">
+                            Gerencia
+                          </th>
+                          <th className="text-left text-[10px] sm:text-xs font-semibold text-brand-text-secondary uppercase tracking-wide p-3 border-b border-brand-border-light">
+                            Sustento
+                          </th>
+                          <th className="text-right text-[10px] sm:text-xs font-semibold text-brand-text-secondary uppercase tracking-wide p-3 border-b border-brand-border-light">
+                            PPTO {year}
+                          </th>
+                          {mode === "execution" ? (
+                            <>
+                              <th className="text-right text-[10px] sm:text-xs font-semibold text-brand-text-secondary uppercase tracking-wide p-3 border-b border-brand-border-light">
+                                Gasto Real
+                              </th>
+                              <th className="text-right text-[10px] sm:text-xs font-semibold text-brand-text-secondary uppercase tracking-wide p-3 border-b border-brand-border-light">
+                                Diferencia
+                              </th>
+                            </>
+                          ) : (
+                            <>
+                              <th className="text-right text-[10px] sm:text-xs font-semibold text-brand-text-secondary uppercase tracking-wide p-3 border-b border-brand-border-light">
+                                Gasto Real
+                              </th>
+                              <th className="text-right text-[10px] sm:text-xs font-semibold text-brand-text-secondary uppercase tracking-wide p-3 border-b border-brand-border-light">
+                                Provisiones
+                              </th>
+                              <th className="text-right text-[10px] sm:text-xs font-semibold text-brand-text-secondary uppercase tracking-wide p-3 border-b border-brand-border-light">
+                                Saldo
+                              </th>
+                            </>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {groupedDetailData.map((group) => {
+                          const formatCurrency = (val: number) => {
+                            return new Intl.NumberFormat("es-PE", {
+                              style: "currency",
+                              currency: "PEN",
+                              minimumFractionDigits: 0,
+                              maximumFractionDigits: 0,
+                            }).format(val);
+                          };
+
+                          return (
+                            <React.Fragment key={group.managementName}>
+                              {/* Filas de sustento por gerencia */}
+                              {group.rows.map((row, idx) => (
+                                <tr 
+                                  key={row.supportId}
+                                  className={`
+                                    ${idx % 2 === 0 ? 'bg-white' : 'bg-brand-background/30'}
+                                    hover:bg-brand-background transition-colors
+                                  `}
+                                >
+                                  {/* Celda de gerencia solo en primera fila del grupo */}
+                                  {idx === 0 ? (
+                                    <td 
+                                      rowSpan={group.rows.length} 
+                                      className="p-3 text-xs text-brand-text-secondary font-semibold border-b border-brand-border-light align-top bg-brand-background/50"
+                                    >
+                                      {group.managementName}
+                                    </td>
+                                  ) : null}
+                                  <td className="p-3 text-xs text-brand-text-primary font-medium border-b border-brand-border-light">
+                                    {row.supportName}
+                                  </td>
+                                  <td className="p-3 text-xs text-brand-text-primary text-right font-medium border-b border-brand-border-light">
+                                    {formatCurrency(row.budget)}
+                                  </td>
+                                  {mode === "execution" ? (
+                                    <>
+                                      <td className="p-3 text-xs text-brand-text-primary text-right border-b border-brand-border-light">
+                                        {formatCurrency(row.executed)}
+                                      </td>
+                                      <td className={`p-3 text-xs text-right font-semibold border-b border-brand-border-light ${
+                                        row.diferencia >= 0 ? 'text-status-success' : 'text-status-error'
+                                      }`}>
+                                        {formatCurrency(row.diferencia)}
+                                      </td>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <td className="p-3 text-xs text-brand-text-primary text-right border-b border-brand-border-light">
+                                        {formatCurrency(row.executed)}
+                                      </td>
+                                      <td className="p-3 text-xs text-brand-text-primary text-right border-b border-brand-border-light">
+                                        {formatCurrency(row.provisions)}
+                                      </td>
+                                      <td className={`p-3 text-xs text-right font-semibold border-b border-brand-border-light ${
+                                        row.diferencia >= 0 ? 'text-status-success' : 'text-status-error'
+                                      }`}>
+                                        {formatCurrency(row.diferencia)}
+                                      </td>
+                                    </>
+                                  )}
+                                </tr>
+                              ))}
+                              {/* Fila de subtotal por gerencia */}
+                              <tr className="bg-brand-background/60 font-semibold">
+                                <td colSpan={2} className="p-3 text-xs text-brand-text-primary uppercase border-b-2 border-brand-border">
+                                  Subtotal {group.managementName}
+                                </td>
+                                <td className="p-3 text-xs text-brand-text-primary text-right border-b-2 border-brand-border">
+                                  {formatCurrency(group.subtotal.budget)}
+                                </td>
+                                {mode === "execution" ? (
+                                  <>
+                                    <td className="p-3 text-xs text-brand-text-primary text-right border-b-2 border-brand-border">
+                                      {formatCurrency(group.subtotal.executed)}
+                                    </td>
+                                    <td className={`p-3 text-xs text-right border-b-2 border-brand-border ${
+                                      group.subtotal.diferencia >= 0 ? 'text-status-success' : 'text-status-error'
+                                    }`}>
+                                      {formatCurrency(group.subtotal.diferencia)}
+                                    </td>
+                                  </>
+                                ) : (
+                                  <>
+                                    <td className="p-3 text-xs text-brand-text-primary text-right border-b-2 border-brand-border">
+                                      {formatCurrency(group.subtotal.executed)}
+                                    </td>
+                                    <td className="p-3 text-xs text-brand-text-primary text-right border-b-2 border-brand-border">
+                                      {formatCurrency(group.subtotal.provisions)}
+                                    </td>
+                                    <td className={`p-3 text-xs text-right border-b-2 border-brand-border ${
+                                      group.subtotal.diferencia >= 0 ? 'text-status-success' : 'text-status-error'
+                                    }`}>
+                                      {formatCurrency(group.subtotal.diferencia)}
+                                    </td>
+                                  </>
+                                )}
+                              </tr>
+                            </React.Fragment>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  
+                  {/* Footer sticky con total general */}
+                  <div className="sticky bottom-0 bg-table-total border-t-2 border-brand-primary shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+                    <table className="w-full table-fixed">
+                      <colgroup>
+                        <col className="w-[20%]" />
+                        <col className="w-[30%]" />
+                        <col className="w-[15%]" />
+                        <col className="w-[15%]" />
+                        {mode === "contable" && <col className="w-[15%]" />}
+                        <col className="w-[20%]" />
+                      </colgroup>
+                      <tfoot>
+                        <tr>
+                          <td colSpan={2} className="p-3 text-xs font-bold text-brand-text-primary uppercase">
+                            Total
+                          </td>
+                          <td className="p-3 text-xs font-bold text-brand-text-primary text-right">
+                            {new Intl.NumberFormat("es-PE", {
+                              style: "currency",
+                              currency: "PEN",
+                              minimumFractionDigits: 0,
+                              maximumFractionDigits: 0,
+                            }).format(detailData.totals.budget)}
+                          </td>
+                          {mode === "execution" ? (
+                            <>
+                              <td className="p-3 text-xs font-bold text-brand-text-primary text-right">
+                                {new Intl.NumberFormat("es-PE", {
+                                  style: "currency",
+                                  currency: "PEN",
+                                  minimumFractionDigits: 0,
+                                  maximumFractionDigits: 0,
+                                }).format(detailData.totals.executed)}
+                              </td>
+                              <td className={`p-3 text-xs font-bold text-right ${
+                                detailData.totals.diferencia >= 0 ? 'text-status-success' : 'text-status-error'
+                              }`}>
+                                {new Intl.NumberFormat("es-PE", {
+                                  style: "currency",
+                                  currency: "PEN",
+                                  minimumFractionDigits: 0,
+                                  maximumFractionDigits: 0,
+                                }).format(detailData.totals.diferencia)}
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              <td className="p-3 text-xs font-bold text-brand-text-primary text-right">
+                                {new Intl.NumberFormat("es-PE", {
+                                  style: "currency",
+                                  currency: "PEN",
+                                  minimumFractionDigits: 0,
+                                  maximumFractionDigits: 0,
+                                }).format(detailData.totals.executed)}
+                              </td>
+                              <td className="p-3 text-xs font-bold text-brand-text-primary text-right">
+                                {new Intl.NumberFormat("es-PE", {
+                                  style: "currency",
+                                  currency: "PEN",
+                                  minimumFractionDigits: 0,
+                                  maximumFractionDigits: 0,
+                                }).format(detailData.totals.provisions)}
+                              </td>
+                              <td className={`p-3 text-xs font-bold text-right ${
+                                detailData.totals.diferencia >= 0 ? 'text-status-success' : 'text-status-error'
+                              }`}>
+                                {new Intl.NumberFormat("es-PE", {
+                                  style: "currency",
+                                  currency: "PEN",
+                                  minimumFractionDigits: 0,
+                                  maximumFractionDigits: 0,
+                                }).format(detailData.totals.diferencia)}
+                              </td>
+                            </>
+                          )}
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* ══════════════════════════════════════════════════════════════
                 INFORMACIÓN ADICIONAL

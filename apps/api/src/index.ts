@@ -1,3 +1,4 @@
+import "dotenv/config";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { PrismaClient, Prisma } from "@prisma/client";
@@ -13,6 +14,7 @@ import { registerOcRoutes } from "./oc";
 import { registerBulkRoutes } from "./bulk";
 import { registerExchangeRateRoutes } from "./exchange-rates";
 import { registerProvisionRoutes } from "./provisions";
+import { registerAssistantRoutes } from "./assistant";
 import { ensureYearPeriods } from "./periods";
 
 const app = Fastify({ logger: true });
@@ -82,6 +84,7 @@ await registerReportRoutes(app);
 await registerMasterRoutes(app);
 await registerBulkRoutes(app);
 await registerExchangeRateRoutes(app);
+await registerAssistantRoutes(app);
 
 const port = Number(process.env.API_PORT || 3001);
 app.listen({ port, host: "0.0.0.0" });

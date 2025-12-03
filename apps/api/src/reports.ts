@@ -503,4 +503,368 @@ export async function registerReportRoutes(app: FastifyInstance) {
       totals 
     };
   });
+
+  /**
+   * GET /reports/dashboard/detail
+   * Endpoint para obtener datos desglosados por sustento/gerencia para tabla de detalles
+   * 
+   * Utiliza los mismos parámetros que /reports/dashboard
+   * Retorna filas agrupadas por sustento con: sustento, gerencia, área, budget, executed, provisions, diferencia
+   */
+  app.get("/reports/dashboard/detail", async (req, reply) => {
+    const q = req.query as any;
+    const year = Number(q.year) || new Date().getFullYear();
+    const mode = q.mode === "contable" ? "contable" : "execution";
+
+    // Versión activa por defecto
+    let versionId: number | null = q.versionId ? Number(q.versionId) : null;
+    if (!versionId) {
+      const active = await prisma.budgetVersion.findFirst({ where: { status: "ACTIVE" } });
+      versionId = active?.id ?? null;
+    }
+
+    // Filtros opcionales
+    const supportId = q.supportId ? Number(q.supportId) : null;
+    const costCenterId = q.costCenterId ? Number(q.costCenterId) : null;
+    const managementId = q.managementId ? Number(q.managementId) : null;
+    const areaId = q.areaId ? Number(q.areaId) : null;
+    const packageId = q.packageId ? Number(q.packageId) : null;
+    const periodFromId = q.periodFromId ? Number(q.periodFromId) : null;
+    const periodToId = q.periodToId ? Number(q.periodToId) : null;
+
+    // Traer períodos del año filtrados por rango
+    const allPeriods = await prisma.period.findMany({
+      where: { year },
+      orderBy: { month: "asc" }
+    });
+
+    let periods = allPeriods;
+    if (periodFromId && periodToId) {
+      const fromPeriod = allPeriods.find(p => p.id === periodFromId);
+      const toPeriod = allPeriods.find(p => p.id === periodToId);
+      
+      if (fromPeriod && toPeriod) {
+        const fromValue = fromPeriod.year * 100 + fromPeriod.month;
+        const toValue = toPeriod.year * 100 + toPeriod.month;
+        
+        periods = allPeriods.filter(p => {
+          const pValue = p.year * 100 + p.month;
+          return pValue >= fromValue && pValue <= toValue;
+        });
+      }
+    } else if (periodFromId) {
+      const fromPeriod = allPeriods.find(p => p.id === periodFromId);
+      if (fromPeriod) {
+        const fromValue = fromPeriod.year * 100 + fromPeriod.month;
+        periods = allPeriods.filter(p => {
+          const pValue = p.year * 100 + p.month;
+          return pValue >= fromValue;
+        });
+      }
+    } else if (periodToId) {
+      const toPeriod = allPeriods.find(p => p.id === periodToId);
+      if (toPeriod) {
+        const toValue = toPeriod.year * 100 + toPeriod.month;
+        periods = allPeriods.filter(p => {
+          const pValue = p.year * 100 + p.month;
+          return pValue <= toValue;
+        });
+      }
+    }
+
+    const periodIds = periods.map(p => p.id);
+
+    // Map para acumular datos por sustento
+    const supportDataMap = new Map<number, {
+      supportId: number;
+      supportCode: string;
+      supportName: string;
+      managementName: string;
+      areaName: string;
+      budget: number;
+      executed: number;
+      provisions: number;
+    }>();
+
+    // ──────────────────────────────────────────────────────────────
+    // 1. PRESUPUESTO con filtros aplicados
+    // ──────────────────────────────────────────────────────────────
+    const budgetWhere: any = { versionId, periodId: { in: periodIds } };
+    if (costCenterId) budgetWhere.costCenterId = costCenterId;
+
+    let budgetAllocations = versionId
+      ? await prisma.budgetAllocation.findMany({
+          where: budgetWhere,
+          include: { 
+            support: {
+              include: {
+                managementRef: true,
+                areaRef: true
+              }
+            }
+          }
+        })
+      : [];
+
+    // Aplicar filtros de support
+    if (supportId || managementId || areaId || packageId) {
+      budgetAllocations = budgetAllocations.filter(alloc => {
+        if (supportId && alloc.supportId !== supportId) return false;
+        if (managementId && alloc.support?.managementId !== managementId) return false;
+        if (areaId && alloc.support?.areaId !== areaId) return false;
+        if (packageId && alloc.support?.expensePackageId !== packageId) return false;
+        return true;
+      });
+    }
+
+    // Acumular presupuesto por sustento
+    budgetAllocations.forEach(alloc => {
+      const sid = alloc.supportId;
+      if (!supportDataMap.has(sid)) {
+        supportDataMap.set(sid, {
+          supportId: sid,
+          supportCode: alloc.support?.code || "",
+          supportName: alloc.support?.name || `S-${sid}`,
+          managementName: alloc.support?.managementRef?.name || "",
+          areaName: alloc.support?.areaRef?.name || "",
+          budget: 0,
+          executed: 0,
+          provisions: 0
+        });
+      }
+      const data = supportDataMap.get(sid)!;
+      data.budget += Number(alloc.amountLocal ?? 0);
+    });
+
+    // ──────────────────────────────────────────────────────────────
+    // 2. EJECUTADO Y PROVISIONES según modo
+    // ──────────────────────────────────────────────────────────────
+    if (mode === "execution") {
+      // Modo Ejecución: facturas por distribución de períodos PPTO
+      let invoices = await prisma.invoice.findMany({
+        where: {
+          periods: {
+            some: { periodId: { in: periodIds } }
+          }
+        },
+        include: {
+          periods: true,
+          oc: {
+            include: { 
+              support: {
+                include: {
+                  managementRef: true,
+                  areaRef: true
+                }
+              } 
+            }
+          }
+        }
+      });
+
+      // Filtrar por support
+      invoices = invoices.filter(inv => {
+        const support = inv.oc?.support;
+        if (!support) return false;
+        if (supportId && support.id !== supportId) return false;
+        if (managementId && support.managementId !== managementId) return false;
+        if (areaId && support.areaId !== areaId) return false;
+        if (packageId && support.expensePackageId !== packageId) return false;
+        return true;
+      });
+
+      // Acumular ejecutado por sustento
+      invoices.forEach(inv => {
+        const support = inv.oc?.support;
+        if (!support) return;
+
+        const sid = support.id;
+        const montoPEN = Number(inv.montoPEN_tcReal ?? inv.montoPEN_tcEstandar ?? 0);
+        
+        // Contar cuántos períodos de esta factura están en el rango filtrado
+        const relevantPeriods = inv.periods.filter(p => periodIds.includes(p.periodId));
+        const numPeriods = inv.periods.length || 1;
+        const numRelevantPeriods = relevantPeriods.length;
+        
+        // Prorratear el monto: solo consideramos la parte que cae en el rango
+        const amountForRange = (montoPEN / numPeriods) * numRelevantPeriods;
+
+        if (!supportDataMap.has(sid)) {
+          supportDataMap.set(sid, {
+            supportId: sid,
+            supportCode: support.code || "",
+            supportName: support.name || `S-${sid}`,
+            managementName: support.managementRef?.name || "",
+            areaName: support.areaRef?.name || "",
+            budget: 0,
+            executed: 0,
+            provisions: 0
+          });
+        }
+        const data = supportDataMap.get(sid)!;
+        data.executed += amountForRange;
+      });
+
+      // En modo Ejecución NO se consideran provisiones
+
+    } else {
+      // Modo Contable: facturas y provisiones por mes contable
+      const mesContableList = periods.map(p => `${p.year}-${String(p.month).padStart(2, "0")}`);
+
+      // Ejecutado contable desde facturas
+      let invoices = await prisma.invoice.findMany({
+        where: {
+          mesContable: { in: mesContableList }
+        },
+        include: { 
+          oc: { 
+            include: { 
+              support: {
+                include: {
+                  managementRef: true,
+                  areaRef: true
+                }
+              } 
+            } 
+          } 
+        }
+      });
+
+      // Filtros de sustento/área/gerencia/paquete
+      invoices = invoices.filter(inv => {
+        const support = inv.oc?.support;
+        if (!support) return false;
+        if (supportId && support.id !== supportId) return false;
+        if (managementId && support.managementId !== managementId) return false;
+        if (areaId && support.areaId !== areaId) return false;
+        if (packageId && support.expensePackageId !== packageId) return false;
+        return true;
+      });
+
+      // Acumular ejecutado contable por sustento
+      invoices.forEach(inv => {
+        const support = inv.oc?.support;
+        if (!support) return;
+
+        const sid = support.id;
+        const montoPEN = Number(inv.montoPEN_tcReal ?? inv.montoPEN_tcEstandar ?? 0);
+
+        if (!supportDataMap.has(sid)) {
+          supportDataMap.set(sid, {
+            supportId: sid,
+            supportCode: support.code || "",
+            supportName: support.name || `S-${sid}`,
+            managementName: support.managementRef?.name || "",
+            areaName: support.areaRef?.name || "",
+            budget: 0,
+            executed: 0,
+            provisions: 0
+          });
+        }
+        const data = supportDataMap.get(sid)!;
+        data.executed += montoPEN;
+      });
+
+      // Provisiones desde tabla provisions
+      let provs = await prisma.provision.findMany({
+        where: {
+          periodoContable: { in: mesContableList }
+        },
+        include: { 
+          sustento: {
+            include: {
+              managementRef: true,
+              areaRef: true
+            }
+          } 
+        }
+      });
+
+      // Filtros
+      provs = provs.filter(prov => {
+        const sustento = prov.sustento;
+        if (!sustento) return false;
+        if (supportId && sustento.id !== supportId) return false;
+        if (managementId && sustento.managementId !== managementId) return false;
+        if (areaId && sustento.areaId !== areaId) return false;
+        if (packageId && sustento.expensePackageId !== packageId) return false;
+        return true;
+      });
+
+      // Acumular provisiones por sustento
+      provs.forEach(prov => {
+        const sustento = prov.sustento;
+        if (!sustento) return;
+
+        const sid = sustento.id;
+        const montoPen = Number(prov.montoPen ?? 0);
+
+        if (!supportDataMap.has(sid)) {
+          supportDataMap.set(sid, {
+            supportId: sid,
+            supportCode: sustento.code || "",
+            supportName: sustento.name || `S-${sid}`,
+            managementName: sustento.managementRef?.name || "",
+            areaName: sustento.areaRef?.name || "",
+            budget: 0,
+            executed: 0,
+            provisions: 0
+          });
+        }
+        const data = supportDataMap.get(sid)!;
+        data.provisions += montoPen;
+      });
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // 3. CONSTRUIR RESULTADO
+    // ──────────────────────────────────────────────────────────────
+    const rows = Array.from(supportDataMap.values()).map(data => {
+      const diferencia = data.budget - data.executed - data.provisions;
+      return {
+        supportId: data.supportId,
+        supportCode: data.supportCode,
+        supportName: data.supportName,
+        managementName: data.managementName,
+        areaName: data.areaName,
+        budget: data.budget,
+        executed: data.executed,
+        provisions: data.provisions,
+        diferencia
+      };
+    });
+
+    // Ordenar por nombre de sustento
+    rows.sort((a, b) => {
+      if (a.managementName !== b.managementName) {
+        return a.managementName.localeCompare(b.managementName);
+      }
+      return a.supportName.localeCompare(b.supportName);
+    });
+
+    // Totales
+    const totals = rows.reduce((acc, r) => ({
+      budget: acc.budget + r.budget,
+      executed: acc.executed + r.executed,
+      provisions: acc.provisions + r.provisions,
+      diferencia: acc.diferencia + r.diferencia
+    }), { budget: 0, executed: 0, provisions: 0, diferencia: 0 });
+
+    return { 
+      year, 
+      versionId, 
+      mode,
+      filters: {
+        supportId,
+        costCenterId,
+        managementId,
+        areaId,
+        packageId,
+        periodFromId,
+        periodToId
+      },
+      rows, 
+      totals 
+    };
+  });
 }

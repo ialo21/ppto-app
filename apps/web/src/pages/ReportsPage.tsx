@@ -102,8 +102,8 @@ export default function ReportsPage() {
   });
 
   const { data: packages } = useQuery({
-    queryKey: ["packages"],
-    queryFn: async () => (await api.get("/packages")).data
+    queryKey: ["expense-packages"],
+    queryFn: async () => (await api.get("/expense-packages")).data
   });
 
   const { data: supports } = useQuery({

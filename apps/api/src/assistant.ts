@@ -1,6 +1,7 @@
 import { FastifyInstance } from "fastify";
 import { PrismaClient, Prisma } from "@prisma/client";
 import { z } from "zod";
+import { requireAuth, requirePermission } from "./auth";
 import { geminiClient } from "./gemini-client";
 
 const prisma = new PrismaClient();
@@ -420,7 +421,7 @@ export async function registerAssistantRoutes(app: FastifyInstance) {
    * POST /assistant
    * Endpoint principal del asistente conversacional
    */
-  app.post("/assistant", async (req, reply) => {
+  app.post("/assistant", { preHandler: [requireAuth, requirePermission("assistant")] }, async (req, reply) => {
     // Validar entrada
     const parsed = assistantMessageSchema.safeParse(req.body);
     
@@ -564,7 +565,7 @@ Responde usando ÚNICAMENTE los datos de PPTO_DATA. Formatea los montos claramen
    * GET /assistant/health
    * Verifica el estado del servicio del asistente
    */
-  app.get("/assistant/health", async (req, reply) => {
+  app.get("/assistant/health", { preHandler: [requireAuth, requirePermission("assistant")] }, async (req, reply) => {
     const hasApiKey = !!process.env.GEMINI_API_KEY;
     
     return {

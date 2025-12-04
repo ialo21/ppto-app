@@ -1,6 +1,7 @@
 import { FastifyInstance } from "fastify";
 import { PrismaClient } from "@prisma/client";
 import { z } from "zod";
+import { requireAuth, requirePermission } from "./auth";
 
 const prisma = new PrismaClient();
 
@@ -44,9 +45,9 @@ const areaSchema = z.object({
 
 export async function registerMasterRoutes(app: FastifyInstance) {
   // Cost centers
-  app.get("/cost-centers", async () => prisma.costCenter.findMany({ orderBy: { code: "asc" } }));
+  app.get("/cost-centers", { preHandler: requireAuth }, async () => prisma.costCenter.findMany({ orderBy: { code: "asc" } }));
 
-  app.post("/cost-centers", async (req, reply) => {
+  app.post("/cost-centers", { preHandler: [requireAuth, requirePermission("catalogos")] }, async (req, reply) => {
     const parsed = costCenterSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send(parsed.error);
     const { id, ...data } = parsed.data;
@@ -60,7 +61,7 @@ export async function registerMasterRoutes(app: FastifyInstance) {
     }
   });
 
-  app.delete("/cost-centers/:id", async (req, reply) => {
+  app.delete("/cost-centers/:id", { preHandler: [requireAuth, requirePermission("catalogos")] }, async (req, reply) => {
     const id = Number((req.params as any).id);
     if (!Number.isInteger(id)) return reply.code(400).send({ error: "id invalido" });
     try {
@@ -72,14 +73,14 @@ export async function registerMasterRoutes(app: FastifyInstance) {
   });
 
   // Expense packages and concepts
-  app.get("/expense-packages", async () =>
+  app.get("/expense-packages", { preHandler: requireAuth }, async () =>
     prisma.expensePackage.findMany({
       orderBy: { name: "asc" },
       include: { concepts: { orderBy: { name: "asc" } } }
     })
   );
 
-  app.post("/expense-packages", async (req, reply) => {
+  app.post("/expense-packages", { preHandler: [requireAuth, requirePermission("catalogos")] }, async (req, reply) => {
     const parsed = expensePackageSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send(parsed.error);
     const { id, ...data } = parsed.data;
@@ -93,7 +94,7 @@ export async function registerMasterRoutes(app: FastifyInstance) {
     }
   });
 
-  app.delete("/expense-packages/:id", async (req, reply) => {
+  app.delete("/expense-packages/:id", { preHandler: [requireAuth, requirePermission("catalogos")] }, async (req, reply) => {
     const id = Number((req.params as any).id);
     if (!Number.isInteger(id)) return reply.code(400).send({ error: "id invalido" });
     try {
@@ -104,7 +105,7 @@ export async function registerMasterRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post("/expense-concepts", async (req, reply) => {
+  app.post("/expense-concepts", { preHandler: [requireAuth, requirePermission("catalogos")] }, async (req, reply) => {
     const parsed = expenseConceptSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send(parsed.error);
     const { id, packageId, ...data } = parsed.data;
@@ -123,7 +124,7 @@ export async function registerMasterRoutes(app: FastifyInstance) {
     }
   });
 
-  app.delete("/expense-concepts/:id", async (req, reply) => {
+  app.delete("/expense-concepts/:id", { preHandler: [requireAuth, requirePermission("catalogos")] }, async (req, reply) => {
     const id = Number((req.params as any).id);
     if (!Number.isInteger(id)) return reply.code(400).send({ error: "id invalido" });
     try {
@@ -135,9 +136,9 @@ export async function registerMasterRoutes(app: FastifyInstance) {
   });
 
   // Articulos
-  app.get("/articulos", async () => prisma.articulo.findMany({ orderBy: { code: "asc" } }));
+  app.get("/articulos", { preHandler: [requireAuth, requirePermission("catalogos")] }, async () => prisma.articulo.findMany({ orderBy: { code: "asc" } }));
 
-  app.post("/articulos", async (req, reply) => {
+  app.post("/articulos", { preHandler: [requireAuth, requirePermission("catalogos")] }, async (req, reply) => {
     const parsed = articuloSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send(parsed.error);
     const { id, ...data } = parsed.data;
@@ -151,7 +152,7 @@ export async function registerMasterRoutes(app: FastifyInstance) {
     }
   });
 
-  app.delete("/articulos/:id", async (req, reply) => {
+  app.delete("/articulos/:id", { preHandler: [requireAuth, requirePermission("catalogos")] }, async (req, reply) => {
     const id = Number((req.params as any).id);
     if (!Number.isInteger(id)) return reply.code(400).send({ error: "id invalido" });
     try {
@@ -163,14 +164,14 @@ export async function registerMasterRoutes(app: FastifyInstance) {
   });
 
   // Managements (Gerencias)
-  app.get("/managements", async () => 
+  app.get("/managements", { preHandler: requireAuth }, async () => 
     prisma.management.findMany({ 
       orderBy: { name: "asc" },
       include: { areas: { orderBy: { name: "asc" } } }
     })
   );
 
-  app.post("/managements", async (req, reply) => {
+  app.post("/managements", { preHandler: [requireAuth, requirePermission("catalogos")] }, async (req, reply) => {
     const parsed = managementSchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.code(422).send({
@@ -217,7 +218,7 @@ export async function registerMasterRoutes(app: FastifyInstance) {
     }
   });
 
-  app.delete("/managements/:id", async (req, reply) => {
+  app.delete("/managements/:id", { preHandler: [requireAuth, requirePermission("catalogos")] }, async (req, reply) => {
     const id = Number((req.params as any).id);
     if (!Number.isInteger(id)) return reply.code(400).send({ error: "id invalido" });
     try {
@@ -229,14 +230,14 @@ export async function registerMasterRoutes(app: FastifyInstance) {
   });
 
   // Areas
-  app.get("/areas", async () => 
+  app.get("/areas", { preHandler: requireAuth }, async () => 
     prisma.area.findMany({ 
       orderBy: { name: "asc" },
       include: { management: true }
     })
   );
 
-  app.post("/areas", async (req, reply) => {
+  app.post("/areas", { preHandler: [requireAuth, requirePermission("catalogos")] }, async (req, reply) => {
     const parsed = areaSchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.code(422).send({
@@ -292,7 +293,7 @@ export async function registerMasterRoutes(app: FastifyInstance) {
     }
   });
 
-  app.delete("/areas/:id", async (req, reply) => {
+  app.delete("/areas/:id", { preHandler: [requireAuth, requirePermission("catalogos")] }, async (req, reply) => {
     const id = Number((req.params as any).id);
     if (!Number.isInteger(id)) return reply.code(400).send({ error: "id invalido" });
     try {

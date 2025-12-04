@@ -1,6 +1,8 @@
 import "dotenv/config";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import cookie from "@fastify/cookie";
+import session from "@fastify/session";
 import { PrismaClient, Prisma } from "@prisma/client";
 import { z } from "zod";
 import { registerInvoiceRoutes } from "./invoices";
@@ -15,10 +17,33 @@ import { registerBulkRoutes } from "./bulk";
 import { registerExchangeRateRoutes } from "./exchange-rates";
 import { registerProvisionRoutes } from "./provisions";
 import { registerAssistantRoutes } from "./assistant";
+import { registerAuthRoutes, requireAuth } from "./auth";
+import { registerRoleRoutes } from "./roles";
 import { ensureYearPeriods } from "./periods";
 
 const app = Fastify({ logger: true });
-await app.register(cors, { origin: true });
+
+// CORS - permitir credenciales para sesiones
+const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+await app.register(cors, { 
+  origin: frontendUrl, 
+  credentials: true 
+});
+
+// Cookies y sesiones
+const isProduction = process.env.NODE_ENV === "production";
+await app.register(cookie);
+await app.register(session, {
+  secret: process.env.SESSION_SECRET || "ppto-app-secret-change-in-production-min-32-chars",
+  cookieName: "ppto-session", // Nombre explícito de la cookie
+  cookie: {
+    secure: isProduction, // true en producción (HTTPS), false en desarrollo
+    httpOnly: true,
+    maxAge: 1000 * 60 * 60 * 24 * 30, // 30 días - sesión más larga
+    sameSite: isProduction ? "strict" : "lax" // strict en producción, lax en desarrollo
+  },
+  saveUninitialized: false
+});
 
 const prisma = new PrismaClient();
 
@@ -26,7 +51,7 @@ const prisma = new PrismaClient();
 app.get("/health", async () => ({ ok: true }));
 
 // Periods: list (optionally filtered by year)
-app.get("/periods", async (req, reply) => {
+app.get("/periods", { preHandler: requireAuth }, async (req, reply) => {
   const year = (req.query as any).year ? Number((req.query as any).year) : undefined;
   
   // If year is specified, ensure all 12 periods exist
@@ -49,7 +74,7 @@ app.get("/periods", async (req, reply) => {
 });
 
 // Periods: get distinct years
-app.get("/periods/years", async () => {
+app.get("/periods/years", { preHandler: requireAuth }, async () => {
   const periods = await prisma.period.findMany({
     select: { year: true },
     distinct: ["year"],
@@ -59,7 +84,7 @@ app.get("/periods/years", async () => {
 });
 
 // Periods: receive accounting closure
-app.post("/periods/:id/closure", async (req, reply) => {
+app.post("/periods/:id/closure", { preHandler: requireAuth }, async (req, reply) => {
   const id = Number((req.params as any).id);
   const period = await prisma.period.findUnique({ where: { id }});
   if (!period) return reply.code(404).send({ error: "period not found" });
@@ -72,7 +97,13 @@ app.post("/periods/:id/closure", async (req, reply) => {
   return closure;
 });
 
-// Rutas específicas
+// Rutas de autenticación (sin protección)
+await registerAuthRoutes(app);
+
+// Rutas de gestión de roles (protegidas)
+await registerRoleRoutes(app);
+
+// Rutas específicas de la aplicación
 await registerSupportRoutes(app);
 await registerBudgetRoutes(app);
 await registerDetailedBudgetRoutes(app);

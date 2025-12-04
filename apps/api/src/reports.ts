@@ -1,5 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { PrismaClient, Prisma } from "@prisma/client";
+import { requireAuth, requirePermission } from "./auth";
 
 const prisma = new PrismaClient();
 
@@ -10,7 +11,7 @@ const prisma = new PrismaClient();
  * Retorna filas por sustento: { supportId, supportName, budget, executed_real, provisions, available }
  */
 export async function registerReportRoutes(app: FastifyInstance) {
-  app.get("/reports/execution", async (req, reply) => {
+  app.get("/reports/execution", { preHandler: [requireAuth, requirePermission("reports")] }, async (req, reply) => {
     const q = req.query as any;
     const periodId = Number(q.periodId);
     if (!periodId) return reply.code(400).send({ error: "periodId requerido" });

@@ -1,4 +1,7 @@
-import { PrismaClient, Prisma } from "@prisma/client";
+import { PrismaClient, Prisma, OcStatus } from "@prisma/client";
+
+// Declaración para evitar error de TypeScript con process.exit
+declare const process: { exit: (code: number) => never };
 
 const prisma = new PrismaClient();
 
@@ -48,51 +51,87 @@ async function main() {
     });
   }
 
-  // Gerencias y Áreas (upsert por nombre)
+  // Gerencias y Áreas (skip si ya existen por nombre case-insensitive)
   let gerenciaTI = await prisma.management.findFirst({ 
-    where: { name: "Gerencia TI" }, 
+    where: { 
+      name: { 
+        equals: "Gerencia TI", 
+        mode: 'insensitive' 
+      } 
+    }, 
     include: { areas: true } 
   });
   if (!gerenciaTI) {
-    gerenciaTI = await prisma.management.create({
-    data: {
-      code: "GER-TI",
-      name: "Gerencia TI",
-      areas: {
-        create: [
-          { code: "AREA-TI-CAL", name: "Calidad" },
-          { code: "AREA-TI-INF", name: "Infraestructura" },
-          { code: "AREA-TI-DEV", name: "Desarrollo" }
-        ]
-      }
-    },
-    include: { areas: true }
-    });
+    try {
+      gerenciaTI = await prisma.management.create({
+        data: {
+          code: "GER-TI",
+          name: "Gerencia TI",
+          areas: {
+            create: [
+              { code: "AREA-TI-CAL", name: "Calidad" },
+              { code: "AREA-TI-INF", name: "Infraestructura" },
+              { code: "AREA-TI-DEV", name: "Desarrollo" }
+            ]
+          }
+        },
+        include: { areas: true }
+      });
+    } catch (e) {
+      // Si falla por duplicado, obtener el existente
+      gerenciaTI = await prisma.management.findFirst({ 
+        where: { 
+          name: { 
+            equals: "Gerencia TI", 
+            mode: 'insensitive' 
+          } 
+        }, 
+        include: { areas: true } 
+      });
+    }
   }
 
   let gerenciaComercial = await prisma.management.findFirst({ 
-    where: { name: "Gerencia Comercial" }, 
+    where: { 
+      name: { 
+        equals: "Gerencia Comercial", 
+        mode: 'insensitive' 
+      } 
+    }, 
     include: { areas: true } 
   });
   if (!gerenciaComercial) {
-    gerenciaComercial = await prisma.management.create({
-    data: {
-      code: "GER-COM",
-      name: "Gerencia Comercial",
-      areas: {
-        create: [
-          { code: "AREA-COM-MKT", name: "Marketing" },
-          { code: "AREA-COM-VTA", name: "Ventas" }
-        ]
-      }
-    },
-    include: { areas: true }
-    });
+    try {
+      gerenciaComercial = await prisma.management.create({
+        data: {
+          code: "GER-COM",
+          name: "Gerencia Comercial",
+          areas: {
+            create: [
+              { code: "AREA-COM-MKT", name: "Marketing" },
+              { code: "AREA-COM-VTA", name: "Ventas" }
+            ]
+          }
+        },
+        include: { areas: true }
+      });
+    } catch (e) {
+      // Si falla por duplicado, obtener el existente
+      gerenciaComercial = await prisma.management.findFirst({ 
+        where: { 
+          name: { 
+            equals: "Gerencia Comercial", 
+            mode: 'insensitive' 
+          } 
+        }, 
+        include: { areas: true } 
+      });
+    }
   }
 
-  const areaCalidad = gerenciaTI.areas.find(a => a.name === "Calidad");
-  const areaInfraestructura = gerenciaTI.areas.find(a => a.name === "Infraestructura");
-  const areaMarketing = gerenciaComercial.areas.find(a => a.name === "Marketing");
+  const areaCalidad = gerenciaTI?.areas.find(a => a.name === "Calidad");
+  const areaInfraestructura = gerenciaTI?.areas.find(a => a.name === "Infraestructura");
+  const areaMarketing = gerenciaComercial?.areas.find(a => a.name === "Marketing");
 
   // Datos maestros (upsert por code único)
   const ccTi = await prisma.costCenter.upsert({
@@ -142,88 +181,102 @@ async function main() {
   const conceptMarketing = pkgServicios.concepts.find(c => c.name === "Consultoria Marketing");
   const conceptCloud = pkgOperacion.concepts.find(c => c.name === "Servicios Cloud");
 
-  // Sustentos (upsert por name único)
-  const supportQa = await prisma.support.upsert({
-    where: { name: "Servicios Externos QA" },
-    update: {},
-    create: {
-      code: "S-0001",
-      name: "Servicios Externos QA",
-      management: "Gerencia TI",  // legacy
-      area: "Calidad",  // legacy
-      managementId: gerenciaTI.id,
-      areaId: areaCalidad?.id,
-      costCenterId: ccTi.id,
-      expensePackageId: pkgServicios.id,
-      expenseConceptId: conceptQa?.id,
-      expenseType: "ADMINISTRATIVO"
-    }
-  });
-  const supportMarketing = await prisma.support.upsert({
-    where: { name: "Marketing Digital" },
-    update: {},
-    create: {
-      code: "S-0002",
-      name: "Marketing Digital",
-      management: "Gerencia Comercial",  // legacy
-      area: "Marketing",  // legacy
-      managementId: gerenciaComercial.id,
-      areaId: areaMarketing?.id,
-      costCenterId: ccMarketing.id,
-      expensePackageId: pkgServicios.id,
-      expenseConceptId: conceptMarketing?.id,
-      expenseType: "PRODUCTO"
-    }
-  });
-  const supportCloud = await prisma.support.upsert({
-    where: { name: "Servicios Cloud" },
-    update: {},
-    create: {
-      code: "S-0003",
-      name: "Servicios Cloud",
-      management: "Gerencia TI",  // legacy
-      area: "Infraestructura",  // legacy
-      managementId: gerenciaTI.id,
-      areaId: areaInfraestructura?.id,
-      costCenterId: ccTi.id,
-      expensePackageId: pkgOperacion.id,
-      expenseConceptId: conceptCloud?.id,
-      expenseType: "DISTRIBUIBLE"
-    }
-  });
+  // Sustentos (upsert por name único) - solo si existen las gerencias
+  let supportQa, supportMarketing, supportCloud;
+  
+  if (gerenciaTI) {
+    supportQa = await prisma.support.upsert({
+      where: { name: "Servicios Externos QA" },
+      update: {},
+      create: {
+        code: "S-0001",
+        name: "Servicios Externos QA",
+        management: "Gerencia TI",  // legacy
+        area: "Calidad",  // legacy
+        managementId: gerenciaTI.id,
+        areaId: areaCalidad?.id,
+        costCenterId: ccTi.id,
+        expensePackageId: pkgServicios.id,
+        expenseConceptId: conceptQa?.id,
+        expenseType: "ADMINISTRATIVO"
+      }
+    });
+    
+    supportCloud = await prisma.support.upsert({
+      where: { name: "Servicios Cloud" },
+      update: {},
+      create: {
+        code: "S-0003",
+        name: "Servicios Cloud",
+        management: "Gerencia TI",  // legacy
+        area: "Infraestructura",  // legacy
+        managementId: gerenciaTI.id,
+        areaId: areaInfraestructura?.id,
+        costCenterId: ccTi.id,
+        expensePackageId: pkgOperacion.id,
+        expenseConceptId: conceptCloud?.id,
+        expenseType: "DISTRIBUIBLE"
+      }
+    });
+  }
+  
+  if (gerenciaComercial) {
+    supportMarketing = await prisma.support.upsert({
+      where: { name: "Marketing Digital" },
+      update: {},
+      create: {
+        code: "S-0002",
+        name: "Marketing Digital",
+        management: "Gerencia Comercial",  // legacy
+        area: "Marketing",  // legacy
+        managementId: gerenciaComercial.id,
+        areaId: areaMarketing?.id,
+        costCenterId: ccMarketing.id,
+        expensePackageId: pkgServicios.id,
+        expenseConceptId: conceptMarketing?.id,
+        expenseType: "PRODUCTO"
+      }
+    });
+  }
 
-  // Asignaciones de presupuesto (enero 2026) - solo si no existen
+  // Asignaciones de presupuesto (enero 2026) - solo si no existen y los sustentos fueron creados
   const periodEne = await prisma.period.findFirst({ where: { year: 2026, month: 1 } });
-  if (periodEne) {
+  if (periodEne && (supportQa || supportMarketing || supportCloud)) {
     const allocCount = await prisma.budgetAllocation.count({ 
       where: { versionId: version.id, periodId: periodEne.id } 
     });
     if (allocCount === 0) {
-      await prisma.budgetAllocation.createMany({
-      data: [
-        {
+      const allocData = [];
+      if (supportQa) {
+        allocData.push({
           versionId: version.id,
           supportId: supportQa.id,
           periodId: periodEne.id,
           amountLocal: new Prisma.Decimal(10000),
           currency: "PEN"
-        },
-        {
+        });
+      }
+      if (supportMarketing) {
+        allocData.push({
           versionId: version.id,
           supportId: supportMarketing.id,
           periodId: periodEne.id,
           amountLocal: new Prisma.Decimal(7500),
           currency: "PEN"
-        },
-        {
+        });
+      }
+      if (supportCloud) {
+        allocData.push({
           versionId: version.id,
           supportId: supportCloud.id,
           periodId: periodEne.id,
           amountLocal: new Prisma.Decimal(15000),
           currency: "PEN"
-        }
-      ]
-      });
+        });
+      }
+      if (allocData.length > 0) {
+        await prisma.budgetAllocation.createMany({ data: allocData });
+      }
     }
   }
 
@@ -244,14 +297,14 @@ async function main() {
     create: { code: "ART-003", name: "Hardware y Equipos" }
   });
 
-  // Órdenes de Compra de ejemplo - solo si no existen
+  // Órdenes de Compra de ejemplo - solo si no existen y los sustentos fueron creados
   const periodFeb = await prisma.period.findFirst({ where: { year: 2026, month: 2 } });
-  if (periodEne && periodFeb) {
+  if (periodEne && periodFeb && (supportQa || supportCloud)) {
     const ocCount = await prisma.oC.count();
     if (ocCount === 0) {
-      await prisma.oC.createMany({
-      data: [
-        {
+      const ocData = [];
+      if (supportQa) {
+        ocData.push({
           budgetPeriodFromId: periodEne.id,
           budgetPeriodToId: periodFeb.id,
           incidenteOc: "INC-2026-001",
@@ -266,14 +319,16 @@ async function main() {
           ruc: "20123456789",
           moneda: "PEN",
           importeSinIgv: new Prisma.Decimal(8500),
-          estado: "PENDIENTE",
+          estado: OcStatus.PENDIENTE,
           numeroOc: "OC-2026-0001",
           comentario: "Requiere aprobación urgente",
           articuloId: artServicios.id,
           cecoId: ccTi.id,
           linkCotizacion: "https://ejemplo.com/cotizacion/001"
-        },
-        {
+        });
+      }
+      if (supportCloud) {
+        ocData.push({
           budgetPeriodFromId: periodEne.id,
           budgetPeriodToId: periodEne.id,
           incidenteOc: "INC-2026-002",
@@ -288,19 +343,131 @@ async function main() {
           ruc: "20987654321",
           moneda: "USD",
           importeSinIgv: new Prisma.Decimal(3200),
-          estado: "PROCESADO",
+          estado: OcStatus.PROCESADO,
           numeroOc: "OC-2026-0002",
           comentario: null,
           articuloId: artLicencias.id,
           cecoId: ccTi.id,
           linkCotizacion: "https://aws.amazon.com/pricing"
-        }
-      ]
-      });
+        });
+      }
+      if (ocData.length > 0) {
+        await prisma.oC.createMany({ data: ocData });
+      }
     }
   }
 
-  console.log("✅ Bootstrap seed completado");
+  // ============ AUTENTICACIÓN Y ROLES ============
+  
+  // Crear permisos para todas las páginas/módulos
+  const permissions = [
+    { key: "dashboard", name: "Dashboard", description: "Vista principal con métricas y estadísticas" },
+    { key: "assistant", name: "Asistente", description: "Asistente IA para consultas" },
+    { key: "reports", name: "Reportes", description: "Reportes y análisis de datos" },
+    { key: "facturas", name: "Facturas", description: "Gestión de facturas" },
+    { key: "ocs", name: "Órdenes de Compra", description: "Gestión de órdenes de compra" },
+    { key: "provisiones", name: "Provisiones", description: "Gestión de provisiones" },
+    { key: "ppto", name: "Presupuesto", description: "Gestión del presupuesto" },
+    { key: "catalogos", name: "Catálogos", description: "Administración de catálogos maestros" },
+    { key: "manage_roles", name: "Gestión de Roles", description: "Administrar roles y permisos (solo super admin)" }
+  ];
+
+  const createdPermissions = [];
+  for (const perm of permissions) {
+    const created = await prisma.permission.upsert({
+      where: { key: perm.key },
+      update: {},
+      create: perm
+    });
+    createdPermissions.push(created);
+  }
+
+  // Crear rol Super Admin (sistema, no se puede eliminar)
+  const superAdminRole = await prisma.role.upsert({
+    where: { name: "super_admin" },
+    update: {},
+    create: {
+      name: "super_admin",
+      description: "Administrador con acceso total al sistema",
+      isSystem: true
+    }
+  });
+
+  // Asignar todos los permisos al Super Admin
+  for (const permission of createdPermissions) {
+    await prisma.rolePermission.upsert({
+      where: { 
+        ux_role_permission: {
+          roleId: superAdminRole.id,
+          permissionId: permission.id
+        }
+      },
+      update: {},
+      create: {
+        roleId: superAdminRole.id,
+        permissionId: permission.id
+      }
+    });
+  }
+
+  // Crear rol Viewer (sistema, rol por defecto para nuevos usuarios)
+  const viewerRole = await prisma.role.upsert({
+    where: { name: "viewer" },
+    update: {},
+    create: {
+      name: "viewer",
+      description: "Usuario con acceso de solo lectura a módulos básicos",
+      isSystem: true
+    }
+  });
+
+  // Asignar permisos limitados al Viewer: solo dashboard, assistant, reports
+  const viewerPermissionKeys = ["dashboard", "assistant", "reports"];
+  const viewerPermissions = createdPermissions.filter(p => viewerPermissionKeys.includes(p.key));
+  
+  for (const permission of viewerPermissions) {
+    await prisma.rolePermission.upsert({
+      where: { 
+        ux_role_permission: {
+          roleId: viewerRole.id,
+          permissionId: permission.id
+        }
+      },
+      update: {},
+      create: {
+        roleId: viewerRole.id,
+        permissionId: permission.id
+      }
+    });
+  }
+
+  // Crear usuario Super Admin por defecto: iago.lopez@interseguro.com.pe
+  const superAdminUser = await prisma.user.upsert({
+    where: { email: "iago.lopez@interseguro.com.pe" },
+    update: {},
+    create: {
+      email: "iago.lopez@interseguro.com.pe",
+      name: "Iago Lopez",
+      active: true
+    }
+  });
+
+  // Asignar rol Super Admin al usuario
+  await prisma.userRole.upsert({
+    where: {
+      ux_user_role: {
+        userId: superAdminUser.id,
+        roleId: superAdminRole.id
+      }
+    },
+    update: {},
+    create: {
+      userId: superAdminUser.id,
+      roleId: superAdminRole.id
+    }
+  });
+
+  console.log("✅ Bootstrap seed completado (incluye permisos, roles y super admin)");
 }
 
 main()

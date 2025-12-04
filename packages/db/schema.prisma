@@ -441,3 +441,70 @@ model Provision {
   @@index([periodoPpto], name: "ix_provision_periodo_ppto")
   @@index([periodoContable], name: "ix_provision_periodo_contable")
 }
+
+// ============ AUTENTICACIÓN Y ROLES ============
+
+model User {
+  id            Int       @id @default(autoincrement())
+  email         String    @unique
+  name          String?
+  googleId      String?   @unique
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  userRoles     UserRole[]
+  
+  @@index([email], name: "ix_user_email")
+}
+
+model Role {
+  id            Int       @id @default(autoincrement())
+  name          String    @unique
+  description   String?
+  isSystem      Boolean   @default(false)  // true para super_admin (no se puede eliminar)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  userRoles     UserRole[]
+  permissions   RolePermission[]
+  
+  @@index([name], name: "ix_role_name")
+}
+
+model Permission {
+  id            Int       @id @default(autoincrement())
+  key           String    @unique  // Ej: 'dashboard', 'assistant', 'reports', 'facturas', etc.
+  name          String    // Nombre descriptivo: 'Dashboard', 'Asistente', etc.
+  description   String?
+  
+  roles         RolePermission[]
+  
+  @@index([key], name: "ix_permission_key")
+}
+
+model UserRole {
+  id            Int       @id @default(autoincrement())
+  userId        Int
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleId        Int
+  role          Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  createdAt     DateTime  @default(now())
+  
+  @@unique([userId, roleId], name: "ux_user_role")
+  @@index([userId], name: "ix_userrole_user")
+  @@index([roleId], name: "ix_userrole_role")
+}
+
+model RolePermission {
+  id            Int       @id @default(autoincrement())
+  roleId        Int
+  role          Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionId  Int
+  permission    Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  createdAt     DateTime  @default(now())
+  
+  @@unique([roleId, permissionId], name: "ux_role_permission")
+  @@index([roleId], name: "ix_rolepermission_role")
+  @@index([permissionId], name: "ix_rolepermission_permission")
+}

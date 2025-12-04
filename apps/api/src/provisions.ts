@@ -1,6 +1,7 @@
 import { FastifyInstance } from "fastify";
 import { PrismaClient, Prisma } from "@prisma/client";
 import { z } from "zod";
+import { requireAuth, requirePermission } from "./auth";
 
 const prisma = new PrismaClient();
 
@@ -17,7 +18,7 @@ const updateProvisionSchema = createProvisionSchema.partial();
 
 export async function registerProvisionRoutes(app: FastifyInstance) {
   // List Provisions con filtros opcionales
-  app.get("/provisions", async (req, reply) => {
+  app.get("/provisions", { preHandler: [requireAuth, requirePermission("provisiones")] }, async (req, reply) => {
     try {
       const { sustentoId, periodoPpto, periodoContable } = req.query as any;
       
@@ -54,7 +55,7 @@ export async function registerProvisionRoutes(app: FastifyInstance) {
   });
 
   // Get Provision by ID
-  app.get("/provisions/:id", async (req, reply) => {
+  app.get("/provisions/:id", { preHandler: [requireAuth, requirePermission("provisiones")] }, async (req, reply) => {
     try {
       const id = Number((req.params as any).id);
       
@@ -88,7 +89,7 @@ export async function registerProvisionRoutes(app: FastifyInstance) {
   });
 
   // Create Provision
-  app.post("/provisions", async (req, reply) => {
+  app.post("/provisions", { preHandler: [requireAuth, requirePermission("provisiones")] }, async (req, reply) => {
     // Log en modo desarrollo
     if (process.env.NODE_ENV === "development") {
       console.log("📥 POST /provisions - Payload recibido:", JSON.stringify(req.body, null, 2));
@@ -254,7 +255,7 @@ export async function registerProvisionRoutes(app: FastifyInstance) {
   });
 
   // Delete Provision
-  app.delete("/provisions/:id", async (req, reply) => {
+  app.delete("/provisions/:id", { preHandler: [requireAuth, requirePermission("provisiones")] }, async (req, reply) => {
     const id = Number((req.params as any).id);
 
     try {
@@ -277,7 +278,7 @@ export async function registerProvisionRoutes(app: FastifyInstance) {
   });
 
   // Export CSV
-  app.get("/provisions/export/csv", async (req, reply) => {
+  app.get("/provisions/export/csv", { preHandler: [requireAuth, requirePermission("provisiones")] }, async (req, reply) => {
     const { sustentoId, periodoPpto, periodoContable } = req.query as any;
     const where: any = {};
 

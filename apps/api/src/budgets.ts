@@ -1,6 +1,8 @@
 import { FastifyInstance } from "fastify";
 import { PrismaClient, Prisma } from "@prisma/client";
 import { z } from "zod";
+import { requireAuth, requirePermission } from "./auth";
+
 const prisma = new PrismaClient();
 
 const listSchema = z.object({
@@ -19,7 +21,7 @@ const upsertSchema = z.object({
 
 export async function registerBudgetRoutes(app: FastifyInstance) {
   // Listar asignaciones por período (y versión activa por defecto)
-  app.get("/budgets", async (req, reply) => {
+  app.get("/budgets", { preHandler: [requireAuth, requirePermission("ppto")] }, async (req, reply) => {
     const q = listSchema.safeParse(req.query);
     if (!q.success) return reply.code(400).send(q.error);
     const { periodId } = q.data;
@@ -41,7 +43,7 @@ export async function registerBudgetRoutes(app: FastifyInstance) {
   });
 
   // Upsert masivo (reemplaza o crea por sustento)
-  app.post("/budgets/upsert", async (req, reply) => {
+  app.post("/budgets/upsert", { preHandler: [requireAuth, requirePermission("ppto")] }, async (req, reply) => {
     const p = upsertSchema.safeParse(req.body);
     if (!p.success) return reply.code(400).send(p.error);
     let { versionId, periodId, items } = p.data;

@@ -1,6 +1,7 @@
 import { FastifyInstance } from "fastify";
 import { PrismaClient, Prisma } from "@prisma/client";
 import { z } from "zod";
+import { requireAuth, requirePermission } from "./auth";
 
 const prisma = new PrismaClient();
 
@@ -49,7 +50,7 @@ const updateOcSchema = createOcSchema.partial();
 
 export async function registerOcRoutes(app: FastifyInstance) {
   // List OCs con filtros
-  app.get("/ocs", async (req, reply) => {
+  app.get("/ocs", { preHandler: [requireAuth, requirePermission("ocs")] }, async (req, reply) => {
     try {
       const {
         proveedor,
@@ -118,7 +119,7 @@ export async function registerOcRoutes(app: FastifyInstance) {
   });
 
   // Get OC by ID
-  app.get("/ocs/:id", async (req, reply) => {
+  app.get("/ocs/:id", { preHandler: [requireAuth, requirePermission("ocs")] }, async (req, reply) => {
     const id = Number((req.params as any).id);
     const oc = await prisma.oC.findUnique({
       where: { id },
@@ -137,7 +138,7 @@ export async function registerOcRoutes(app: FastifyInstance) {
   });
 
   // Create OC
-  app.post("/ocs", async (req, reply) => {
+  app.post("/ocs", { preHandler: [requireAuth, requirePermission("ocs")] }, async (req, reply) => {
     const parsed = createOcSchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.code(422).send({
@@ -391,7 +392,7 @@ export async function registerOcRoutes(app: FastifyInstance) {
   });
 
   // Delete OC
-  app.delete("/ocs/:id", async (req, reply) => {
+  app.delete("/ocs/:id", { preHandler: [requireAuth, requirePermission("ocs")] }, async (req, reply) => {
     const id = Number((req.params as any).id);
 
     try {
@@ -407,7 +408,7 @@ export async function registerOcRoutes(app: FastifyInstance) {
   });
 
   // Export CSV
-  app.get("/ocs/export/csv", async (req, reply) => {
+  app.get("/ocs/export/csv", { preHandler: [requireAuth, requirePermission("ocs")] }, async (req, reply) => {
     const { moneda, estado, proveedor, search } = req.query as any;
     const where: any = {};
 

@@ -410,8 +410,8 @@ export default function Dashboard() {
   });
 
   const { data: packages = [] } = useQuery({
-    queryKey: ["packages"],
-    queryFn: async () => (await api.get("/packages")).data,
+    queryKey: ["expense-packages"],
+    queryFn: async () => (await api.get("/expense-packages")).data,
   });
 
   // Áreas filtradas por gerencia

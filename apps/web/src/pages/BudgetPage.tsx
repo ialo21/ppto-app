@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffe
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { Card, CardContent, CardHeader } from "../components/ui/Card";
-import Select from "../components/ui/Select";
+import FilterSelect from "../components/ui/FilterSelect";
 import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
 import { Table, Th, Td } from "../components/ui/Table";
@@ -747,10 +747,10 @@ export default function BudgetPage() {
           </div>
 
           {/* Filters */}
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {/* Year */}
             <div>
-              <label className="block text-sm font-medium mb-1">Año</label>
+              <label className="block text-xs text-brand-text-secondary font-medium mb-1">Año</label>
               <Input
                 type="number"
                 min={2000}
@@ -768,13 +768,14 @@ export default function BudgetPage() {
                   }
                 }}
                 placeholder="Ej: 2025"
+                className="h-9"
               />
             </div>
 
             {/* Period (only for monthly) */}
             {viewMode === "monthly" && (
               <div>
-                <label className="block text-sm font-medium mb-1">Período (Mes)</label>
+                <label className="block text-xs text-brand-text-secondary font-medium mb-1">Período (Mes)</label>
                 <YearMonthPicker
                   value={selectedPeriodId ?? null}
                   onChange={(period) => {
@@ -800,86 +801,87 @@ export default function BudgetPage() {
 
             {/* Search */}
             <div>
-              <label className="block text-sm font-medium mb-1">Buscar</label>
+              <label className="block text-xs text-brand-text-secondary font-medium mb-1">Buscar</label>
               <Input
                 placeholder="Sustento o CECO..."
                 value={searchText}
                 onChange={e => setSearchText(e.target.value)}
                 disabled={!selectedYear}
                 title="Busca por nombre de Sustento o código de CECO (case-insensitive)"
+                className="h-9"
               />
             </div>
 
             {/* Management */}
             <div>
-              <label className="block text-sm font-medium mb-1">Gerencia</label>
-              <Select
-                value={managementId ?? ""}
-                onChange={e => {
-                  setManagementId(e.target.value ? Number(e.target.value) : undefined);
+              <FilterSelect
+                label="Gerencia"
+                placeholder="Todas"
+                value={managementId ? String(managementId) : ""}
+                onChange={(value) => {
+                  setManagementId(value ? Number(value) : undefined);
                   setAreaId(undefined);
                 }}
-              >
-                <option value="">Todas</option>
-                {(managementsQuery.data || []).map((m: any) => (
-                  <option key={m.id} value={m.id}>{m.name}</option>
-                ))}
-              </Select>
+                options={(managementsQuery.data || []).map((m: any) => ({
+                  value: String(m.id),
+                  label: m.name
+                }))}
+              />
             </div>
 
             {/* Area */}
             <div>
-              <label className="block text-sm font-medium mb-1">Área</label>
-              <Select
-                value={areaId ?? ""}
-                onChange={e => setAreaId(e.target.value ? Number(e.target.value) : undefined)}
+              <FilterSelect
+                label="Área"
+                placeholder="Todas"
+                value={areaId ? String(areaId) : ""}
+                onChange={(value) => setAreaId(value ? Number(value) : undefined)}
                 disabled={!managementId}
-              >
-                <option value="">Todas</option>
-                {availableAreas.map((a: any) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
-              </Select>
+                options={availableAreas.map((a: any) => ({
+                  value: String(a.id),
+                  label: a.name
+                }))}
+              />
             </div>
 
             {/* Package */}
             <div>
-              <label className="block text-sm font-medium mb-1">Paquete</label>
-              <Select
-                value={packageId ?? ""}
-                onChange={e => {
-                  setPackageId(e.target.value ? Number(e.target.value) : undefined);
+              <FilterSelect
+                label="Paquete"
+                placeholder="Todos"
+                value={packageId ? String(packageId) : ""}
+                onChange={(value) => {
+                  setPackageId(value ? Number(value) : undefined);
                   setConceptId(undefined);
                 }}
-              >
-                <option value="">Todos</option>
-                {(packagesQuery.data || []).map((p: any) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </Select>
+                options={(packagesQuery.data || []).map((p: any) => ({
+                  value: String(p.id),
+                  label: p.name
+                }))}
+              />
             </div>
 
             {/* Concept */}
             {packageId && (
               <div>
-                <label className="block text-sm font-medium mb-1">Concepto</label>
-                <Select
-                  value={conceptId ?? ""}
-                  onChange={e => setConceptId(e.target.value ? Number(e.target.value) : undefined)}
+                <FilterSelect
+                  label="Concepto"
+                  placeholder="Todos"
+                  value={conceptId ? String(conceptId) : ""}
+                  onChange={(value) => setConceptId(value ? Number(value) : undefined)}
                   disabled={!packageId}
-                >
-                  <option value="">Todos</option>
-                  {availableConcepts.map((c: any) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-        </Select>
+                  options={availableConcepts.map((c: any) => ({
+                    value: String(c.id),
+                    label: c.name
+                  }))}
+                />
               </div>
             )}
           </div>
 
           {/* Actions */}
           {viewMode === "monthly" && selectedPeriodId && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 pt-1">
               <Button
                 onClick={() => saveMonthlyMutation.mutate()}
                 disabled={!canSaveMonthly}
@@ -905,7 +907,7 @@ export default function BudgetPage() {
           )}
 
           {viewMode === "annual" && selectedYear && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 pt-1">
               <Button
                 onClick={() => saveAnnualMutation.mutate()}
                 disabled={!canSaveAnnual}

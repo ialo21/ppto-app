@@ -1,11 +1,10 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import Input from "../components/ui/Input";
-import Select from "../components/ui/Select";
+import FilterSelect, { FilterOption } from "../components/ui/FilterSelect";
 import YearMonthPicker from "../components/YearMonthPicker";
 import { 
-  ResponsiveContainer, 
   ComposedChart, 
   Bar, 
   Line, 
@@ -27,7 +26,9 @@ import {
   Calendar,
   TrendingDown,
   Percent,
-  PieChart
+  PieChart,
+  Building2,
+  Users
 } from "lucide-react";
 
 /**
@@ -315,6 +316,73 @@ function QuarterSelector({
 }
 
 /**
+ * Hook personalizado para debounce del resize del contenedor
+ * Previene re-renders del gráfico durante la transición del sidebar
+ */
+function useDebouncedContainerSize(delay: number = 350) {
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  const [element, setElement] = useState<HTMLDivElement | null>(null);
+  const isFirstResize = useRef(true);
+  const observerRef = useRef<ResizeObserver | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout>();
+
+  // Callback ref que se llama cuando el elemento se monta
+  const ref = useCallback((node: HTMLDivElement | null) => {
+    if (node) {
+      // Establecer tamaño inicial inmediatamente cuando el nodo se monta
+      setSize({
+        width: node.offsetWidth,
+        height: node.offsetHeight,
+      });
+      setElement(node);
+    }
+  }, []);
+
+  // Configurar ResizeObserver
+  useEffect(() => {
+    if (!element) return;
+
+    const updateSize = () => {
+      if (element) {
+        setSize({
+          width: element.offsetWidth,
+          height: element.offsetHeight,
+        });
+      }
+    };
+
+    observerRef.current = new ResizeObserver(() => {
+      // Primera notificación: ignorar (ya tenemos el tamaño inicial del callback ref)
+      if (isFirstResize.current) {
+        isFirstResize.current = false;
+        return;
+      }
+      
+      // Cambios posteriores: con debounce para evitar lag en transiciones
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      timeoutRef.current = setTimeout(updateSize, delay);
+    });
+
+    observerRef.current.observe(element);
+
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+      // Resetear flag para próximo mount
+      isFirstResize.current = true;
+    };
+  }, [element, delay]);
+
+  return { ref, size };
+}
+
+/**
  * Tooltip personalizado para el gráfico
  */
 function CustomTooltip({ active, payload, label }: any) {
@@ -380,6 +448,9 @@ export default function Dashboard() {
   // Ref para rastrear si estamos en un cambio programático (trimestre) o manual (usuario)
   const isProgrammaticChangeRef = useRef(false);
   const [selectedQuarter, setSelectedQuarter] = useState<number | null>(null);
+
+  // Hook para debounce del resize del gráfico
+  const { ref: chartContainerRef, size: chartSize } = useDebouncedContainerSize(350);
 
   // ══════════════════════════════════════════════════════════════
   // QUERIES - Catálogos
@@ -675,103 +746,70 @@ export default function Dashboard() {
               
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {/* Sustento */}
-                <div>
-                  <label className="block text-xs text-brand-text-secondary font-medium mb-1">
-                    Sustento
-                  </label>
-                  <Select
-                    value={supportId}
-                    onChange={(e) => setSupportId(e.target.value)}
-                    className="h-9 text-xs sm:text-sm"
-                  >
-                    <option value="">Todos</option>
-                    {supports.map((s: any) => (
-                      <option key={s.id} value={s.id}>
-                        {s.code} - {s.name}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
+                <FilterSelect
+                  label="Sustento"
+                  placeholder="Todos"
+                  value={supportId}
+                  onChange={setSupportId}
+                  options={supports.map((s: any) => ({
+                    value: String(s.id),
+                    label: `${s.code} - ${s.name}`,
+                    searchText: `${s.code} ${s.name}`
+                  }))}
+                />
 
                 {/* CECO */}
-                <div>
-                  <label className="block text-xs text-brand-text-secondary font-medium mb-1">
-                    Centro de Costo
-                  </label>
-                  <Select
-                    value={costCenterId}
-                    onChange={(e) => setCostCenterId(e.target.value)}
-                    className="h-9 text-xs sm:text-sm"
-                  >
-                    <option value="">Todos</option>
-                    {costCenters.map((c: any) => (
-                      <option key={c.id} value={c.id}>
-                        {c.code} - {c.name}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
+                <FilterSelect
+                  label="Centro de Costo"
+                  placeholder="Todos"
+                  value={costCenterId}
+                  onChange={setCostCenterId}
+                  options={costCenters.map((c: any) => ({
+                    value: String(c.id),
+                    label: `${c.code} - ${c.name || ''}`,
+                    searchText: `${c.code} ${c.name || ''}`
+                  }))}
+                />
 
                 {/* Gerencia */}
-                <div>
-                  <label className="block text-xs text-brand-text-secondary font-medium mb-1">
-                    Gerencia
-                  </label>
-                  <Select
-                    value={managementId}
-                    onChange={(e) => {
-                      setManagementId(e.target.value);
-                      setAreaId(""); // Limpiar área al cambiar gerencia
-                    }}
-                    className="h-9 text-xs sm:text-sm"
-                  >
-                    <option value="">Todas</option>
-                    {managements.map((m: any) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
+                <FilterSelect
+                  label="Gerencia"
+                  placeholder="Todas"
+                  value={managementId}
+                  onChange={(value) => {
+                    setManagementId(value);
+                    setAreaId(""); // Limpiar área al cambiar gerencia
+                  }}
+                  options={managements.map((m: any) => ({
+                    value: String(m.id),
+                    label: m.name
+                  }))}
+                />
 
                 {/* Área */}
-                <div>
-                  <label className="block text-xs text-brand-text-secondary font-medium mb-1">
-                    Área
-                  </label>
-                  <Select
-                    value={areaId}
-                    onChange={(e) => setAreaId(e.target.value)}
-                    className="h-9 text-xs sm:text-sm"
-                    disabled={!managementId}
-                  >
-                    <option value="">Todas</option>
-                    {filteredAreas.map((a: any) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
+                <FilterSelect
+                  label="Área"
+                  placeholder="Todas"
+                  value={areaId}
+                  onChange={setAreaId}
+                  disabled={!managementId}
+                  options={filteredAreas.map((a: any) => ({
+                    value: String(a.id),
+                    label: a.name
+                  }))}
+                />
 
                 {/* Paquete de Gasto */}
-                <div>
-                  <label className="block text-xs text-brand-text-secondary font-medium mb-1">
-                    Paquete de Gasto
-                  </label>
-                  <Select
-                    value={packageId}
-                    onChange={(e) => setPackageId(e.target.value)}
-                    className="h-9 text-xs sm:text-sm"
-                  >
-                    <option value="">Todos</option>
-                    {packages.map((p: any) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
+                <FilterSelect
+                  label="Paquete de Gasto"
+                  placeholder="Todos"
+                  value={packageId}
+                  onChange={setPackageId}
+                  options={packages.map((p: any) => ({
+                    value: String(p.id),
+                    label: p.name
+                  }))}
+                />
               </div>
             </div>
           )}
@@ -920,9 +958,11 @@ export default function Dashboard() {
                   </div>
                 </div>
                 
-                <div className="h-[320px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
+                <div className="h-[320px] w-full" ref={chartContainerRef}>
+                  {chartSize.width > 0 && chartSize.height > 0 && (
                     <ComposedChart 
+                      width={chartSize.width}
+                      height={chartSize.height}
                       data={data.series}
                       margin={{ top: 10, right: 10, left: 0, bottom: 5 }}
                     >
@@ -1010,7 +1050,7 @@ export default function Dashboard() {
                         />
                       )}
                     </ComposedChart>
-                  </ResponsiveContainer>
+                  )}
                 </div>
               </div>
 
@@ -1146,6 +1186,117 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
+
+            {/* ══════════════════════════════════════════════════════════════
+                SECCIÓN 3.5: INDICADORES POR GERENCIA
+                ══════════════════════════════════════════════════════════════ */}
+            {groupedDetailData.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 px-1">
+                  <Building2 size={18} className="text-brand-primary" />
+                  <h3 className="text-[14px] lg:text-[15px] font-semibold text-brand-text-primary uppercase tracking-wide">
+                    Comparativa por Gerencia
+                  </h3>
+                </div>
+                
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {groupedDetailData.map((group) => {
+                    const executionRate = group.subtotal.budget > 0 
+                      ? (group.subtotal.executed / group.subtotal.budget) * 100 
+                      : 0;
+                    
+                    const isOverBudget = group.subtotal.diferencia < 0;
+                    
+                    return (
+                      <div 
+                        key={group.managementName}
+                        className="bg-white border border-brand-border rounded-lg p-4 hover:shadow-md transition-shadow"
+                      >
+                        {/* Header */}
+                        <div className="flex items-start gap-2 mb-3">
+                          <div className="p-2 bg-brand-background rounded-lg">
+                            <Users size={16} className="text-brand-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-sm font-semibold text-brand-text-primary truncate">
+                              {group.managementName}
+                            </h4>
+                            <p className="text-xs text-brand-text-secondary">
+                              {group.rows.length} {group.rows.length === 1 ? 'sustento' : 'sustentos'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Ejecución Progress */}
+                        <div className="mb-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs text-brand-text-secondary flex items-center gap-1">
+                              <TrendingUp size={12} />
+                              {mode === 'execution' ? 'Cierre' : 'Contabilizado'}
+                            </span>
+                            <span className="text-sm font-bold text-brand-text-primary">
+                              {executionRate.toFixed(1)}%
+                            </span>
+                          </div>
+                          <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                            <div 
+                              className={`h-full rounded-full transition-all ${
+                                executionRate >= 90 ? 'bg-green-500' :
+                                executionRate >= 70 ? 'bg-blue-500' :
+                                executionRate >= 50 ? 'bg-yellow-500' :
+                                'bg-orange-500'
+                              }`}
+                              style={{ width: `${Math.min(executionRate, 100)}%` }}
+                            />
+                          </div>
+                          <p className="text-xs text-brand-text-secondary mt-1">
+                            {new Intl.NumberFormat("es-PE", {
+                              style: "currency",
+                              currency: "PEN",
+                              minimumFractionDigits: 0,
+                              maximumFractionDigits: 0,
+                            }).format(group.subtotal.executed)} de{' '}
+                            {new Intl.NumberFormat("es-PE", {
+                              style: "currency",
+                              currency: "PEN",
+                              minimumFractionDigits: 0,
+                              maximumFractionDigits: 0,
+                            }).format(group.subtotal.budget)}
+                          </p>
+                        </div>
+
+                        {/* Diferencia */}
+                        <div className={`p-2 rounded-lg ${
+                          isOverBudget ? 'bg-red-50' : 'bg-green-50'
+                        }`}>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-brand-text-secondary">
+                              {isOverBudget ? 'Sobre presupuesto' : 'Disponible'}
+                            </span>
+                            <span className={`text-sm font-bold ${
+                              isOverBudget ? 'text-red-600' : 'text-green-600'
+                            }`}>
+                              {new Intl.NumberFormat("es-PE", {
+                                style: "currency",
+                                currency: "PEN",
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 0,
+                              }).format(Math.abs(group.subtotal.diferencia))}
+                              {isOverBudget && ' ⚠️'}
+                            </span>
+                          </div>
+                          {!isOverBudget && (
+                            <p className="text-xs text-green-700 mt-1">
+                              {((Math.abs(group.subtotal.diferencia) / group.subtotal.budget) * 100).toFixed(1)}% del presupuesto
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* ══════════════════════════════════════════════════════════════
                 SECCIÓN 4: TABLA DE DETALLES POR SUSTENTO

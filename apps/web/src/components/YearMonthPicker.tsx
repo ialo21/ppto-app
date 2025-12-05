@@ -363,7 +363,7 @@ export default function YearMonthPicker({
       {/* Input trigger */}
       <div
         className={cn(
-          "relative flex items-center h-10 w-full rounded-xl border bg-white px-3 cursor-text",
+          "relative flex items-center h-9 w-full rounded-xl border bg-white px-3 cursor-text",
           "outline-none transition-colors",
           disabled && "opacity-50 cursor-not-allowed bg-slate-50",
           error 

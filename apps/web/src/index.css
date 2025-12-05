@@ -54,10 +54,10 @@ body {
   overflow-x: hidden;
   z-index: 40;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
-  transition: width 0.3s ease;
+  transition: width 0.3s ease-in-out, transform 0.3s ease-in-out;
 }
 
-/* Sidebar colapsado */
+/* Sidebar colapsado (solo en desktop) */
 .sidebar-collapsed {
   width: 4rem; /* w-16 = 64px = 4rem - solo iconos */
 }
@@ -67,6 +67,22 @@ body {
   justify-content: center;
   padding-left: 0.75rem;
   padding-right: 0.75rem;
+}
+
+/* Prevenir que textos largos se partan en múltiples líneas */
+.sidebar-fixed nav a {
+  white-space: nowrap;
+}
+
+/* Sidebar en mobile: oculto por defecto */
+.sidebar-mobile {
+  transform: translateX(-100%);
+  z-index: 50;
+}
+
+/* Sidebar mobile abierto: visible en overlay */
+.sidebar-mobile-open {
+  transform: translateX(0);
 }
 
 /* Scrollbar personalizada para el sidebar */
@@ -88,14 +104,28 @@ body {
   background: rgba(255, 255, 255, 0.5);
 }
 
-/* Responsive: en pantallas muy pequeñas, el sidebar podría ocultarse o ajustarse */
-@media (max-width: 768px) {
+/* Desktop (lg y superior): comportamiento con hover */
+@media (min-width: 1024px) {
   .sidebar-fixed {
-    position: fixed;
+    /* En desktop, siempre visible (no transform) */
+    transform: translateX(0);
   }
   
   .sidebar-collapsed {
     width: 4rem;
+  }
+}
+
+/* Mobile y tablet (menos de lg): comportamiento overlay */
+@media (max-width: 1023px) {
+  .sidebar-fixed {
+    /* En mobile, ancho completo cuando está abierto */
+    width: 16rem;
+  }
+  
+  /* En mobile, el estado collapsed no aplica */
+  .sidebar-mobile.sidebar-collapsed {
+    width: 16rem;
   }
 }
 

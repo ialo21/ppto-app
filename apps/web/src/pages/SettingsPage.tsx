@@ -3,9 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api } from "../lib/api";
 import { Card, CardContent, CardHeader } from "../components/ui/Card";
-import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
-import Select from "../components/ui/Select";
+import FilterSelect from "../components/ui/FilterSelect";
+import MultiSelectFilter from "../components/ui/MultiSelectFilter";
+import Button from "../components/ui/Button";
 import { Table, Th, Td } from "../components/ui/Table";
 
 type ExpenseConcept = { id: number; name: string; packageId: number };
@@ -144,7 +145,6 @@ export default function CatalogsPage() {
   };
   
   const [supportForm, setSupportForm] = useState(INITIAL_SUPPORT_FORM);
-  const [costCenterSearchSupport, setCostCenterSearchSupport] = useState("");  // Para búsqueda en selector de CECOs de Sustentos
   const [exchangeRateForm, setExchangeRateForm] = useState({ id: "", year: "", rate: "" });
 
   const conceptRows = useMemo(() => {
@@ -418,7 +418,6 @@ export default function CatalogsPage() {
       toast.success("Sustento guardado");
       setSupportForm(INITIAL_SUPPORT_FORM);
       setSupportErrors({});
-      setCostCenterSearchSupport("");
       queryClient.invalidateQueries({ queryKey: ["supports"] });
     },
     onError: (error: any) => {
@@ -637,17 +636,16 @@ export default function CatalogsPage() {
                 )}
               </div>
               <div className="mt-4 space-y-3">
-                <Select
+                <FilterSelect
+                  label="Paquete de Gasto *"
+                  placeholder="Seleccionar paquete"
                   value={conceptForm.packageId || (selectedPackageId ? String(selectedPackageId) : "")}
-                  onChange={e => setConceptForm(f => ({ ...f, packageId: e.target.value }))}
-                >
-                  <option value="">Selecciona un paquete</option>
-                  {(packagesQuery.data || []).map(pkg => (
-                    <option key={pkg.id} value={pkg.id}>
-                      {pkg.name}
-                    </option>
-                  ))}
-                </Select>
+                  onChange={(value) => setConceptForm(f => ({ ...f, packageId: value }))}
+                  options={(packagesQuery.data || []).map(pkg => ({
+                    value: String(pkg.id),
+                    label: pkg.name
+                  }))}
+                />
                 <Input
                   placeholder="Nombre del concepto"
                   value={conceptForm.name}
@@ -976,18 +974,17 @@ export default function CatalogsPage() {
               </div>
               <div className="mt-4 space-y-3">
                 <div>
-                  <Select
+                  <FilterSelect
+                    label="Gerencia *"
+                    placeholder="Seleccionar gerencia"
                     value={areaForm.managementId || (selectedManagementId ? String(selectedManagementId) : "")}
-                    onChange={e => setAreaForm(f => ({ ...f, managementId: e.target.value }))}
+                    onChange={(value) => setAreaForm(f => ({ ...f, managementId: value }))}
+                    options={(managementsQuery.data || []).map(mgmt => ({
+                      value: String(mgmt.id),
+                      label: mgmt.name
+                    }))}
                     className={areaErrors.managementId ? "border-red-500" : ""}
-                  >
-                    <option value="">Selecciona una gerencia</option>
-                    {(managementsQuery.data || []).map(mgmt => (
-                      <option key={mgmt.id} value={mgmt.id}>
-                        {mgmt.name}
-                      </option>
-                    ))}
-                  </Select>
+                  />
                   {areaErrors.managementId && <p className="text-xs text-red-600 mt-1">{areaErrors.managementId}</p>}
                 </div>
                 <div>
@@ -1080,7 +1077,6 @@ export default function CatalogsPage() {
                   onClick={() => {
                     setSupportForm(INITIAL_SUPPORT_FORM);
                     setSupportErrors({});
-                    setCostCenterSearchSupport("");
                   }}
                 >
                   Cancelar
@@ -1094,144 +1090,91 @@ export default function CatalogsPage() {
               </p>
             )}
             <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <Input
-                placeholder="Nombre"
-                value={supportForm.name}
-                onChange={e => setSupportForm(f => ({ ...f, name: e.target.value }))}
-              />
               <div>
-                <Select
+                <label className="block text-xs text-brand-text-secondary font-medium mb-1">Nombre</label>
+                <Input
+                  placeholder="Nombre"
+                  value={supportForm.name}
+                  onChange={e => setSupportForm(f => ({ ...f, name: e.target.value }))}
+                  className="h-9"
+                />
+              </div>
+              <div>
+                <FilterSelect
+                  label="Gerencia"
+                  placeholder="Sin gerencia"
                   value={supportForm.managementId}
-                  onChange={e =>
+                  onChange={(value) =>
                     setSupportForm(f => ({
                       ...f,
-                      managementId: e.target.value,
+                      managementId: value,
                       areaId: ""
                     }))
                   }
+                  options={(managementsQuery.data || []).map(mgmt => ({
+                    value: String(mgmt.id),
+                    label: mgmt.name
+                  }))}
                   className={supportErrors.managementId ? "border-red-500" : ""}
-                >
-                  <option value="">Sin gerencia</option>
-                  {(managementsQuery.data || []).map(mgmt => (
-                    <option key={mgmt.id} value={mgmt.id}>
-                      {mgmt.name}
-                    </option>
-                  ))}
-                </Select>
+                />
                 {supportErrors.managementId && <p className="text-xs text-red-600 mt-1">{supportErrors.managementId}</p>}
               </div>
               <div>
-                <Select
+                <FilterSelect
+                  label="Área"
+                  placeholder="Sin área"
                   value={supportForm.areaId}
-                  onChange={e => setSupportForm(f => ({ ...f, areaId: e.target.value }))}
+                  onChange={(value) => setSupportForm(f => ({ ...f, areaId: value }))}
+                  options={availableAreas.map(area => ({
+                    value: String(area.id),
+                    label: area.name
+                  }))}
                   className={supportErrors.areaId ? "border-red-500" : ""}
-                >
-                  <option value="">Sin área</option>
-                  {availableAreas.map(area => (
-                    <option key={area.id} value={area.id}>
-                      {area.name}
-                    </option>
-                  ))}
-                </Select>
+                />
                 {supportErrors.areaId && <p className="text-xs text-red-600 mt-1">{supportErrors.areaId}</p>}
               </div>
-              {/* Selector múltiple de CECOs */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700">Centros de costo (múltiples)</label>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Buscar CECO por código o nombre..."
-                    value={costCenterSearchSupport}
-                    onChange={e => setCostCenterSearchSupport(e.target.value)}
-                  />
-                </div>
-                {/* Lista de CECOs filtrados */}
-                {costCenterSearchSupport.trim() && (
-                  <div className="max-h-40 overflow-y-auto border rounded-md p-2 space-y-1">
-                    {(costCentersQuery.data || [])
-                      .filter(cc => {
-                        const search = costCenterSearchSupport.toLowerCase();
-                        const selectedIds = supportForm.costCenterIds ?? [];
-                        return (
-                          cc.code.toLowerCase().includes(search) ||
-                          (cc.name?.toLowerCase() || "").includes(search)
-                        ) && !selectedIds.includes(cc.id);
-                      })
-                      .map(cc => (
-                        <button
-                          key={cc.id}
-                          type="button"
-                          className="w-full text-left px-2 py-1 hover:bg-slate-100 rounded text-sm"
-                          onClick={() => {
-                            setSupportForm(f => ({
-                              ...(f ?? INITIAL_SUPPORT_FORM),
-                              costCenterIds: [...(f?.costCenterIds ?? []), cc.id]
-                            }));
-                            setCostCenterSearchSupport("");
-                          }}
-                        >
-                          {cc.code} — {cc.name || "—"}
-                        </button>
-                      ))}
-                  </div>
-                )}
-                {/* Chips de CECOs seleccionados */}
-                {(() => {
-                  const selectedIds = supportForm.costCenterIds ?? [];
-                  return selectedIds.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {selectedIds.map(ccId => {
-                        const cc = (costCentersQuery.data || []).find(c => c.id === ccId);
-                        if (!cc) return null;
-                        return (
-                          <span
-                            key={ccId}
-                            className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-md text-sm"
-                          >
-                            {cc.code} — {cc.name || "—"}
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setSupportForm(f => ({
-                                  ...(f ?? INITIAL_SUPPORT_FORM),
-                                  costCenterIds: (f?.costCenterIds ?? []).filter(id => id !== ccId)
-                                }))
-                              }
-                              className="text-blue-600 hover:text-blue-800"
-                            >
-                              ×
-                            </button>
-                          </span>
-                        );
-                      })}
-                    </div>
-                  );
-                })()}
+              <div>
+                <MultiSelectFilter
+                  label="Centros de costo (múltiples)"
+                  placeholder="Sin CECOs"
+                  values={(supportForm.costCenterIds ?? []).map(id => String(id))}
+                  onChange={(values) => setSupportForm(f => ({
+                    ...f,
+                    costCenterIds: values.map(v => Number(v))
+                  }))}
+                  options={(costCentersQuery.data || []).map(cc => ({
+                    value: String(cc.id),
+                    label: `${cc.code} — ${cc.name || "—"}`,
+                    searchText: `${cc.code} ${cc.name || ""}`
+                  }))}
+                  className={supportErrors.costCenterIds ? "border-red-500" : ""}
+                />
                 {supportErrors.costCenterIds && (
                   <p className="text-xs text-red-600 mt-1">{supportErrors.costCenterIds}</p>
                 )}
               </div>
-              <Select
+              <FilterSelect
+                label="Paquete de Gasto"
+                placeholder="Sin paquete"
                 value={supportForm.packageId}
-                onChange={e =>
+                onChange={(value) =>
                   setSupportForm(f => ({
                     ...f,
-                    packageId: e.target.value,
+                    packageId: value,
                     conceptId: ""
                   }))
                 }
-              >
-                <option value="">Sin paquete</option>
-                {(packagesQuery.data || []).map(pkg => (
-                  <option key={pkg.id} value={pkg.id}>
-                    {pkg.name}
-                  </option>
-                ))}
-              </Select>
-              <Select
+                options={(packagesQuery.data || []).map(pkg => ({
+                  value: String(pkg.id),
+                  label: pkg.name
+                }))}
+              />
+              <FilterSelect
+                label="Concepto de Gasto"
+                placeholder="Sin concepto"
                 value={supportForm.conceptId}
-                onChange={e => {
-                  const conceptId = e.target.value;
+                onChange={(value) => {
+                  const conceptId = value;
                   const concept = conceptRows.find(item => item.id === Number(conceptId));
                   setSupportForm(f => ({
                     ...f,
@@ -1239,25 +1182,23 @@ export default function CatalogsPage() {
                     packageId: conceptId ? String(concept?.packageId ?? "") : f.packageId
                   }));
                 }}
-              >
-                <option value="">Sin concepto</option>
-                {availableConcepts.map(concept => (
-                  <option key={concept.id} value={concept.id}>
-                    {concept.name}
-                    {concept.packageName ? ` — ${concept.packageName}` : ""}
-                  </option>
-                ))}
-              </Select>
-              <Select
+                options={availableConcepts.map(concept => ({
+                  value: String(concept.id),
+                  label: concept.packageName ? `${concept.name} — ${concept.packageName}` : concept.name,
+                  searchText: `${concept.name} ${concept.packageName || ''}`
+                }))}
+              />
+              <FilterSelect
+                label="Tipo de Gasto"
+                placeholder="Seleccionar tipo"
                 value={supportForm.expenseType}
-                onChange={e => setSupportForm(f => ({ ...f, expenseType: e.target.value }))}
-              >
-                {expenseTypes.map(option => (
-                  <option key={option.value || "none"} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </Select>
+                onChange={(value) => setSupportForm(f => ({ ...f, expenseType: value }))}
+                options={expenseTypes.map(option => ({
+                  value: option.value,
+                  label: option.label
+                }))}
+                searchable={false}
+              />
             </div>
             <div className="mt-3">
               <Button onClick={() => saveSupport.mutate()} disabled={saveSupport.isPending || !supportForm.name.trim()}>
@@ -1328,7 +1269,6 @@ export default function CatalogsPage() {
                                 conceptId: support.expenseConcept ? String(support.expenseConcept.id) : "",
                                 expenseType: support.expenseType ?? ""
                               });
-                              setCostCenterSearchSupport("");
                             }}
                           >
                             Editar
@@ -1730,19 +1670,31 @@ function BulkUploadSection({ queryClient }: { queryClient: any }) {
             <CardHeader>
               <h3 className="text-lg font-semibold">Detalle de Filas ({filteredRows.length})</h3>
               <div className="flex flex-wrap gap-2 mt-2">
-                <Select value={filterType} onChange={e => { setFilterType(e.target.value); setCurrentPage(1); }} className="text-sm">
-                  <option value="all">Todos los tipos</option>
-                  {uniqueTypes.map(type => (
-                    <option key={type} value={type}>{type}</option>
-                  ))}
-                </Select>
-                <Select value={filterAction} onChange={e => { setFilterAction(e.target.value); setCurrentPage(1); }} className="text-sm">
-                  <option value="all">Todas las acciones</option>
-                  <option value="created">Creados</option>
-                  <option value="updated">Actualizados</option>
-                  <option value="skipped">Omitidos</option>
-                  <option value="error">Errores</option>
-                </Select>
+                <FilterSelect
+                  placeholder="Todos los tipos"
+                  value={filterType}
+                  onChange={(value) => { setFilterType(value); setCurrentPage(1); }}
+                  options={[{ value: "all", label: "Todos los tipos" }, ...uniqueTypes.map(type => ({
+                    value: type,
+                    label: type
+                  }))]}
+                  searchable={false}
+                  className="text-sm w-auto min-w-[160px]"
+                />
+                <FilterSelect
+                  placeholder="Todas las acciones"
+                  value={filterAction}
+                  onChange={(value) => { setFilterAction(value); setCurrentPage(1); }}
+                  options={[
+                    { value: "all", label: "Todas las acciones" },
+                    { value: "created", label: "Creados" },
+                    { value: "updated", label: "Actualizados" },
+                    { value: "skipped", label: "Omitidos" },
+                    { value: "error", label: "Errores" }
+                  ]}
+                  searchable={false}
+                  className="text-sm w-auto min-w-[180px]"
+                />
               </div>
             </CardHeader>
             <CardContent>

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createBrowserRouter, RouterProvider, NavLink, Outlet, Navigate, useNavigate } from "react-router-dom";
@@ -22,7 +22,21 @@ const sidebarItems = [
   { path: "/settings", label: "Catálogos", icon: Archive, permission: "catalogos" }
 ];
 
-function Sidebar({ isCollapsed }: { isCollapsed: boolean }){
+function Sidebar({ 
+  isCollapsed, 
+  isOpen, 
+  isMobile, 
+  onMouseEnter, 
+  onMouseLeave,
+  onClose 
+}: { 
+  isCollapsed: boolean;
+  isOpen: boolean;
+  isMobile: boolean;
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
+  onClose?: () => void;
+}){
   const { hasPermission } = useAuth();
   const link = "flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 text-white/90 hover:bg-white/20 hover:text-white";
   const active = "bg-white/30 text-white font-medium";
@@ -30,30 +44,56 @@ function Sidebar({ isCollapsed }: { isCollapsed: boolean }){
   // Filtrar items según permisos del usuario
   const allowedItems = sidebarItems.filter(item => hasPermission(item.permission));
   
+  // En mobile: si no está abierto, no renderizar nada
+  if (isMobile && !isOpen) {
+    return null;
+  }
+  
   return (
-    <aside className={`sidebar-fixed transition-all duration-300 ${isCollapsed ? 'sidebar-collapsed' : ''}`}>
-      <nav className="space-y-1">
-        {allowedItems.map(item => {
-          const Icon = item.icon;
-          return (
-            <NavLink 
-              key={item.path}
-              to={item.path} 
-              end={item.end}
-              className={({isActive})=>`${link} ${isActive?active:""}`} 
-              title={item.label}
-            >
-              <Icon size={18} className="flex-shrink-0"/>
-              {!isCollapsed && <span>{item.label}</span>}
-            </NavLink>
-          );
-        })}
-      </nav>
-    </aside>
+    <>
+      {/* Overlay de fondo solo en mobile cuando está abierto */}
+      {isMobile && isOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
+          onClick={onClose}
+        />
+      )}
+      
+      <aside 
+        className={`sidebar-fixed transition-all duration-300 ease-in-out ${
+          isMobile ? 'sidebar-mobile' : ''
+        } ${
+          isCollapsed && !isMobile ? 'sidebar-collapsed' : ''
+        } ${
+          isOpen && isMobile ? 'sidebar-mobile-open' : ''
+        }`}
+        onMouseEnter={!isMobile ? onMouseEnter : undefined}
+        onMouseLeave={!isMobile ? onMouseLeave : undefined}
+      >
+        <nav className="space-y-1">
+          {allowedItems.map(item => {
+            const Icon = item.icon;
+            return (
+              <NavLink 
+                key={item.path}
+                to={item.path} 
+                end={item.end}
+                className={({isActive})=>`${link} ${isActive?active:""}`} 
+                title={item.label}
+                onClick={isMobile ? onClose : undefined}
+              >
+                <Icon size={18} className="flex-shrink-0"/>
+                {(!isCollapsed || isMobile) && <span>{item.label}</span>}
+              </NavLink>
+            );
+          })}
+        </nav>
+      </aside>
+    </>
   );
 }
 
-function Topbar({ onToggleSidebar, isSidebarCollapsed }: { onToggleSidebar: () => void; isSidebarCollapsed: boolean }){
+function Topbar({ onToggleSidebar, isSidebarCollapsed, showMenuButton }: { onToggleSidebar: () => void; isSidebarCollapsed: boolean; showMenuButton: boolean }){
   const { user, logout, hasPermission } = useAuth();
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -67,13 +107,15 @@ function Topbar({ onToggleSidebar, isSidebarCollapsed }: { onToggleSidebar: () =
   return (
     <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between border-b border-border-default bg-white shadow-sm px-4 py-3">
       <div className="flex items-center gap-4">
-        <button
-          onClick={onToggleSidebar}
-          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          aria-label={isSidebarCollapsed ? "Expandir sidebar" : "Colapsar sidebar"}
-        >
-          {isSidebarCollapsed ? <Menu size={20} className="text-gray-700" /> : <X size={20} className="text-gray-700" />}
-        </button>
+        {showMenuButton && (
+          <button
+            onClick={onToggleSidebar}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            aria-label={isSidebarCollapsed ? "Abrir menú" : "Cerrar menú"}
+          >
+            {isSidebarCollapsed ? <Menu size={20} className="text-gray-700" /> : <X size={20} className="text-gray-700" />}
+          </button>
+        )}
         <div className="font-semibold text-lg text-gray-800">PORTAL PPTO</div>
       </div>
       
@@ -148,22 +190,93 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// Hook personalizado para detectar tamaño de pantalla
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.matchMedia(query).matches;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(query);
+    const handleChange = (e: MediaQueryListEvent) => setMatches(e.matches);
+    
+    // Listener moderno
+    mediaQuery.addEventListener('change', handleChange);
+    
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, [query]);
+
+  return matches;
+}
+
 function AppLayout(){
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  // Detectar si estamos en desktop (lg breakpoint = 1024px en Tailwind)
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
+  
+  // Estado para desktop: colapsado por defecto
+  const [isCollapsedDesktop, setIsCollapsedDesktop] = useState(true);
+  
+  // Estado para mobile: cerrado por defecto
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+  
+  // Handlers para hover en desktop
+  const handleMouseEnter = () => {
+    if (isDesktop) {
+      setIsCollapsedDesktop(false);
+    }
+  };
+  
+  const handleMouseLeave = () => {
+    if (isDesktop) {
+      setIsCollapsedDesktop(true);
+    }
+  };
+  
+  // Handler para toggle en mobile
+  const handleToggleMobile = () => {
+    setIsMobileOpen(!isMobileOpen);
+  };
+  
+  // Cerrar sidebar mobile
+  const handleCloseMobile = () => {
+    setIsMobileOpen(false);
+  };
+  
+  // Calcular margen izquierdo del contenido
+  const getMainMargin = () => {
+    if (!isDesktop) {
+      return 'ml-0'; // En mobile, sin margen (sidebar en overlay)
+    }
+    return isCollapsedDesktop ? 'ml-16' : 'ml-64';
+  };
   
   return (
     <ProtectedRoute>
       <div className="min-h-screen">
         {/* Header global full-width */}
-        <Topbar onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)} isSidebarCollapsed={isSidebarCollapsed} />
+        <Topbar 
+          onToggleSidebar={handleToggleMobile} 
+          isSidebarCollapsed={!isMobileOpen}
+          showMenuButton={!isDesktop}
+        />
         
         {/* Layout principal: sidebar + contenido */}
         <div className="flex pt-[57px]"> {/* pt = altura del header (p-3 = 12px top/bottom + border) */}
-          <Sidebar isCollapsed={isSidebarCollapsed} />
+          <Sidebar 
+            isCollapsed={isCollapsedDesktop}
+            isOpen={isMobileOpen}
+            isMobile={!isDesktop}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+            onClose={handleCloseMobile}
+          />
           
           {/* Contenido principal con margen izquierdo dinámico */}
-          <main className={`flex-1 w-full bg-brand-background transition-all duration-300 ${
-            isSidebarCollapsed ? 'ml-16' : 'ml-64'
+          <main className={`flex-1 w-full bg-brand-background transition-all duration-300 ease-in-out ${
+            getMainMargin()
           }`}>
             <div className="container-page">
               <Outlet />

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { api } from "../lib/api";
+import { usePrefetchCatalogs } from "../hooks/usePrefetchCatalogs";
 
 export interface AuthUser {
   id: number;
@@ -28,6 +29,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     checkSession();
   }, []);
+
+  // Precargar catálogos cuando el usuario esté autenticado
+  // Esto evita el "mini refresh" al entrar al Dashboard por primera vez
+  usePrefetchCatalogs(!!user && !loading);
 
   async function checkSession() {
     try {

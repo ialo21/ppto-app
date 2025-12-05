@@ -4,11 +4,12 @@ import { api } from "../lib/api";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader } from "../components/ui/Card";
 import Input from "../components/ui/Input";
-import Select from "../components/ui/Select";
+import FilterSelect from "../components/ui/FilterSelect";
 import Button from "../components/ui/Button";
 import { Table, Th, Td } from "../components/ui/Table";
 import StatusChip from "../components/StatusChip";
 import YearMonthPicker from "../components/YearMonthPicker";
+import { formatNumber } from "../utils/numberFormat";
 
 type OC = {
   id: number;
@@ -700,60 +701,63 @@ export default function InvoicesPage() {
             </label>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid md:grid-cols-3 gap-3">
             {/* Tipo */}
-            <div className="w-full">
-              <label className="block text-sm font-medium mb-1">Tipo *</label>
-              <Select
+            <div>
+              <FilterSelect
+                label="Tipo *"
+                placeholder="Seleccionar tipo"
                 value={form.docType}
-                onChange={(e) => handleFormChange("docType", e.target.value)}
+                onChange={(value) => handleFormChange("docType", value)}
+                options={[
+                  { value: "FACTURA", label: "FACTURA" },
+                  { value: "NOTA_CREDITO", label: "NOTA DE CRÉDITO" }
+                ]}
+                searchable={false}
                 className={fieldErrors.docType ? "border-red-500" : ""}
-              >
-                <option value="FACTURA">FACTURA</option>
-                <option value="NOTA_CREDITO">NOTA DE CRÉDITO</option>
-              </Select>
+              />
               {fieldErrors.docType && <p className="text-xs text-red-600 mt-1">{fieldErrors.docType}</p>}
             </div>
 
             {/* OC o Proveedor/Moneda manual */}
             {hasOC ? (
-              <div className="md:col-span-2 w-full">
-                <label className="block text-sm font-medium mb-1">Orden de Compra *</label>
-                <Select
+              <div className="md:col-span-2">
+                <FilterSelect
+                  label="Orden de Compra *"
+                  placeholder="Seleccionar OC"
                   value={form.ocId}
-                  onChange={(e) => handleFormChange("ocId", e.target.value)}
+                  onChange={(value) => handleFormChange("ocId", value)}
+                  options={(ocsQuery.data || []).map(oc => ({
+                    value: String(oc.id),
+                    label: `${oc.numeroOc || `OC-${oc.id}`} - ${oc.proveedor} (${oc.moneda} ${formatNumber(oc.importeSinIgv)})`,
+                    searchText: `${oc.numeroOc || oc.id} ${oc.proveedor}`
+                  }))}
                   className={fieldErrors.ocId ? "border-red-500" : ""}
-                >
-                  <option value="">Selecciona una OC</option>
-                  {(ocsQuery.data || []).map(oc => (
-                    <option key={oc.id} value={oc.id}>
-                      {oc.numeroOc || `OC-${oc.id}`} - {oc.proveedor} ({oc.moneda} {Number(oc.importeSinIgv).toFixed(2)})
-                    </option>
-                  ))}
-                </Select>
+                />
                 {fieldErrors.ocId && <p className="text-xs text-red-600 mt-1">{fieldErrors.ocId}</p>}
               </div>
             ) : (
               <>
-                <div className="w-full">
-                  <label className="block text-sm font-medium mb-1">Sustento *</label>
-                  <Select
+                <div>
+                  <FilterSelect
+                    label="Sustento *"
+                    placeholder="Seleccionar sustento"
                     value={form.supportId}
-                    onChange={(e) => {
-                      handleFormChange("supportId", e.target.value);
+                    onChange={(value) => {
+                      handleFormChange("supportId", value);
                       // Limpiar allocations al cambiar sustento
                       setAllocations([]);
                     }}
+                    options={(supports || []).map((sup: any) => ({
+                      value: String(sup.id),
+                      label: sup.name,
+                      searchText: `${sup.code || ''} ${sup.name}`
+                    }))}
                     className={fieldErrors.supportId ? "border-red-500" : ""}
-                  >
-                    <option value="">Selecciona sustento</option>
-                    {(supports || []).map((sup: any) => (
-                      <option key={sup.id} value={sup.id}>{sup.name}</option>
-                    ))}
-                  </Select>
+                  />
                   {fieldErrors.supportId && <p className="text-xs text-red-600 mt-1">{fieldErrors.supportId}</p>}
                 </div>
-                <div className="w-full">
+                <div>
                   <label className="block text-sm font-medium mb-1">Proveedor *</label>
                   <Input
                     placeholder="Proveedor"
@@ -763,23 +767,26 @@ export default function InvoicesPage() {
                   />
                   {fieldErrors.proveedor && <p className="text-xs text-red-600 mt-1">{fieldErrors.proveedor}</p>}
                 </div>
-                <div className="w-full">
-                  <label className="block text-sm font-medium mb-1">Moneda *</label>
-                  <Select
+                <div>
+                  <FilterSelect
+                    label="Moneda *"
+                    placeholder="Seleccionar moneda"
                     value={form.moneda}
-                    onChange={(e) => handleFormChange("moneda", e.target.value)}
+                    onChange={(value) => handleFormChange("moneda", value)}
+                    options={[
+                      { value: "PEN", label: "PEN" },
+                      { value: "USD", label: "USD" }
+                    ]}
+                    searchable={false}
                     className={fieldErrors.moneda ? "border-red-500" : ""}
-                  >
-                    <option value="PEN">PEN</option>
-                    <option value="USD">USD</option>
-                  </Select>
+                  />
                   {fieldErrors.moneda && <p className="text-xs text-red-600 mt-1">{fieldErrors.moneda}</p>}
                 </div>
               </>
             )}
 
             {/* Número de Factura */}
-            <div className="w-full">
+            <div>
               <label className="block text-sm font-medium mb-1">Número de Factura *</label>
               <Input
                 placeholder="Número de Factura"
@@ -791,7 +798,7 @@ export default function InvoicesPage() {
             </div>
 
             {/* Monto sin IGV */}
-            <div className="w-full">
+            <div>
               <label className="block text-sm font-medium mb-1">Monto sin IGV *</label>
               <Input
                 type="number"
@@ -806,7 +813,7 @@ export default function InvoicesPage() {
 
             {/* Tipo de cambio override (solo si moneda ≠ PEN) */}
             {currentCurrency !== "PEN" && (
-              <div className="w-full">
+              <div>
                 <label className="block text-sm font-medium mb-1">TC (opcional)</label>
                 <Input
                   type="number"
@@ -824,7 +831,7 @@ export default function InvoicesPage() {
             )}
 
             {/* Incidente Ultimus */}
-            <div className="w-full">
+            <div>
               <label className="block text-sm font-medium mb-1">Incidente Ultimus</label>
               <Input
                 placeholder="Incidente Ultimus"
@@ -841,7 +848,7 @@ export default function InvoicesPage() {
             </div>
 
             {/* Mes Contable */}
-            <div className="w-full">
+            <div>
               <label className="block text-sm font-medium mb-1">Mes Contable (opcional)</label>
               <YearMonthPicker
                 value={mesContablePeriodId}
@@ -871,7 +878,7 @@ export default function InvoicesPage() {
               (es decir, cuando tiene un mes contable asignado).
             */}
             {currentCurrency === "USD" && mesContablePeriodId && (
-              <div className="w-full">
+              <div>
                 <label className="block text-sm font-medium mb-1">TC Real (editable)</label>
                 <Input
                   type="number"
@@ -944,7 +951,7 @@ export default function InvoicesPage() {
             </div>
 
             {/* Detalle */}
-            <div className="md:col-span-3 w-full">
+            <div className="md:col-span-3">
               <label className="block text-sm font-medium mb-1">Detalle</label>
               <Input
                 placeholder="Detalle (opcional)"
@@ -1081,16 +1088,16 @@ export default function InvoicesPage() {
                   <>
                     <div>
                       <span className="text-slate-600">Importe Total:</span>
-                      <p className="font-medium text-slate-900">{consumoOC.moneda} {consumoOC.importeTotal.toFixed(2)}</p>
+                      <p className="font-medium text-slate-900">{consumoOC.moneda} {formatNumber(consumoOC.importeTotal)}</p>
                     </div>
                     <div>
                       <span className="text-slate-600">Consumido:</span>
-                      <p className="font-medium text-slate-900">{consumoOC.moneda} {consumoOC.consumido.toFixed(2)}</p>
+                      <p className="font-medium text-slate-900">{consumoOC.moneda} {formatNumber(consumoOC.consumido)}</p>
                     </div>
                     <div className="md:col-span-2">
                       <span className="text-slate-600">Saldo Disponible:</span>
                       <p className={`font-medium ${consumoOC.saldoDisponible < 0 ? "text-red-600" : "text-green-600"}`}>
-                        {consumoOC.moneda} {consumoOC.saldoDisponible.toFixed(2)}
+                        {consumoOC.moneda} {formatNumber(consumoOC.saldoDisponible)}
                       </p>
                     </div>
                   </>
@@ -1115,34 +1122,39 @@ export default function InvoicesPage() {
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-2 mb-4">
-            <Select
+            <FilterSelect
+              placeholder="Todos los tipos"
               value={filters.docType}
-              onChange={e => {
-                setFilters(f => ({ ...f, docType: e.target.value }));
+              onChange={(value) => {
+                setFilters(f => ({ ...f, docType: value }));
                 setSortConfig(DEFAULT_SORT);
               }}
-            >
-              <option value="">Todos los tipos</option>
-              <option value="FACTURA">FACTURA</option>
-              <option value="NOTA_CREDITO">NOTA DE CRÉDITO</option>
-            </Select>
+              options={[
+                { value: "FACTURA", label: "FACTURA" },
+                { value: "NOTA_CREDITO", label: "NOTA DE CRÉDITO" }
+              ]}
+              searchable={false}
+              className="w-auto min-w-[160px]"
+            />
 
-            <Select
+            <FilterSelect
+              placeholder="Todos los estados"
               value={filters.status}
-              onChange={e => {
-                setFilters(f => ({ ...f, status: e.target.value }));
+              onChange={(value) => {
+                setFilters(f => ({ ...f, status: value }));
                 setSortConfig(DEFAULT_SORT);
               }}
-            >
-              <option value="">Todos los estados</option>
-              <option value="INGRESADO">INGRESADO</option>
-              <option value="EN_APROBACION">EN APROBACIÓN</option>
-              <option value="EN_CONTABILIDAD">EN CONTABILIDAD</option>
-              <option value="EN_TESORERIA">EN TESORERÍA</option>
-              <option value="EN_ESPERA_DE_PAGO">EN ESPERA DE PAGO</option>
-              <option value="PAGADO">PAGADO</option>
-              <option value="RECHAZADO">RECHAZADO</option>
-            </Select>
+              options={[
+                { value: "INGRESADO", label: "INGRESADO" },
+                { value: "EN_APROBACION", label: "EN APROBACIÓN" },
+                { value: "EN_CONTABILIDAD", label: "EN CONTABILIDAD" },
+                { value: "EN_TESORERIA", label: "EN TESORERÍA" },
+                { value: "EN_ESPERA_DE_PAGO", label: "EN ESPERA DE PAGO" },
+                { value: "PAGADO", label: "PAGADO" },
+                { value: "RECHAZADO", label: "RECHAZADO" }
+              ]}
+              className="w-auto min-w-[180px]"
+            />
 
             <Input
               placeholder="Buscar por Número OC"
@@ -1218,7 +1230,7 @@ export default function InvoicesPage() {
                       <Td>{inv.oc?.numeroOc || "-"}</Td>
                       <Td>{inv.oc?.proveedor || "-"}</Td>
                       <Td>{inv.currency}</Td>
-                      <Td className="text-right">{inv.montoSinIgv ? Number(inv.montoSinIgv).toFixed(2) : "-"}</Td>
+                      <Td className="text-right">{inv.montoSinIgv ? formatNumber(inv.montoSinIgv) : "-"}</Td>
                       <Td className="text-xs">
                         {inv.periods && inv.periods.length > 0
                           ? formatPeriodsRange(inv.periods.map(p => p.period))

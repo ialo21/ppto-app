@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader } from "../components/ui/Card";
 import Input from "../components/ui/Input";
-import Select from "../components/ui/Select";
+import FilterSelect from "../components/ui/FilterSelect";
 import Button from "../components/ui/Button";
 import { Table, Th, Td } from "../components/ui/Table";
 import YearMonthPicker from "../components/YearMonthPicker";
@@ -277,19 +277,18 @@ export default function ProvisionsPage() {
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* Sustento */}
               <div className="w-full">
-                <label className="block text-sm font-medium mb-1">Sustento *</label>
-                <Select
+                <FilterSelect
+                  label="Sustento *"
+                  placeholder="Seleccionar sustento"
                   value={form.sustentoId}
-                  onChange={(e) => handleFormChange("sustentoId", e.target.value)}
+                  onChange={(value) => handleFormChange("sustentoId", value)}
+                  options={(supports || []).map((sup: any) => ({
+                    value: String(sup.id),
+                    label: sup.code ? `${sup.code} - ${sup.name}` : sup.name,
+                    searchText: `${sup.code || ''} ${sup.name}`
+                  }))}
                   className={fieldErrors.sustentoId ? "border-red-500" : ""}
-                >
-                  <option value="">Selecciona un sustento</option>
-                  {(supports || []).map((sup: any) => (
-                    <option key={sup.id} value={sup.id}>
-                      {sup.code ? `${sup.code} - ` : ""}{sup.name}
-                    </option>
-                  ))}
-                </Select>
+                />
                 {fieldErrors.sustentoId && <p className="text-xs text-red-600 mt-1">{fieldErrors.sustentoId}</p>}
               </div>
 
@@ -372,20 +371,20 @@ export default function ProvisionsPage() {
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-2 mb-4">
-            <Select
+            <FilterSelect
+              placeholder="Todos los sustentos"
               value={filters.sustentoId}
-              onChange={e => {
-                setFilters(f => ({ ...f, sustentoId: e.target.value }));
+              onChange={(value) => {
+                setFilters(f => ({ ...f, sustentoId: value }));
                 setSortConfig(DEFAULT_SORT);
               }}
-            >
-              <option value="">Todos los sustentos</option>
-              {(supports || []).map((sup: any) => (
-                <option key={sup.id} value={sup.id}>
-                  {sup.code ? `${sup.code} - ` : ""}{sup.name}
-                </option>
-              ))}
-            </Select>
+              options={(supports || []).map((sup: any) => ({
+                value: String(sup.id),
+                label: sup.code ? `${sup.code} - ${sup.name}` : sup.name,
+                searchText: `${sup.code || ''} ${sup.name}`
+              }))}
+              className="w-auto min-w-[200px]"
+            />
 
             <Input
               placeholder="Período PPTO (YYYY-MM)"

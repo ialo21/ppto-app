@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader } from "../components/ui/Card";
 import Input from "../components/ui/Input";
-import Select from "../components/ui/Select";
+import FilterSelect from "../components/ui/FilterSelect";
 import Button from "../components/ui/Button";
 import { Table, Th, Td } from "../components/ui/Table";
-import { toast } from "sonner";
+import StatusChip from "../components/StatusChip";
 import YearMonthPicker from "../components/YearMonthPicker";
+import { formatNumber } from "../utils/numberFormat";
 import { formatPeriodLabel } from "../utils/periodFormat";
 
 // Función auxiliar para formatear rango de períodos
@@ -125,17 +127,16 @@ const InputWithError = ({ error, ...props }: any) => {
   );
 };
 
-// Wrapper para selects con errores
-const SelectWithError = ({ error, children, ...props }: any) => {
-  const hasError = !!error;
+// Helper para mostrar FilterSelect con errores
+const FilterSelectWithError = ({ error, label, options, ...props }: any) => {
   return (
     <div>
-      <Select 
-        {...props} 
-        className={hasError ? "border-red-500 focus:ring-red-500" : ""}
-      >
-        {children}
-      </Select>
+      <FilterSelect
+        label={label}
+        options={options}
+        {...props}
+        className={error ? "border-red-500" : props.className || ""}
+      />
       <FieldError error={error} />
     </div>
   );
@@ -594,17 +595,18 @@ export default function PurchaseOrdersPage() {
               </div>
 
               <div className="md:col-span-3">
-                <label className="block text-sm font-medium mb-1">Sustento *</label>
-                <SelectWithError 
-                  value={form.supportId} 
-                  onChange={(e: any) => setForm(f => ({ ...f, supportId: e.target.value }))}
+                <FilterSelectWithError
+                  label="Sustento *"
+                  placeholder="Seleccionar sustento"
+                  value={form.supportId}
+                  onChange={(value: string) => setForm(f => ({ ...f, supportId: value }))}
+                  options={supports?.map((s: any) => ({
+                    value: String(s.id),
+                    label: `${s.code} - ${s.name}`,
+                    searchText: `${s.code} ${s.name}`
+                  })) || []}
                   error={fieldErrors.supportId}
-                >
-                  <option value="">Seleccionar sustento...</option>
-                  {supports?.map((s: any) => (
-                    <option key={s.id} value={s.id}>{s.code} - {s.name}</option>
-                  ))}
-                </SelectWithError>
+                />
               </div>
 
               <div className="md:col-span-3">
@@ -617,108 +619,19 @@ export default function PurchaseOrdersPage() {
                 />
               </div>
 
-              <div className="md:col-span-3">
-                <label className="block text-sm font-medium mb-1">Descripción</label>
-                <InputWithError 
-                  placeholder="Descripción del servicio o producto" 
-                  value={form.descripcion} 
-                  onChange={(e: any) => setForm(f => ({ ...f, descripcion: e.target.value }))}
-                  error={fieldErrors.descripcion}
-                />
-              </div>
-
               <div>
-                <label className="block text-sm font-medium mb-1">Nombre Solicitante *</label>
-                <InputWithError 
-                  placeholder="Juan Pérez" 
-                  value={form.nombreSolicitante} 
-                  onChange={(e: any) => setForm(f => ({ ...f, nombreSolicitante: e.target.value }))}
-                  error={fieldErrors.nombreSolicitante}
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-1">Correo Solicitante *</label>
-                <InputWithError 
-                  type="email" 
-                  placeholder="juan.perez@empresa.com" 
-                  value={form.correoSolicitante} 
-                  onChange={(e: any) => setForm(f => ({ ...f, correoSolicitante: e.target.value }))}
-                  error={fieldErrors.correoSolicitante}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Proveedor *</label>
-                <InputWithError 
-                  placeholder="Nombre del proveedor" 
-                  value={form.proveedor} 
-                  onChange={(e: any) => setForm(f => ({ ...f, proveedor: e.target.value }))}
-                  error={fieldErrors.proveedor}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">RUC (11 dígitos) *</label>
-                <InputWithError 
-                  placeholder="20123456789" 
-                  maxLength={11} 
-                  value={form.ruc} 
-                  onChange={(e: any) => setForm(f => ({ ...f, ruc: e.target.value.replace(/\D/g, "") }))}
-                  error={fieldErrors.ruc}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Moneda *</label>
-                <SelectWithError 
-                  value={form.moneda} 
-                  onChange={(e: any) => setForm(f => ({ ...f, moneda: e.target.value }))}
-                  error={fieldErrors.moneda}
-                >
-                  <option value="PEN">Soles (PEN)</option>
-                  <option value="USD">Dólares (USD)</option>
-                </SelectWithError>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Importe sin IGV *</label>
-                <InputWithError 
-                  type="number" 
-                  step="0.01" 
-                  min="0" 
-                  placeholder="0.00" 
-                  value={form.importeSinIgv} 
-                  onChange={(e: any) => setForm(f => ({ ...f, importeSinIgv: e.target.value }))}
-                  error={fieldErrors.importeSinIgv}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Estado *</label>
-                <SelectWithError 
-                  value={form.estado} 
-                  onChange={(e: any) => setForm(f => ({ ...f, estado: e.target.value }))}
-                  error={fieldErrors.estado}
-                >
-                  {ESTADOS_OC.map(estado => (
-                    <option key={estado} value={estado}>{estado.replace(/_/g, " ")}</option>
-                  ))}
-                </SelectWithError>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Artículo</label>
-                <SelectWithError 
-                  value={form.articuloId} 
-                  onChange={(e: any) => setForm(f => ({ ...f, articuloId: e.target.value }))}
+                <FilterSelectWithError
+                  label="Artículo"
+                  placeholder="Ninguno"
+                  value={form.articuloId}
+                  onChange={(value: string) => setForm(f => ({ ...f, articuloId: value }))}
+                  options={articulos?.map((a: any) => ({
+                    value: String(a.id),
+                    label: `${a.code} - ${a.name}`,
+                    searchText: `${a.code} ${a.name}`
+                  })) || []}
                   error={fieldErrors.articuloId}
-                >
-                  <option value="">Sin artículo</option>
-                  {articulos?.map((a: any) => (
-                    <option key={a.id} value={a.id}>{a.code} - {a.name}</option>
-                  ))}
-                </SelectWithError>
+                />
               </div>
 
               <div className="md:col-span-2">
@@ -729,23 +642,24 @@ export default function PurchaseOrdersPage() {
                   </div>
                 ) : (
                   <>
-                    <Select
+                    <FilterSelect
+                      placeholder="Selecciona uno o más CECOs..."
                       value=""
-                      onChange={(e: any) => {
-                        const cecoId = Number(e.target.value);
+                      onChange={(value) => {
+                        const cecoId = Number(value);
                         if (cecoId && !form.costCenterIds.includes(cecoId)) {
                           setForm(f => ({ ...f, costCenterIds: [...f.costCenterIds, cecoId] }));
                         }
                       }}
-                      className={fieldErrors.costCenterIds ? "border-red-500" : ""}
-                    >
-                      <option value="">Selecciona uno o más CECOs...</option>
-                      {availableCostCenters
+                      options={availableCostCenters
                         ?.filter((cc: any) => !form.costCenterIds.includes(cc.id))
-                        .map((cc: any) => (
-                          <option key={cc.id} value={cc.id}>{cc.code} - {cc.name}</option>
-                        ))}
-                    </Select>
+                        .map((cc: any) => ({
+                          value: String(cc.id),
+                          label: `${cc.code} - ${cc.name}`,
+                          searchText: `${cc.code} ${cc.name}`
+                        })) || []}
+                      className={fieldErrors.costCenterIds ? "border-red-500" : ""}
+                    />
                     {/* Chips de CECOs seleccionados */}
                     {form.costCenterIds.length > 0 && (
                       <div className="flex flex-wrap gap-2 mt-2">
@@ -834,17 +748,27 @@ export default function PurchaseOrdersPage() {
               onChange={e => setFilters(f => ({ ...f, numeroOc: e.target.value }))}
               className="w-auto flex-1 min-w-[150px]"
             />
-            <Select value={filters.moneda} onChange={e => setFilters(f => ({ ...f, moneda: e.target.value }))} className="w-auto">
-              <option value="">(Moneda)</option>
-              <option value="PEN">PEN</option>
-              <option value="USD">USD</option>
-            </Select>
-            <Select value={filters.estado} onChange={e => setFilters(f => ({ ...f, estado: e.target.value }))} className="w-auto">
-              <option value="">(Estado)</option>
-              {ESTADOS_OC.map(estado => (
-                <option key={estado} value={estado}>{estado.replace(/_/g, " ")}</option>
-              ))}
-            </Select>
+            <FilterSelect
+              placeholder="(Moneda)"
+              value={filters.moneda}
+              onChange={(value) => setFilters(f => ({ ...f, moneda: value }))}
+              options={[
+                { value: "PEN", label: "PEN" },
+                { value: "USD", label: "USD" }
+              ]}
+              searchable={false}
+              className="w-auto min-w-[120px]"
+            />
+            <FilterSelect
+              placeholder="(Estado)"
+              value={filters.estado}
+              onChange={(value) => setFilters(f => ({ ...f, estado: value }))}
+              options={ESTADOS_OC.map(estado => ({
+                value: estado,
+                label: estado.replace(/_/g, " ")
+              }))}
+              className="w-auto min-w-[160px]"
+            />
             <Button variant="secondary" onClick={handleExportCSV}>
               Exportar CSV
             </Button>
@@ -876,7 +800,7 @@ export default function PurchaseOrdersPage() {
                       <Td>{oc.numeroOc || "-"}</Td>
                       <Td>{oc.proveedor}</Td>
                       <Td>{oc.moneda}</Td>
-                      <Td>{Number(oc.importeSinIgv).toFixed(2)}</Td>
+                      <Td className="text-right">{formatNumber(oc.importeSinIgv)}</Td>
                       <Td>
                         <span className="text-xs px-2 py-1 rounded-full bg-slate-100">
                           {oc.estado.replace(/_/g, " ")}

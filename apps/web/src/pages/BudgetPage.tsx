@@ -12,6 +12,7 @@ import YearMonthPicker from "../components/YearMonthPicker";
 import { useManagements, useAreas, useExpensePackages } from "../hooks/useCatalogData";
 import { matchesSearch, debounce } from "../utils/searchUtils";
 import { formatPeriodLabel } from "../utils/periodFormat";
+import { ChevronDown, ChevronUp, Wallet, FileText, TrendingUp, Calendar } from "lucide-react";
 
 type ViewMode = "monthly" | "annual";
 
@@ -62,7 +63,8 @@ const LOCAL_STORAGE_KEYS = {
   viewMode: "ppto.viewMode",
   year: "ppto.year",
   periodId: "ppto.periodId",
-  onlyWithBudget: "ppto.onlyWithBudget"
+  onlyWithBudget: "ppto.onlyWithBudget",
+  showDetailTable: "ppto.showDetailTable"
 };
 
 export default function BudgetPage() {
@@ -78,6 +80,12 @@ export default function BudgetPage() {
   const [onlyWithBudget, setOnlyWithBudget] = useState<boolean>(() => {
     const saved = localStorage.getItem(LOCAL_STORAGE_KEYS.onlyWithBudget);
     return saved !== null ? saved === "true" : true;
+  });
+
+  // Show/hide detail table (default: false - collapsed)
+  const [showDetailTable, setShowDetailTable] = useState<boolean>(() => {
+    const saved = localStorage.getItem(LOCAL_STORAGE_KEYS.showDetailTable);
+    return saved !== null ? saved === "true" : false;
   });
 
   // State
@@ -223,6 +231,10 @@ export default function BudgetPage() {
   useEffect(() => {
     localStorage.setItem(LOCAL_STORAGE_KEYS.onlyWithBudget, String(onlyWithBudget));
   }, [onlyWithBudget]);
+
+  useEffect(() => {
+    localStorage.setItem(LOCAL_STORAGE_KEYS.showDetailTable, String(showDetailTable));
+  }, [showDetailTable]);
 
   // Sync bulk year with selected year if not manually touched
   useEffect(() => {
@@ -554,6 +566,18 @@ export default function BudgetPage() {
     }, 0);
   }, [filteredAndSortedMonthlyRows, edited]);
 
+  // Calculate monthly metrics for summary
+  const monthlyMetrics = useMemo(() => {
+    if (!filteredAndSortedMonthlyRows) return { totalSupports: 0, totalRows: 0, avgAmount: 0 };
+    const uniqueSupports = new Set(filteredAndSortedMonthlyRows.map((r: BudgetRow) => r.supportId));
+    const avgAmount = filteredAndSortedMonthlyRows.length > 0 ? monthlyTotal / filteredAndSortedMonthlyRows.length : 0;
+    return {
+      totalSupports: uniqueSupports.size,
+      totalRows: filteredAndSortedMonthlyRows.length,
+      avgAmount
+    };
+  }, [filteredAndSortedMonthlyRows, monthlyTotal]);
+
   // Calculate annual totals
   const annualTotals = useMemo(() => {
     if (!filteredAnnualRows || filteredAnnualRows.length === 0) return { monthTotals: {}, yearTotal: 0 };
@@ -576,6 +600,21 @@ export default function BudgetPage() {
     
     return { monthTotals, yearTotal };
   }, [filteredAnnualRows, annualEdited]);
+
+  // Calculate annual metrics for summary
+  const annualMetrics = useMemo(() => {
+    if (!filteredAnnualRows) return { totalSupports: 0, totalRows: 0, avgMonthly: 0, monthsWithBudget: 0 };
+    const uniqueSupports = new Set(filteredAnnualRows.map((r: AnnualRow) => r.supportId));
+    const monthsCount = Object.keys(annualTotals.monthTotals).length;
+    const avgMonthly = monthsCount > 0 ? annualTotals.yearTotal / 12 : 0; // Promedio sobre 12 meses
+    const monthsWithBudget = Object.values(annualTotals.monthTotals).filter(v => v !== 0).length;
+    return {
+      totalSupports: uniqueSupports.size,
+      totalRows: filteredAnnualRows.length,
+      avgMonthly,
+      monthsWithBudget
+    };
+  }, [filteredAnnualRows, annualTotals]);
 
   // Sync row heights between left and right tables in annual view
   // This runs after every render and also on window resize
@@ -963,19 +1002,107 @@ export default function BudgetPage() {
                     </div>
                   )}
 
-                  {filteredAndSortedMonthlyRows.length === 0 ? (
+                  {/* Summary Section - KPI Cards */}
+                  <div className="mb-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {/* Total PPTO */}
+                      <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
+                              Total PPTO {budgetData.period && `(${formatPeriodLabel(budgetData.period)})`}
+                            </p>
+                          </div>
+                          <div className="p-2 rounded-lg bg-brand-background">
+                            <Wallet size={18} className="text-brand-primary" strokeWidth={2} />
+                          </div>
+                        </div>
+                        <div className="text-2xl font-bold text-brand-text-primary">
+                          S/ {formatNumber(monthlyTotal)}
+                        </div>
+                      </div>
+
+                      {/* Total Sustentos */}
+                      <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
+                              Sustentos con PPTO
+                            </p>
+                          </div>
+                          <div className="p-2 rounded-lg bg-brand-background">
+                            <FileText size={18} className="text-blue-600" strokeWidth={2} />
+                          </div>
+                        </div>
+                        <div className="text-2xl font-bold text-brand-text-primary">
+                          {monthlyMetrics.totalSupports}
+                        </div>
+                      </div>
+
+                      {/* Total Filas */}
+                      <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
+                              Total de Filas
+                            </p>
+                          </div>
+                          <div className="p-2 rounded-lg bg-brand-background">
+                            <TrendingUp size={18} className="text-green-600" strokeWidth={2} />
+                          </div>
+                        </div>
+                        <div className="text-2xl font-bold text-brand-text-primary">
+                          {monthlyMetrics.totalRows}
+                        </div>
+                      </div>
+
+                      {/* Promedio por Fila */}
+                      <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
+                              Promedio por Fila
+                            </p>
+                          </div>
+                          <div className="p-2 rounded-lg bg-brand-background">
+                            <Calendar size={18} className="text-purple-600" strokeWidth={2} />
+                          </div>
+                        </div>
+                        <div className="text-2xl font-bold text-brand-text-primary">
+                          S/ {formatNumber(monthlyMetrics.avgAmount)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Toggle Detail Table Button */}
+                  <div className="mb-4 flex items-center justify-between">
+                    <Button
+                      variant={showDetailTable ? "primary" : "secondary"}
+                      size="sm"
+                      onClick={() => setShowDetailTable(!showDetailTable)}
+                      className="flex items-center gap-2"
+                    >
+                      {showDetailTable ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      {showDetailTable ? "Ocultar detalle de sustentos" : "Mostrar detalle de sustentos"}
+                    </Button>
+                    {showDetailTable && (
+                      <div className="text-sm text-slate-600">
+                        {filteredAndSortedMonthlyRows.length} fila{filteredAndSortedMonthlyRows.length !== 1 ? 's' : ''}
+                        {debouncedSearch && ` para "${debouncedSearch}"`}
+                      </div>
+                    )}
+                  </div>
+
+                  {filteredAndSortedMonthlyRows.length === 0 && showDetailTable ? (
                     <div className="text-center py-8 text-slate-500">
                       {debouncedSearch ? 
                         `No hay datos para "${debouncedSearch}" con los filtros aplicados` :
                         "No hay datos para mostrar con los filtros aplicados"
                       }
                     </div>
-                  ) : (
+                  ) : showDetailTable ? (
                     <>
-                      <div className="mb-2 text-sm text-slate-600">
-                        Mostrando {filteredAndSortedMonthlyRows.length} fila{filteredAndSortedMonthlyRows.length !== 1 ? 's' : ''}
-                        {debouncedSearch && ` para "${debouncedSearch}"`}
-                      </div>
                       <div className="overflow-x-auto">
           <Table>
                           <thead>
@@ -1082,7 +1209,7 @@ export default function BudgetPage() {
           </Table>
                       </div>
                     </>
-                  )}
+                  ) : null}
                 </>
               ) : null}
             </>
@@ -1091,19 +1218,107 @@ export default function BudgetPage() {
           {/* ANNUAL VIEW */}
           {viewMode === "annual" && selectedYear && annualData && (
             <>
-              {filteredAnnualRows.length === 0 ? (
+              {/* Summary Section - KPI Cards (Annual) */}
+              <div className="mb-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Total PPTO Anual */}
+                  <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1">
+                        <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
+                          Total PPTO {selectedYear}
+                        </p>
+                      </div>
+                      <div className="p-2 rounded-lg bg-brand-background">
+                        <Wallet size={18} className="text-brand-primary" strokeWidth={2} />
+                      </div>
+                    </div>
+                    <div className="text-2xl font-bold text-brand-text-primary">
+                      S/ {formatNumber(annualTotals.yearTotal)}
+                    </div>
+                  </div>
+
+                  {/* Total Sustentos */}
+                  <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1">
+                        <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
+                          Sustentos con PPTO
+                        </p>
+                      </div>
+                      <div className="p-2 rounded-lg bg-brand-background">
+                        <FileText size={18} className="text-blue-600" strokeWidth={2} />
+                      </div>
+                    </div>
+                    <div className="text-2xl font-bold text-brand-text-primary">
+                      {annualMetrics.totalSupports}
+                    </div>
+                  </div>
+
+                  {/* Promedio Mensual */}
+                  <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1">
+                        <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
+                          Promedio Mensual
+                        </p>
+                      </div>
+                      <div className="p-2 rounded-lg bg-brand-background">
+                        <TrendingUp size={18} className="text-green-600" strokeWidth={2} />
+                      </div>
+                    </div>
+                    <div className="text-2xl font-bold text-brand-text-primary">
+                      S/ {formatNumber(annualMetrics.avgMonthly)}
+                    </div>
+                  </div>
+
+                  {/* Meses con PPTO */}
+                  <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1">
+                        <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
+                          Meses con PPTO
+                        </p>
+                      </div>
+                      <div className="p-2 rounded-lg bg-brand-background">
+                        <Calendar size={18} className="text-purple-600" strokeWidth={2} />
+                      </div>
+                    </div>
+                    <div className="text-2xl font-bold text-brand-text-primary">
+                      {annualMetrics.monthsWithBudget} / 12
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Toggle Detail Table Button */}
+              <div className="mb-4 flex items-center justify-between">
+                <Button
+                  variant={showDetailTable ? "primary" : "secondary"}
+                  size="sm"
+                  onClick={() => setShowDetailTable(!showDetailTable)}
+                  className="flex items-center gap-2"
+                >
+                  {showDetailTable ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  {showDetailTable ? "Ocultar detalle de sustentos" : "Mostrar detalle de sustentos"}
+                </Button>
+                {showDetailTable && (
+                  <div className="text-sm text-slate-600">
+                    {filteredAnnualRows.length} fila{filteredAnnualRows.length !== 1 ? 's' : ''}
+                    {debouncedSearch && ` para "${debouncedSearch}"`}
+                  </div>
+                )}
+              </div>
+
+              {filteredAnnualRows.length === 0 && showDetailTable ? (
                 <div className="text-center py-8 text-slate-500">
                   {debouncedSearch ? 
                     `No hay datos para "${debouncedSearch}" con los filtros aplicados` :
                     "No hay datos para mostrar con los filtros aplicados"
                   }
                 </div>
-              ) : (
+              ) : showDetailTable ? (
                 <>
-                  <div className="mb-2 text-sm text-slate-600">
-                    Mostrando {filteredAnnualRows.length} fila{filteredAnnualRows.length !== 1 ? 's' : ''}
-                    {debouncedSearch && ` para "${debouncedSearch}"`}
-                  </div>
                   {/* Two-table layout: Left table (fixed) + Right table (scrollable) */}
                   <div className="budget-tables-container">
                     {/* LEFT TABLE: Sustento y CECO (Fixed columns) */}
@@ -1236,7 +1451,7 @@ export default function BudgetPage() {
                     </div>
                   </div>
                 </>
-              )}
+              ) : null}
             </>
           )}
         </CardContent>

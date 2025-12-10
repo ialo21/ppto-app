@@ -25,8 +25,22 @@ const app = Fastify({ logger: true });
 
 // CORS - permitir credenciales para sesiones
 const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+// Permitir múltiples orígenes para desarrollo en red
+const allowedOrigins = [
+  frontendUrl,
+  "http://localhost:5173",
+  "http://127.0.0.1:5173"
+];
+
 await app.register(cors, { 
-  origin: frontendUrl, 
+  origin: (origin, cb) => {
+    // Permitir requests sin origin (como Postman) o los orígenes permitidos
+    if (!origin || allowedOrigins.includes(origin) || origin.includes('.nip.io')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Not allowed by CORS'), false);
+    }
+  },
   credentials: true 
 });
 
@@ -37,10 +51,11 @@ await app.register(session, {
   secret: process.env.SESSION_SECRET || "ppto-app-secret-change-in-production-min-32-chars",
   cookieName: "ppto-session", // Nombre explícito de la cookie
   cookie: {
-    secure: isProduction, // true en producción (HTTPS), false en desarrollo
+    secure: false, // false para HTTP en desarrollo
     httpOnly: true,
-    maxAge: 1000 * 60 * 60 * 24 * 30, // 30 días - sesión más larga
-    sameSite: isProduction ? "strict" : "lax" // strict en producción, lax en desarrollo
+    maxAge: 1000 * 60 * 60 * 24 * 30, // 30 días
+    sameSite: "lax", // lax funciona con HTTP en desarrollo
+    path: "/" // cookie disponible en todas las rutas
   },
   saveUninitialized: false
 });

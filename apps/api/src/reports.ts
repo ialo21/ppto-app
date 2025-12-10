@@ -259,12 +259,12 @@ export async function registerReportRoutes(app: FastifyInstance) {
       versionId = active?.id ?? null;
     }
 
-    // Filtros opcionales
-    const supportId = q.supportId ? Number(q.supportId) : null;
-    const costCenterId = q.costCenterId ? Number(q.costCenterId) : null;
-    const managementId = q.managementId ? Number(q.managementId) : null;
-    const areaId = q.areaId ? Number(q.areaId) : null;
-    const packageId = q.packageId ? Number(q.packageId) : null;
+    // Filtros opcionales (ahora soportan arrays separados por comas)
+    const supportIds = q.supportIds ? q.supportIds.split(',').map((id: string) => Number(id)).filter((id: number) => !isNaN(id)) : [];
+    const costCenterIds = q.costCenterIds ? q.costCenterIds.split(',').map((id: string) => Number(id)).filter((id: number) => !isNaN(id)) : [];
+    const managementIds = q.managementIds ? q.managementIds.split(',').map((id: string) => Number(id)).filter((id: number) => !isNaN(id)) : [];
+    const areaIds = q.areaIds ? q.areaIds.split(',').map((id: string) => Number(id)).filter((id: number) => !isNaN(id)) : [];
+    const packageIds = q.packageIds ? q.packageIds.split(',').map((id: string) => Number(id)).filter((id: number) => !isNaN(id)) : [];
     
     // Filtros de rango de períodos (mes desde/hasta)
     const periodFromId = q.periodFromId ? Number(q.periodFromId) : null;
@@ -318,7 +318,7 @@ export async function registerReportRoutes(app: FastifyInstance) {
       // PRESUPUESTO con filtros aplicados
       // ──────────────────────────────────────────────────────────────
       const budgetWhere: any = { versionId, periodId: p.id };
-      if (costCenterId) budgetWhere.costCenterId = costCenterId;
+      if (costCenterIds.length > 0) budgetWhere.costCenterId = { in: costCenterIds };
 
       // Filtros que requieren JOIN con support
       let budgetAllocations = versionId
@@ -328,13 +328,13 @@ export async function registerReportRoutes(app: FastifyInstance) {
           })
         : [];
 
-      // Aplicar filtros de support
-      if (supportId || managementId || areaId || packageId) {
+      // Aplicar filtros de support (ahora con arrays)
+      if (supportIds.length > 0 || managementIds.length > 0 || areaIds.length > 0 || packageIds.length > 0) {
         budgetAllocations = budgetAllocations.filter(alloc => {
-          if (supportId && alloc.supportId !== supportId) return false;
-          if (managementId && alloc.support?.managementId !== managementId) return false;
-          if (areaId && alloc.support?.areaId !== areaId) return false;
-          if (packageId && alloc.support?.expensePackageId !== packageId) return false;
+          if (supportIds.length > 0 && !supportIds.includes(alloc.supportId)) return false;
+          if (managementIds.length > 0 && alloc.support?.managementId && !managementIds.includes(alloc.support.managementId)) return false;
+          if (areaIds.length > 0 && alloc.support?.areaId && !areaIds.includes(alloc.support.areaId)) return false;
+          if (packageIds.length > 0 && alloc.support?.expensePackageId && !packageIds.includes(alloc.support.expensePackageId)) return false;
           return true;
         });
       }
@@ -372,14 +372,14 @@ export async function registerReportRoutes(app: FastifyInstance) {
           }
         });
 
-        // Filtrar por support
+        // Filtrar por support (ahora con arrays)
         invoices = invoices.filter(inv => {
           const support = inv.oc?.support;
           if (!support) return false;
-          if (supportId && support.id !== supportId) return false;
-          if (managementId && support.managementId !== managementId) return false;
-          if (areaId && support.areaId !== areaId) return false;
-          if (packageId && support.expensePackageId !== packageId) return false;
+          if (supportIds.length > 0 && !supportIds.includes(support.id)) return false;
+          if (managementIds.length > 0 && support.managementId && !managementIds.includes(support.managementId)) return false;
+          if (areaIds.length > 0 && support.areaId && !areaIds.includes(support.areaId)) return false;
+          if (packageIds.length > 0 && support.expensePackageId && !packageIds.includes(support.expensePackageId)) return false;
           return true;
         });
 
@@ -416,14 +416,14 @@ export async function registerReportRoutes(app: FastifyInstance) {
           }
         });
 
-        // Filtros de sustento/área/gerencia/paquete
+        // Filtros de sustento/área/gerencia/paquete (ahora con arrays)
         invoices = invoices.filter(inv => {
           const support = inv.oc?.support;
           if (!support) return false;
-          if (supportId && support.id !== supportId) return false;
-          if (managementId && support.managementId !== managementId) return false;
-          if (areaId && support.areaId !== areaId) return false;
-          if (packageId && support.expensePackageId !== packageId) return false;
+          if (supportIds.length > 0 && !supportIds.includes(support.id)) return false;
+          if (managementIds.length > 0 && support.managementId && !managementIds.includes(support.managementId)) return false;
+          if (areaIds.length > 0 && support.areaId && !areaIds.includes(support.areaId)) return false;
+          if (packageIds.length > 0 && support.expensePackageId && !packageIds.includes(support.expensePackageId)) return false;
           return true;
         });
 
@@ -439,14 +439,14 @@ export async function registerReportRoutes(app: FastifyInstance) {
           include: { sustento: true }
         });
 
-        // Filtros
+        // Filtros (ahora con arrays)
         provs = provs.filter(prov => {
           const sustento = prov.sustento;
           if (!sustento) return false;
-          if (supportId && sustento.id !== supportId) return false;
-          if (managementId && sustento.managementId !== managementId) return false;
-          if (areaId && sustento.areaId !== areaId) return false;
-          if (packageId && sustento.expensePackageId !== packageId) return false;
+          if (supportIds.length > 0 && !supportIds.includes(sustento.id)) return false;
+          if (managementIds.length > 0 && sustento.managementId && !managementIds.includes(sustento.managementId)) return false;
+          if (areaIds.length > 0 && sustento.areaId && !areaIds.includes(sustento.areaId)) return false;
+          if (packageIds.length > 0 && sustento.expensePackageId && !packageIds.includes(sustento.expensePackageId)) return false;
           return true;
         });
 
@@ -492,11 +492,11 @@ export async function registerReportRoutes(app: FastifyInstance) {
       versionId, 
       mode,
       filters: {
-        supportId,
-        costCenterId,
-        managementId,
-        areaId,
-        packageId,
+        supportIds,
+        costCenterIds,
+        managementIds,
+        areaIds,
+        packageIds,
         periodFromId,
         periodToId
       },
@@ -524,12 +524,12 @@ export async function registerReportRoutes(app: FastifyInstance) {
       versionId = active?.id ?? null;
     }
 
-    // Filtros opcionales
-    const supportId = q.supportId ? Number(q.supportId) : null;
-    const costCenterId = q.costCenterId ? Number(q.costCenterId) : null;
-    const managementId = q.managementId ? Number(q.managementId) : null;
-    const areaId = q.areaId ? Number(q.areaId) : null;
-    const packageId = q.packageId ? Number(q.packageId) : null;
+    // Filtros opcionales (ahora soportan arrays separados por comas)
+    const supportIds = q.supportIds ? q.supportIds.split(',').map((id: string) => Number(id)).filter((id: number) => !isNaN(id)) : [];
+    const costCenterIds = q.costCenterIds ? q.costCenterIds.split(',').map((id: string) => Number(id)).filter((id: number) => !isNaN(id)) : [];
+    const managementIds = q.managementIds ? q.managementIds.split(',').map((id: string) => Number(id)).filter((id: number) => !isNaN(id)) : [];
+    const areaIds = q.areaIds ? q.areaIds.split(',').map((id: string) => Number(id)).filter((id: number) => !isNaN(id)) : [];
+    const packageIds = q.packageIds ? q.packageIds.split(',').map((id: string) => Number(id)).filter((id: number) => !isNaN(id)) : [];
     const periodFromId = q.periodFromId ? Number(q.periodFromId) : null;
     const periodToId = q.periodToId ? Number(q.periodToId) : null;
 
@@ -591,7 +591,7 @@ export async function registerReportRoutes(app: FastifyInstance) {
     // 1. PRESUPUESTO con filtros aplicados
     // ──────────────────────────────────────────────────────────────
     const budgetWhere: any = { versionId, periodId: { in: periodIds } };
-    if (costCenterId) budgetWhere.costCenterId = costCenterId;
+    if (costCenterIds.length > 0) budgetWhere.costCenterId = { in: costCenterIds };
 
     let budgetAllocations = versionId
       ? await prisma.budgetAllocation.findMany({
@@ -607,13 +607,13 @@ export async function registerReportRoutes(app: FastifyInstance) {
         })
       : [];
 
-    // Aplicar filtros de support
-    if (supportId || managementId || areaId || packageId) {
+    // Aplicar filtros de support (ahora con arrays)
+    if (supportIds.length > 0 || managementIds.length > 0 || areaIds.length > 0 || packageIds.length > 0) {
       budgetAllocations = budgetAllocations.filter(alloc => {
-        if (supportId && alloc.supportId !== supportId) return false;
-        if (managementId && alloc.support?.managementId !== managementId) return false;
-        if (areaId && alloc.support?.areaId !== areaId) return false;
-        if (packageId && alloc.support?.expensePackageId !== packageId) return false;
+        if (supportIds.length > 0 && !supportIds.includes(alloc.supportId)) return false;
+        if (managementIds.length > 0 && alloc.support?.managementId && !managementIds.includes(alloc.support.managementId)) return false;
+        if (areaIds.length > 0 && alloc.support?.areaId && !areaIds.includes(alloc.support.areaId)) return false;
+        if (packageIds.length > 0 && alloc.support?.expensePackageId && !packageIds.includes(alloc.support.expensePackageId)) return false;
         return true;
       });
     }
@@ -663,14 +663,14 @@ export async function registerReportRoutes(app: FastifyInstance) {
         }
       });
 
-      // Filtrar por support
+      // Filtrar por support (ahora con arrays)
       invoices = invoices.filter(inv => {
         const support = inv.oc?.support;
         if (!support) return false;
-        if (supportId && support.id !== supportId) return false;
-        if (managementId && support.managementId !== managementId) return false;
-        if (areaId && support.areaId !== areaId) return false;
-        if (packageId && support.expensePackageId !== packageId) return false;
+        if (supportIds.length > 0 && !supportIds.includes(support.id)) return false;
+        if (managementIds.length > 0 && support.managementId && !managementIds.includes(support.managementId)) return false;
+        if (areaIds.length > 0 && support.areaId && !areaIds.includes(support.areaId)) return false;
+        if (packageIds.length > 0 && support.expensePackageId && !packageIds.includes(support.expensePackageId)) return false;
         return true;
       });
 
@@ -731,14 +731,14 @@ export async function registerReportRoutes(app: FastifyInstance) {
         }
       });
 
-      // Filtros de sustento/área/gerencia/paquete
+      // Filtros de sustento/área/gerencia/paquete (ahora con arrays)
       invoices = invoices.filter(inv => {
         const support = inv.oc?.support;
         if (!support) return false;
-        if (supportId && support.id !== supportId) return false;
-        if (managementId && support.managementId !== managementId) return false;
-        if (areaId && support.areaId !== areaId) return false;
-        if (packageId && support.expensePackageId !== packageId) return false;
+        if (supportIds.length > 0 && !supportIds.includes(support.id)) return false;
+        if (managementIds.length > 0 && support.managementId && !managementIds.includes(support.managementId)) return false;
+        if (areaIds.length > 0 && support.areaId && !areaIds.includes(support.areaId)) return false;
+        if (packageIds.length > 0 && support.expensePackageId && !packageIds.includes(support.expensePackageId)) return false;
         return true;
       });
 
@@ -781,14 +781,14 @@ export async function registerReportRoutes(app: FastifyInstance) {
         }
       });
 
-      // Filtros
+      // Filtros (ahora con arrays)
       provs = provs.filter(prov => {
         const sustento = prov.sustento;
         if (!sustento) return false;
-        if (supportId && sustento.id !== supportId) return false;
-        if (managementId && sustento.managementId !== managementId) return false;
-        if (areaId && sustento.areaId !== areaId) return false;
-        if (packageId && sustento.expensePackageId !== packageId) return false;
+        if (supportIds.length > 0 && !supportIds.includes(sustento.id)) return false;
+        if (managementIds.length > 0 && sustento.managementId && !managementIds.includes(sustento.managementId)) return false;
+        if (areaIds.length > 0 && sustento.areaId && !areaIds.includes(sustento.areaId)) return false;
+        if (packageIds.length > 0 && sustento.expensePackageId && !packageIds.includes(sustento.expensePackageId)) return false;
         return true;
       });
 
@@ -855,15 +855,6 @@ export async function registerReportRoutes(app: FastifyInstance) {
       year, 
       versionId, 
       mode,
-      filters: {
-        supportId,
-        costCenterId,
-        managementId,
-        areaId,
-        packageId,
-        periodFromId,
-        periodToId
-      },
       rows, 
       totals 
     };

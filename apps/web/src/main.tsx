@@ -41,31 +41,77 @@ function Sidebar({
   const link = "flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 text-white/90 hover:bg-white/20 hover:text-white";
   const active = "bg-white/30 text-white font-medium";
   
+  // Estados locales para controlar las animaciones
+  const [isClosing, setIsClosing] = useState(false);
+  const [isOpening, setIsOpening] = useState(false);
+  
   // Filtrar items según permisos del usuario
   const allowedItems = sidebarItems.filter(item => hasPermission(item.permission));
   
-  // En mobile: si no está abierto, no renderizar nada
-  if (isMobile && !isOpen) {
+  // Efecto para animar la apertura del sidebar
+  useEffect(() => {
+    if (isMobile && isOpen && !isClosing) {
+      // Cuando se abre el sidebar, primero renderizar sin la clase de apertura
+      // Luego en el siguiente frame aplicar la clase para activar la transición
+      setIsOpening(false);
+      
+      // Usar requestAnimationFrame para asegurar que el DOM se ha actualizado
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setIsOpening(true);
+        });
+      });
+    } else if (!isOpen) {
+      setIsOpening(false);
+    }
+  }, [isOpen, isMobile, isClosing]);
+  
+  // Handler para cerrar con animación suave
+  const handleClose = () => {
+    if (!onClose) return;
+    
+    // Iniciar animación de cierre
+    setIsClosing(true);
+    setIsOpening(false);
+    
+    // Esperar a que la animación termine antes de cerrar realmente
+    setTimeout(() => {
+      onClose();
+      setIsClosing(false);
+    }, 350); // Debe coincidir con la duración de la transición CSS
+  };
+  
+  // Handler para el clic en un link del menú
+  const handleLinkClick = () => {
+    if (isMobile) {
+      handleClose();
+    }
+  };
+  
+  // En mobile: si no está abierto ni cerrándose, no renderizar nada
+  if (isMobile && !isOpen && !isClosing) {
     return null;
   }
   
   return (
     <>
       {/* Overlay de fondo solo en mobile cuando está abierto */}
-      {isMobile && isOpen && (
+      {isMobile && (isOpen || isClosing) && (
         <div 
-          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
-          onClick={onClose}
+          className={`fixed inset-0 bg-black/50 z-30 lg:hidden sidebar-overlay ${
+            isOpening && !isClosing ? 'sidebar-overlay-visible' : ''
+          }`}
+          onClick={handleClose}
         />
       )}
       
       <aside 
-        className={`sidebar-fixed transition-all duration-300 ease-in-out ${
+        className={`sidebar-fixed ${
           isMobile ? 'sidebar-mobile' : ''
         } ${
           isCollapsed && !isMobile ? 'sidebar-collapsed' : ''
         } ${
-          isOpen && isMobile ? 'sidebar-mobile-open' : ''
+          isOpening && !isClosing && isMobile ? 'sidebar-mobile-open' : ''
         }`}
         onMouseEnter={!isMobile ? onMouseEnter : undefined}
         onMouseLeave={!isMobile ? onMouseLeave : undefined}
@@ -80,7 +126,7 @@ function Sidebar({
                 end={item.end}
                 className={({isActive})=>`${link} ${isActive?active:""}`} 
                 title={item.label}
-                onClick={isMobile ? onClose : undefined}
+                onClick={handleLinkClick}
               >
                 <Icon size={18} className="flex-shrink-0"/>
                 {(!isCollapsed || isMobile) && <span>{item.label}</span>}

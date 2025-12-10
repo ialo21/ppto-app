@@ -69,11 +69,11 @@ type BudgetAllocation = {
 };
 
 type Filters = {
-  managementId?: number | null;
-  areaId?: number | null;
-  packageId?: number | null;
-  supportId?: number | null;
-  costCenterId?: number | null;
+  managementIds?: number[];
+  areaIds?: number[];
+  packageIds?: number[];
+  supportIds?: number[];
+  costCenterIds?: number[];
 };
 
 /**
@@ -112,6 +112,7 @@ function parsePeriodString(periodStr: string): { year: number; month: number } |
 
 /**
  * Aplica filtros a un registro con support/sustento
+ * Ahora soporta arrays de IDs para multi-select
  */
 function matchesFilters(
   support: { managementId?: number; areaId?: number; expensePackageId?: number; id: number } | undefined,
@@ -119,10 +120,31 @@ function matchesFilters(
 ): boolean {
   if (!support) return true; // Si no hay support, no filtrar
   
-  if (filters.supportId && support.id !== filters.supportId) return false;
-  if (filters.managementId && support.managementId !== filters.managementId) return false;
-  if (filters.areaId && support.areaId !== filters.areaId) return false;
-  if (filters.packageId && support.expensePackageId !== filters.packageId) return false;
+  // Filtro por supportIds (array)
+  if (filters.supportIds && filters.supportIds.length > 0 && !filters.supportIds.includes(support.id)) {
+    return false;
+  }
+  
+  // Filtro por managementIds (array)
+  if (filters.managementIds && filters.managementIds.length > 0 && support.managementId) {
+    if (!filters.managementIds.includes(support.managementId)) return false;
+  } else if (filters.managementIds && filters.managementIds.length > 0 && !support.managementId) {
+    return false;
+  }
+  
+  // Filtro por areaIds (array)
+  if (filters.areaIds && filters.areaIds.length > 0 && support.areaId) {
+    if (!filters.areaIds.includes(support.areaId)) return false;
+  } else if (filters.areaIds && filters.areaIds.length > 0 && !support.areaId) {
+    return false;
+  }
+  
+  // Filtro por packageIds (array)
+  if (filters.packageIds && filters.packageIds.length > 0 && support.expensePackageId) {
+    if (!filters.packageIds.includes(support.expensePackageId)) return false;
+  } else if (filters.packageIds && filters.packageIds.length > 0 && !support.expensePackageId) {
+    return false;
+  }
   
   return true;
 }
@@ -151,7 +173,10 @@ export function calculatePresupuestalReport(
   // Sumar PPTO
   budgetAllocations.forEach(alloc => {
     if (!matchesFilters(alloc.support, filters)) return;
-    if (filters.costCenterId && alloc.costCenterId !== filters.costCenterId) return;
+    // Filtro por costCenterIds (array)
+    if (filters.costCenterIds && filters.costCenterIds.length > 0) {
+      if (!filters.costCenterIds.includes(alloc.costCenterId)) return;
+    }
     
     const row = result.get(alloc.periodId);
     if (row) {
@@ -265,7 +290,10 @@ export function calculateContableReport(
     budgetAllocations.forEach(alloc => {
       if (alloc.periodId !== period.id) return;
       if (!matchesFilters(alloc.support, filters)) return;
-      if (filters.costCenterId && alloc.costCenterId !== filters.costCenterId) return;
+      // Filtro por costCenterIds (array)
+      if (filters.costCenterIds && filters.costCenterIds.length > 0) {
+        if (!filters.costCenterIds.includes(alloc.costCenterId)) return;
+      }
       
       row.pptoAsociado += alloc.amountPen;
     });

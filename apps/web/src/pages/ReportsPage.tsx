@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import { Card, CardContent, CardHeader } from "../components/ui/Card";
 import Input from "../components/ui/Input";
 import FilterSelect from "../components/ui/FilterSelect";
+import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import Button from "../components/ui/Button";
 import { Table, Th, Td } from "../components/ui/Table";
 import YearMonthPicker from "../components/YearMonthPicker";
@@ -233,17 +234,17 @@ export default function ReportsPage() {
     queryFn: async () => (await api.get("/cost-centers")).data
   });
 
-  // Estados de filtros
+  // Estados de filtros (ahora multi-select excepto currency y mode)
   // NOTA: Se declaran antes de las queries que los utilizan para evitar "Cannot access before initialization"
   const [mode, setMode] = useState<ReportMode>('presupuestal');
   const [year, setYear] = useState<number>(new Date().getFullYear());
   const [periodFromId, setPeriodFromId] = useState<number | null>(null);
   const [periodToId, setPeriodToId] = useState<number | null>(null);
-  const [managementId, setManagementId] = useState<string>("");
-  const [areaId, setAreaId] = useState<string>("");
-  const [packageId, setPackageId] = useState<string>("");
-  const [supportId, setSupportId] = useState<string>("");
-  const [costCenterId, setCostCenterId] = useState<string>("");
+  const [managementIds, setManagementIds] = useState<string[]>([]);
+  const [areaIds, setAreaIds] = useState<string[]>([]);
+  const [packageIds, setPackageIds] = useState<string[]>([]);
+  const [supportIds, setSupportIds] = useState<string[]>([]);
+  const [costCenterIds, setCostCenterIds] = useState<string[]>([]);
   const [currency, setCurrency] = useState<string>("PEN");
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const [expandedPackages, setExpandedPackages] = useState<Set<string>>(new Set());
@@ -289,11 +290,11 @@ export default function ReportsPage() {
       .sort((a, b) => a.month - b.month);
   }, [periods, year]);
 
-  // Áreas filtradas por gerencia
+  // Áreas filtradas por gerencia(s) seleccionada(s)
   const filteredAreas = useMemo(() => {
-    if (!areas || !managementId) return areas || [];
-    return areas.filter((a: any) => String(a.managementId) === managementId);
-  }, [areas, managementId]);
+    if (!areas || managementIds.length === 0) return areas || [];
+    return areas.filter((a: any) => managementIds.includes(String(a.managementId)));
+  }, [areas, managementIds]);
 
   // Procesar datos de presupuesto anual para obtener budget allocations
   // NOTA: annualBudgetData.rows tiene estructura: { supportId, costCenterId, months: { '01': { periodId, amountPen }, '02': {...}, ... } }
@@ -337,14 +338,14 @@ export default function ReportsPage() {
     return allocations;
   }, [annualBudgetData]);
 
-  // Filtros para cálculos
+  // Filtros para cálculos (ahora con soporte para arrays)
   const calculationFilters = useMemo(() => ({
-    managementId: managementId ? Number(managementId) : null,
-    areaId: areaId ? Number(areaId) : null,
-    packageId: packageId ? Number(packageId) : null,
-    supportId: supportId ? Number(supportId) : null,
-    costCenterId: costCenterId ? Number(costCenterId) : null
-  }), [managementId, areaId, packageId, supportId, costCenterId]);
+    managementIds: managementIds.map(id => Number(id)),
+    areaIds: areaIds.map(id => Number(id)),
+    packageIds: packageIds.map(id => Number(id)),
+    supportIds: supportIds.map(id => Number(id)),
+    costCenterIds: costCenterIds.map(id => Number(id))
+  }), [managementIds, areaIds, packageIds, supportIds, costCenterIds]);
 
   // Períodos filtrados por rango
   const filteredPeriods = useMemo(() => {
@@ -505,12 +506,12 @@ export default function ReportsPage() {
     budgetAllocations.forEach((alloc: any) => {
       if (!alloc.periodId) return;
       
-      // Aplicar filtros
-      if (calculationFilters.managementId && alloc.support?.managementId !== calculationFilters.managementId) return;
-      if (calculationFilters.areaId && alloc.support?.areaId !== calculationFilters.areaId) return;
-      if (calculationFilters.packageId && alloc.expensePackageId !== calculationFilters.packageId) return;
-      if (calculationFilters.supportId && alloc.supportId !== calculationFilters.supportId) return;
-      if (calculationFilters.costCenterId && alloc.costCenterId !== calculationFilters.costCenterId) return;
+      // Aplicar filtros (ahora con arrays)
+      if (calculationFilters.managementIds.length > 0 && alloc.support?.managementId && !calculationFilters.managementIds.includes(alloc.support.managementId)) return;
+      if (calculationFilters.areaIds.length > 0 && alloc.support?.areaId && !calculationFilters.areaIds.includes(alloc.support.areaId)) return;
+      if (calculationFilters.packageIds.length > 0 && alloc.expensePackageId && !calculationFilters.packageIds.includes(alloc.expensePackageId)) return;
+      if (calculationFilters.supportIds.length > 0 && !calculationFilters.supportIds.includes(alloc.supportId)) return;
+      if (calculationFilters.costCenterIds.length > 0 && !calculationFilters.costCenterIds.includes(alloc.costCenterId)) return;
       
       const periodId = alloc.periodId;
       const packageId = alloc.expensePackageId ?? null;
@@ -560,11 +561,11 @@ export default function ReportsPage() {
       const support = inv.oc?.support;
       if (!support) return;
       
-      // Aplicar filtros
-      if (calculationFilters.managementId && support.managementId !== calculationFilters.managementId) return;
-      if (calculationFilters.areaId && support.areaId !== calculationFilters.areaId) return;
-      if (calculationFilters.packageId && support.expensePackageId !== calculationFilters.packageId) return;
-      if (calculationFilters.supportId && support.id !== calculationFilters.supportId) return;
+      // Aplicar filtros (ahora con arrays)
+      if (calculationFilters.managementIds.length > 0 && support.managementId && !calculationFilters.managementIds.includes(support.managementId)) return;
+      if (calculationFilters.areaIds.length > 0 && support.areaId && !calculationFilters.areaIds.includes(support.areaId)) return;
+      if (calculationFilters.packageIds.length > 0 && support.expensePackageId && !calculationFilters.packageIds.includes(support.expensePackageId)) return;
+      if (calculationFilters.supportIds.length > 0 && !calculationFilters.supportIds.includes(support.id)) return;
       
       const amountPEN = Number(inv.montoPEN_tcReal ?? inv.montoPEN_tcEstandar ?? 0);
       const amountPerPeriod = amountPEN / periodIds.length;
@@ -976,13 +977,19 @@ export default function ReportsPage() {
             )}
 
             {/* Filtros de catálogos */}
-            <FilterSelect
+            <MultiSelectFilter
                 label="Gerencia"
                 placeholder="Todas"
-                value={managementId}
-                onChange={(value) => {
-                  setManagementId(value);
-                  setAreaId(""); // Reset área
+                values={managementIds}
+                onChange={(values) => {
+                  setManagementIds(values);
+                  // Limpiar áreas que no pertenecen a las gerencias seleccionadas
+                  if (values.length > 0 && areaIds.length > 0) {
+                    const validAreaIds = (areas || [])
+                      .filter((a: any) => values.includes(String(a.managementId)))
+                      .map((a: any) => String(a.id));
+                    setAreaIds(areaIds.filter(id => validAreaIds.includes(id)));
+                  }
                 }}
                 options={(managements || []).map((m: any) => ({
                   value: String(m.id),
@@ -990,34 +997,34 @@ export default function ReportsPage() {
                 }))}
               />
 
-              <FilterSelect
+              <MultiSelectFilter
                 label="Área"
                 placeholder="Todas"
-                value={areaId}
-                onChange={setAreaId}
-                disabled={!managementId}
+                values={areaIds}
+                onChange={setAreaIds}
+                disabled={managementIds.length === 0}
                 options={filteredAreas.map((a: any) => ({
                   value: String(a.id),
                   label: a.name
                 }))}
               />
 
-              <FilterSelect
+              <MultiSelectFilter
                 label="Paquete de Gasto"
                 placeholder="Todos"
-                value={packageId}
-                onChange={setPackageId}
+                values={packageIds}
+                onChange={setPackageIds}
                 options={(packages || []).map((p: any) => ({
                   value: String(p.id),
                   label: p.name
                 }))}
               />
 
-              <FilterSelect
+              <MultiSelectFilter
                 label="Sustento"
                 placeholder="Todos"
-                value={supportId}
-                onChange={setSupportId}
+                values={supportIds}
+                onChange={setSupportIds}
                 options={(supports || []).map((s: any) => ({
                   value: String(s.id),
                   label: s.code ? `${s.code} - ${s.name}` : s.name,
@@ -1025,11 +1032,11 @@ export default function ReportsPage() {
                 }))}
               />
 
-              <FilterSelect
+              <MultiSelectFilter
                 label="Centro de Costo"
                 placeholder="Todos"
-                value={costCenterId}
-                onChange={setCostCenterId}
+                values={costCenterIds}
+                onChange={setCostCenterIds}
                 options={(costCenters || []).map((cc: any) => ({
                   value: String(cc.id),
                   label: `${cc.code} - ${cc.name || ''}`,

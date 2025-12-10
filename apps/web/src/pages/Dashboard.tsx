@@ -3,7 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import Input from "../components/ui/Input";
 import FilterSelect, { FilterOption } from "../components/ui/FilterSelect";
+import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import YearMonthPicker from "../components/YearMonthPicker";
+import { formatNumberAbbreviated } from "../utils/numberFormat";
 import { 
   ComposedChart, 
   Bar, 
@@ -153,15 +155,6 @@ function KpiCard({
   highlighted?: boolean;
   description?: string;
 }) {
-  const formatCurrency = (val: number): string => {
-    return new Intl.NumberFormat("es-PE", {
-      style: "currency",
-      currency: "PEN",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(val);
-  };
-
   return (
     <div 
       className={`
@@ -188,7 +181,7 @@ function KpiCard({
         </div>
       </div>
       <div className="text-[22px] xl:text-[24px] 2xl:text-[26px] font-bold text-brand-text-primary leading-none">
-        {formatCurrency(value)}
+        S/ {formatNumberAbbreviated(value)}
       </div>
     </div>
   );
@@ -436,12 +429,12 @@ export default function Dashboard() {
   const [mode, setMode] = useState<DashboardMode>("execution");
   const [showFilters, setShowFilters] = useState(false);
   
-  // Filtros
-  const [supportId, setSupportId] = useState<string>("");
-  const [costCenterId, setCostCenterId] = useState<string>("");
-  const [managementId, setManagementId] = useState<string>("");
-  const [areaId, setAreaId] = useState<string>("");
-  const [packageId, setPackageId] = useState<string>("");
+  // Filtros (ahora multi-select)
+  const [supportIds, setSupportIds] = useState<string[]>([]);
+  const [costCenterIds, setCostCenterIds] = useState<string[]>([]);
+  const [managementIds, setManagementIds] = useState<string[]>([]);
+  const [areaIds, setAreaIds] = useState<string[]>([]);
+  const [packageIds, setPackageIds] = useState<string[]>([]);
   const [periodFromId, setPeriodFromId] = useState<number | null>(null);
   const [periodToId, setPeriodToId] = useState<number | null>(null);
   
@@ -485,11 +478,11 @@ export default function Dashboard() {
     queryFn: async () => (await api.get("/expense-packages")).data,
   });
 
-  // Áreas filtradas por gerencia
+  // Áreas filtradas por gerencia(s) seleccionada(s)
   const filteredAreas = useMemo(() => {
-    if (!managementId) return areas;
-    return areas.filter((a: any) => String(a.managementId) === managementId);
-  }, [areas, managementId]);
+    if (managementIds.length === 0) return areas;
+    return areas.filter((a: any) => managementIds.includes(String(a.managementId)));
+  }, [areas, managementIds]);
 
   // Períodos del año seleccionado
   const yearPeriods = useMemo(() => {
@@ -503,14 +496,14 @@ export default function Dashboard() {
   // QUERY - Dashboard Data
   // ══════════════════════════════════════════════════════════════
   const { data, isLoading, isError } = useQuery<DashboardData>({
-    queryKey: ["dashboard", year, mode, supportId, costCenterId, managementId, areaId, packageId, periodFromId, periodToId],
+    queryKey: ["dashboard", year, mode, supportIds, costCenterIds, managementIds, areaIds, packageIds, periodFromId, periodToId],
     queryFn: async () => {
       const params: any = { year, mode };
-      if (supportId) params.supportId = supportId;
-      if (costCenterId) params.costCenterId = costCenterId;
-      if (managementId) params.managementId = managementId;
-      if (areaId) params.areaId = areaId;
-      if (packageId) params.packageId = packageId;
+      if (supportIds.length > 0) params.supportIds = supportIds.join(',');
+      if (costCenterIds.length > 0) params.costCenterIds = costCenterIds.join(',');
+      if (managementIds.length > 0) params.managementIds = managementIds.join(',');
+      if (areaIds.length > 0) params.areaIds = areaIds.join(',');
+      if (packageIds.length > 0) params.packageIds = packageIds.join(',');
       if (periodFromId) params.periodFromId = periodFromId;
       if (periodToId) params.periodToId = periodToId;
       
@@ -522,14 +515,14 @@ export default function Dashboard() {
   // QUERY - Dashboard Detail Data
   // ══════════════════════════════════════════════════════════════
   const { data: detailData } = useQuery<DashboardDetailData>({
-    queryKey: ["dashboard-detail", year, mode, supportId, costCenterId, managementId, areaId, packageId, periodFromId, periodToId],
+    queryKey: ["dashboard-detail", year, mode, supportIds, costCenterIds, managementIds, areaIds, packageIds, periodFromId, periodToId],
     queryFn: async () => {
       const params: any = { year, mode };
-      if (supportId) params.supportId = supportId;
-      if (costCenterId) params.costCenterId = costCenterId;
-      if (managementId) params.managementId = managementId;
-      if (areaId) params.areaId = areaId;
-      if (packageId) params.packageId = packageId;
+      if (supportIds.length > 0) params.supportIds = supportIds.join(',');
+      if (costCenterIds.length > 0) params.costCenterIds = costCenterIds.join(',');
+      if (managementIds.length > 0) params.managementIds = managementIds.join(',');
+      if (areaIds.length > 0) params.areaIds = areaIds.join(',');
+      if (packageIds.length > 0) params.packageIds = packageIds.join(',');
       if (periodFromId) params.periodFromId = periodFromId;
       if (periodToId) params.periodToId = periodToId;
       
@@ -552,15 +545,16 @@ export default function Dashboard() {
   }, [periods]);
   
   const hasActiveFilters = useMemo(() => {
-    return !!(supportId || costCenterId || managementId || areaId || packageId || periodFromId || periodToId);
-  }, [supportId, costCenterId, managementId, areaId, packageId, periodFromId, periodToId]);
+    return supportIds.length > 0 || costCenterIds.length > 0 || managementIds.length > 0 || 
+           areaIds.length > 0 || packageIds.length > 0 || periodFromId !== null || periodToId !== null;
+  }, [supportIds, costCenterIds, managementIds, areaIds, packageIds, periodFromId, periodToId]);
 
   const clearFilters = () => {
-    setSupportId("");
-    setCostCenterId("");
-    setManagementId("");
-    setAreaId("");
-    setPackageId("");
+    setSupportIds([]);
+    setCostCenterIds([]);
+    setManagementIds([]);
+    setAreaIds([]);
+    setPackageIds([]);
     setPeriodFromId(null);
     setPeriodToId(null);
     setSelectedQuarter(null);
@@ -719,7 +713,7 @@ export default function Dashboard() {
               Filtros Avanzados
               {hasActiveFilters && (
                 <span className="bg-brand-primary text-white text-[9px] px-1.5 py-0.5 rounded-full ml-1">
-                  {[supportId, costCenterId, managementId, areaId, packageId].filter(Boolean).length}
+                  {supportIds.length + costCenterIds.length + managementIds.length + areaIds.length + packageIds.length}
                 </span>
               )}
             </button>
@@ -746,11 +740,11 @@ export default function Dashboard() {
               
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {/* Sustento */}
-                <FilterSelect
+                <MultiSelectFilter
                   label="Sustento"
                   placeholder="Todos"
-                  value={supportId}
-                  onChange={setSupportId}
+                  values={supportIds}
+                  onChange={setSupportIds}
                   options={supports.map((s: any) => ({
                     value: String(s.id),
                     label: `${s.code} - ${s.name}`,
@@ -759,11 +753,11 @@ export default function Dashboard() {
                 />
 
                 {/* CECO */}
-                <FilterSelect
+                <MultiSelectFilter
                   label="Centro de Costo"
                   placeholder="Todos"
-                  value={costCenterId}
-                  onChange={setCostCenterId}
+                  values={costCenterIds}
+                  onChange={setCostCenterIds}
                   options={costCenters.map((c: any) => ({
                     value: String(c.id),
                     label: `${c.code} - ${c.name || ''}`,
@@ -772,13 +766,19 @@ export default function Dashboard() {
                 />
 
                 {/* Gerencia */}
-                <FilterSelect
+                <MultiSelectFilter
                   label="Gerencia"
                   placeholder="Todas"
-                  value={managementId}
-                  onChange={(value) => {
-                    setManagementId(value);
-                    setAreaId(""); // Limpiar área al cambiar gerencia
+                  values={managementIds}
+                  onChange={(values) => {
+                    setManagementIds(values);
+                    // Limpiar áreas que no pertenecen a las gerencias seleccionadas
+                    if (values.length > 0 && areaIds.length > 0) {
+                      const validAreaIds = areas
+                        .filter((a: any) => values.includes(String(a.managementId)))
+                        .map((a: any) => String(a.id));
+                      setAreaIds(areaIds.filter(id => validAreaIds.includes(id)));
+                    }
                   }}
                   options={managements.map((m: any) => ({
                     value: String(m.id),
@@ -787,12 +787,12 @@ export default function Dashboard() {
                 />
 
                 {/* Área */}
-                <FilterSelect
+                <MultiSelectFilter
                   label="Área"
                   placeholder="Todas"
-                  value={areaId}
-                  onChange={setAreaId}
-                  disabled={!managementId}
+                  values={areaIds}
+                  onChange={setAreaIds}
+                  disabled={managementIds.length === 0}
                   options={filteredAreas.map((a: any) => ({
                     value: String(a.id),
                     label: a.name
@@ -800,11 +800,11 @@ export default function Dashboard() {
                 />
 
                 {/* Paquete de Gasto */}
-                <FilterSelect
+                <MultiSelectFilter
                   label="Paquete de Gasto"
                   placeholder="Todos"
-                  value={packageId}
-                  onChange={setPackageId}
+                  values={packageIds}
+                  onChange={setPackageIds}
                   options={packages.map((p: any) => ({
                     value: String(p.id),
                     label: p.name

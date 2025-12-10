@@ -54,7 +54,10 @@ body {
   overflow-x: hidden;
   z-index: 40;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
-  transition: width 0.3s ease-in-out, transform 0.3s ease-in-out;
+  /* Transiciones mejoradas para animaciones más suaves */
+  transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1), 
+              transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Sidebar colapsado (solo en desktop) */
@@ -78,11 +81,25 @@ body {
 .sidebar-mobile {
   transform: translateX(-100%);
   z-index: 50;
+  /* Sombra más suave cuando está oculto */
+  box-shadow: none;
 }
 
 /* Sidebar mobile abierto: visible en overlay */
 .sidebar-mobile-open {
   transform: translateX(0);
+  /* Sombra más pronunciada cuando está visible */
+  box-shadow: 4px 0 16px rgba(0, 0, 0, 0.2);
+}
+
+/* Animación del overlay de fondo */
+.sidebar-overlay {
+  transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 0;
+}
+
+.sidebar-overlay-visible {
+  opacity: 1;
 }
 
 /* Scrollbar personalizada para el sidebar */

@@ -67,7 +67,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   function hasPermission(permission: string): boolean {
     if (!user) return false;
-    return user.permissions.includes(permission);
+    
+    // Verificar permiso directo
+    if (user.permissions.includes(permission)) return true;
+    
+    // Si es un submódulo (contiene ':'), verificar también el permiso padre (acceso global)
+    // Ej: si verifica 'ocs:listado' pero tiene 'ocs' → retorna true
+    if (permission.includes(':')) {
+      const parentPermission = permission.split(':')[0];
+      if (user.permissions.includes(parentPermission)) {
+        return true;
+      }
+    }
+    
+    return false;
   }
 
   function isSuperAdmin(): boolean {

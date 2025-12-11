@@ -479,13 +479,18 @@ model Role {
 
 model Permission {
   id            Int       @id @default(autoincrement())
-  key           String    @unique  // Ej: 'dashboard', 'assistant', 'reports', 'facturas', etc.
-  name          String    // Nombre descriptivo: 'Dashboard', 'Asistente', etc.
+  key           String    @unique  // Ej: 'dashboard', 'ocs', 'ocs:listado', 'ocs:gestion', etc.
+  name          String    // Nombre descriptivo: 'Dashboard', 'Órdenes de Compra', etc.
   description   String?
+  module        String?   // Módulo al que pertenece (para agrupar en UI): 'ocs', 'facturas', etc.
+  parentKey     String?   // Key del permiso padre (para jerarquía): 'ocs' es padre de 'ocs:listado'
+  sortOrder     Int       @default(0)  // Orden de visualización en UI
   
   roles         RolePermission[]
   
   @@index([key], name: "ix_permission_key")
+  @@index([module], name: "ix_permission_module")
+  @@index([parentKey], name: "ix_permission_parent")
 }
 
 model UserRole {

@@ -360,26 +360,78 @@ async function main() {
   // ============ AUTENTICACIÓN Y ROLES ============
   
   // Crear permisos para todas las páginas/módulos
+  // Estructura jerárquica: módulos principales y submódulos
+  // - module: agrupa permisos en la UI (ej: todos los de OC tienen module='ocs')
+  // - parentKey: indica el permiso padre (ej: 'ocs:listado' tiene parentKey='ocs')
+  // - sortOrder: orden de visualización en la UI
   const permissions = [
-    { key: "dashboard", name: "Dashboard", description: "Vista principal con métricas y estadísticas" },
-    { key: "assistant", name: "Asistente", description: "Asistente IA para consultas" },
-    { key: "reports", name: "Reportes", description: "Reportes y análisis de datos" },
-    { key: "facturas", name: "Facturas", description: "Gestión de facturas" },
-    { key: "ocs", name: "Órdenes de Compra", description: "Gestión de órdenes de compra" },
-    { key: "provisiones", name: "Provisiones", description: "Gestión de provisiones" },
-    { key: "ppto", name: "Presupuesto", description: "Gestión del presupuesto" },
-    { key: "catalogos", name: "Catálogos", description: "Administración de catálogos maestros" },
-    { key: "manage_roles", name: "Gestión de Roles", description: "Administrar roles y permisos (solo super admin)" }
+    // Módulos principales (sin padre)
+    { key: "dashboard", name: "Dashboard", description: "Vista principal con métricas y estadísticas", module: null, parentKey: null, sortOrder: 1 },
+    { key: "assistant", name: "Asistente", description: "Asistente IA para consultas", module: null, parentKey: null, sortOrder: 2 },
+    { key: "reports", name: "Reportes", description: "Reportes y análisis de datos", module: null, parentKey: null, sortOrder: 3 },
+    { key: "facturas", name: "Facturas", description: "Gestión de facturas", module: null, parentKey: null, sortOrder: 4 },
+    
+    // Órdenes de Compra - Módulo padre (acceso global)
+    { key: "ocs", name: "Órdenes de Compra", description: "Acceso completo a todos los submódulos de OC", module: "ocs", parentKey: null, sortOrder: 5 },
+    // Órdenes de Compra - Submódulos
+    { key: "ocs:listado", name: "OC - Listado", description: "Vista de consulta de órdenes de compra", module: "ocs", parentKey: "ocs", sortOrder: 1 },
+    { key: "ocs:gestion", name: "OC - Gestión", description: "Registro y administración de órdenes de compra", module: "ocs", parentKey: "ocs", sortOrder: 2 },
+    { key: "ocs:solicitud", name: "OC - Solicitud", description: "Solicitud de nuevas órdenes de compra", module: "ocs", parentKey: "ocs", sortOrder: 3 },
+    
+    // Otros módulos principales
+    { key: "provisiones", name: "Provisiones", description: "Gestión de provisiones", module: null, parentKey: null, sortOrder: 6 },
+    { key: "ppto", name: "Presupuesto", description: "Gestión del presupuesto", module: null, parentKey: null, sortOrder: 7 },
+    { key: "catalogos", name: "Catálogos", description: "Administración de catálogos maestros", module: null, parentKey: null, sortOrder: 8 },
+    { key: "manage_roles", name: "Gestión de Roles", description: "Administrar roles y permisos (solo super admin)", module: null, parentKey: null, sortOrder: 99 }
   ];
 
   const createdPermissions = [];
   for (const perm of permissions) {
     const created = await prisma.permission.upsert({
       where: { key: perm.key },
-      update: {},
+      update: {
+        name: perm.name,
+        description: perm.description,
+        module: perm.module,
+        parentKey: perm.parentKey,
+        sortOrder: perm.sortOrder
+      },
       create: perm
     });
     createdPermissions.push(created);
+  }
+  
+  // Migración automática: roles que tenían 'ocs' ahora reciben también los submódulos
+  // Esto asegura compatibilidad hacia atrás
+  const ocsPermission = createdPermissions.find(p => p.key === "ocs");
+  const ocsSubPermissions = createdPermissions.filter(p => p.parentKey === "ocs");
+  
+  if (ocsPermission && ocsSubPermissions.length > 0) {
+    // Buscar todos los roles que tienen el permiso 'ocs'
+    const rolesWithOcs = await prisma.rolePermission.findMany({
+      where: { permissionId: ocsPermission.id },
+      select: { roleId: true }
+    });
+    
+    // Para cada rol con 'ocs', asignar también los submódulos
+    for (const { roleId } of rolesWithOcs) {
+      for (const subPerm of ocsSubPermissions) {
+        await prisma.rolePermission.upsert({
+          where: {
+            ux_role_permission: {
+              roleId: roleId,
+              permissionId: subPerm.id
+            }
+          },
+          update: {},
+          create: {
+            roleId: roleId,
+            permissionId: subPerm.id
+          }
+        });
+      }
+    }
+    console.log(`✅ Migración: ${rolesWithOcs.length} roles con 'ocs' ahora tienen submódulos`);
   }
 
   // Crear rol Super Admin (sistema, no se puede eliminar)

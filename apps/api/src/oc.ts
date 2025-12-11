@@ -391,6 +391,52 @@ export async function registerOcRoutes(app: FastifyInstance) {
     }
   });
 
+  // Update OC Status (endpoint específico para cambio de estado)
+  app.patch("/ocs/:id/status", { preHandler: [requireAuth, requirePermission("ocs")] }, async (req, reply) => {
+    const id = Number((req.params as any).id);
+    const { estado } = req.body as any;
+
+    // Validar estado
+    const validEstados = [
+      "PENDIENTE", "PROCESAR", "PROCESADO", "APROBACION_VP",
+      "ANULAR", "ANULADO", "ATENDER_COMPRAS", "ATENDIDO"
+    ];
+
+    if (!estado || !validEstados.includes(estado)) {
+      return reply.code(400).send({ 
+        error: "Estado inválido", 
+        validEstados 
+      });
+    }
+
+    try {
+      const updated = await prisma.oC.update({
+        where: { id },
+        data: { estado },
+        include: {
+          support: { select: { id: true, code: true, name: true } },
+          budgetPeriodFrom: { select: { id: true, year: true, month: true, label: true } },
+          budgetPeriodTo: { select: { id: true, year: true, month: true, label: true } },
+          articulo: { select: { id: true, code: true, name: true } },
+          ceco: { select: { id: true, code: true, name: true } },
+          costCenters: { 
+            include: { 
+              costCenter: { select: { id: true, code: true, name: true } }
+            }
+          }
+        }
+      });
+
+      return updated;
+    } catch (err: any) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
+        return reply.code(404).send({ error: "OC no encontrada" });
+      }
+      console.error("Error updating OC status:", err);
+      return reply.code(500).send({ error: "Error al actualizar estado de OC" });
+    }
+  });
+
   // Delete OC
   app.delete("/ocs/:id", { preHandler: [requireAuth, requirePermission("ocs")] }, async (req, reply) => {
     const id = Number((req.params as any).id);

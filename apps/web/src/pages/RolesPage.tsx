@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader } from "../components/ui/Card";
 import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
 import { Table, Th, Td } from "../components/ui/Table";
-import { Shield, Edit, Trash2, Users, Plus, X, Check } from "lucide-react";
+import { Shield, Edit, Trash2, Users, Plus, X, Check, ChevronDown, ChevronRight } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { Navigate } from "react-router-dom";
 
@@ -15,6 +15,13 @@ type Permission = {
   key: string;
   name: string;
   description: string | null;
+  module?: string | null;
+  parentKey?: string | null;
+  sortOrder?: number;
+};
+
+type PermissionNode = Permission & {
+  children: PermissionNode[];
 };
 
 type Role = {
@@ -58,6 +65,58 @@ export default function RolesPage() {
     queryKey: ["permissions"],
     queryFn: async () => (await api.get("/permissions")).data as Permission[]
   });
+
+  // Query para permisos en estructura jerárquica (para UI de edición)
+  const permissionsTreeQuery = useQuery({
+    queryKey: ["permissions-tree"],
+    queryFn: async () => (await api.get("/permissions/tree")).data as PermissionNode[]
+  });
+
+  // Estado para controlar qué módulos están expandidos en el formulario
+  const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
+
+  // Toggle para expandir/colapsar módulos
+  const toggleModuleExpand = (key: string) => {
+    setExpandedModules(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(key)) {
+        newSet.delete(key);
+      } else {
+        newSet.add(key);
+      }
+      return newSet;
+    });
+  };
+
+  // Función para verificar si un permiso padre está seleccionado (acceso global)
+  const isParentSelected = (parentKey: string | null): boolean => {
+    if (!parentKey || !permissionsQuery.data) return false;
+    const parent = permissionsQuery.data.find(p => p.key === parentKey);
+    return parent ? roleForm.permissionIds.includes(parent.id) : false;
+  };
+
+  // Función para seleccionar/deseleccionar un permiso padre y sus hijos
+  const toggleParentPermission = (node: PermissionNode) => {
+    const isSelected = roleForm.permissionIds.includes(node.id);
+    const childIds = node.children.map(c => c.id);
+    
+    if (isSelected) {
+      // Deseleccionar padre y todos los hijos
+      setRoleForm(prev => ({
+        ...prev,
+        permissionIds: prev.permissionIds.filter(id => id !== node.id && !childIds.includes(id))
+      }));
+    } else {
+      // Seleccionar padre y todos los hijos
+      const newIds = [node.id, ...childIds];
+      setRoleForm(prev => ({
+        ...prev,
+        permissionIds: [...new Set([...prev.permissionIds, ...newIds])]
+      }));
+      // Expandir el módulo para mostrar los hijos
+      setExpandedModules(prev => new Set([...prev, node.key]));
+    }
+  };
 
   const usersQuery = useQuery({
     queryKey: ["users"],
@@ -273,26 +332,103 @@ export default function RolesPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Permisos ({roleForm.permissionIds.length} seleccionados)
                 </label>
-                <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
-                  {permissionsQuery.data?.map(permission => (
-                    <label
-                      key={permission.id}
-                      className="flex items-start gap-2 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={roleForm.permissionIds.includes(permission.id)}
-                        onChange={() => togglePermission(permission.id)}
-                        className="mt-1"
-                      />
-                      <div className="flex-1">
-                        <div className="font-medium text-sm">{permission.name}</div>
-                        {permission.description && (
-                          <div className="text-xs text-gray-500">{permission.description}</div>
+                <div className="space-y-2">
+                  {permissionsTreeQuery.data?.map(node => {
+                    const hasChildren = node.children && node.children.length > 0;
+                    const isExpanded = expandedModules.has(node.key);
+                    const isSelected = roleForm.permissionIds.includes(node.id);
+                    
+                    return (
+                      <div key={node.id} className="border rounded-lg overflow-hidden">
+                        {/* Permiso principal / Módulo padre */}
+                        <div 
+                          className={`flex items-center gap-2 p-3 cursor-pointer transition-colors ${
+                            isSelected ? 'bg-brand-50 border-brand-200' : 'hover:bg-gray-50'
+                          }`}
+                        >
+                          {/* Checkbox del permiso padre */}
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => hasChildren ? toggleParentPermission(node) : togglePermission(node.id)}
+                            className="flex-shrink-0"
+                          />
+                          
+                          {/* Botón expandir/colapsar (solo si tiene hijos) */}
+                          {hasChildren && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleModuleExpand(node.key);
+                              }}
+                              className="p-1 hover:bg-gray-200 rounded transition-colors"
+                            >
+                              {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                            </button>
+                          )}
+                          
+                          {/* Información del permiso */}
+                          <div className="flex-1" onClick={() => hasChildren && toggleModuleExpand(node.key)}>
+                            <div className="font-medium text-sm flex items-center gap-2">
+                              {node.name}
+                              {hasChildren && (
+                                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                                  {node.children.length} submódulos
+                                </span>
+                              )}
+                              {isSelected && hasChildren && (
+                                <span className="text-xs bg-brand-100 text-brand-700 px-2 py-0.5 rounded">
+                                  Acceso completo
+                                </span>
+                              )}
+                            </div>
+                            {node.description && (
+                              <div className="text-xs text-gray-500">{node.description}</div>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* Submódulos (si tiene hijos y está expandido) */}
+                        {hasChildren && isExpanded && (
+                          <div className="border-t bg-gray-50 pl-8 py-2 space-y-1">
+                            {node.children.map(child => {
+                              const childSelected = roleForm.permissionIds.includes(child.id);
+                              const parentSelected = isSelected;
+                              
+                              return (
+                                <label
+                                  key={child.id}
+                                  className={`flex items-start gap-2 p-2 rounded cursor-pointer transition-colors ${
+                                    childSelected ? 'bg-brand-50' : 'hover:bg-gray-100'
+                                  } ${parentSelected ? 'opacity-75' : ''}`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={childSelected}
+                                    onChange={() => togglePermission(child.id)}
+                                    disabled={parentSelected}
+                                    className="mt-0.5"
+                                  />
+                                  <div className="flex-1">
+                                    <div className="font-medium text-sm">{child.name}</div>
+                                    {child.description && (
+                                      <div className="text-xs text-gray-500">{child.description}</div>
+                                    )}
+                                    {parentSelected && (
+                                      <div className="text-xs text-brand-600 italic">
+                                        Incluido por acceso global
+                                      </div>
+                                    )}
+                                  </div>
+                                </label>
+                              );
+                            })}
+                          </div>
                         )}
                       </div>
-                    </label>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 

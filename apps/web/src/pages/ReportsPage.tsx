@@ -53,6 +53,27 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 type ReportMode = 'presupuestal' | 'contable' | 'mixto';
 
 /**
+ * Obtiene las etiquetas dinámicas según el tipo de presupuesto para reportes
+ */
+function getReportBudgetLabels(budgetType: 'PPTO' | 'RPPTO', year: number) {
+  const isPPTO = budgetType === 'PPTO';
+  
+  return {
+    // Etiqueta corta para columnas
+    shortLabel: isPPTO ? 'PPTO' : 'RPPTO',
+    
+    // Etiqueta para títulos
+    titleLabel: isPPTO ? `Reporte Presupuestal – ${year}` : `Reporte Presupuestal Revisado – ${year}`,
+    
+    // Etiqueta descriptiva para columnas de tabla
+    columnLabel: isPPTO ? 'PPTO' : 'PPTO Revisado',
+    
+    // Etiqueta para CSV
+    csvLabel: isPPTO ? 'PPTO' : 'RPPTO'
+  };
+}
+
+/**
  * Toggle de modo de reporte (Presupuestal / Contable / Mixto)
  */
 function ReportModeToggle({ 
@@ -99,6 +120,46 @@ function ReportModeToggle({
         `}
       >
         Mixto
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Toggle de tipo de presupuesto (PPTO / RPPTO)
+ */
+function BudgetTypeToggle({
+  budgetType,
+  onChange
+}: {
+  budgetType: 'PPTO' | 'RPPTO';
+  onChange: (type: 'PPTO' | 'RPPTO') => void;
+}) {
+  return (
+    <div className="inline-flex rounded-lg border border-brand-border bg-white p-1">
+      <button
+        onClick={() => onChange('PPTO')}
+        className={`
+          px-4 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all
+          ${budgetType === 'PPTO'
+            ? 'bg-blue-600 text-white shadow-sm'
+            : 'text-brand-text-secondary hover:text-brand-text-primary hover:bg-brand-background'
+          }
+        `}
+      >
+        📋 PPTO
+      </button>
+      <button
+        onClick={() => onChange('RPPTO')}
+        className={`
+          px-4 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all
+          ${budgetType === 'RPPTO'
+            ? 'bg-purple-600 text-white shadow-sm'
+            : 'text-brand-text-secondary hover:text-brand-text-primary hover:bg-brand-background'
+          }
+        `}
+      >
+        📊 RPPTO
       </button>
     </div>
   );
@@ -234,10 +295,11 @@ export default function ReportsPage() {
     queryFn: async () => (await api.get("/cost-centers")).data
   });
 
-  // Estados de filtros (ahora multi-select excepto currency y mode)
+  // Estados de filtros (ahora multi-select excepto currency, mode y budgetType)
   // NOTA: Se declaran antes de las queries que los utilizan para evitar "Cannot access before initialization"
   const [mode, setMode] = useState<ReportMode>('presupuestal');
   const [year, setYear] = useState<number>(new Date().getFullYear());
+  const [budgetType, setBudgetType] = useState<'PPTO' | 'RPPTO'>('PPTO'); // Tipo de presupuesto
   const [periodFromId, setPeriodFromId] = useState<number | null>(null);
   const [periodToId, setPeriodToId] = useState<number | null>(null);
   const [managementIds, setManagementIds] = useState<string[]>([]);
@@ -265,11 +327,16 @@ export default function ReportsPage() {
     queryFn: async () => (await api.get("/provisions")).data
   });
 
-  // Query para presupuestos del año seleccionado
+  // Query para presupuestos del año seleccionado (ahora incluye budgetType)
   const { data: annualBudgetData = [] } = useQuery({
-    queryKey: ["budgets-annual-report", year],
+    queryKey: ["budgets-annual-report", year, budgetType],
     queryFn: async () => {
-      const response = await api.get("/budgets/annual", { params: { year } });
+      const response = await api.get("/budgets/annual", { 
+        params: { 
+          year,
+          budgetType // Incluir tipo de presupuesto
+        } 
+      });
       return response.data;
     },
     enabled: !!year
@@ -775,11 +842,12 @@ export default function ReportsPage() {
   // Exportación CSV - Resumen
   // Exporta las filas visibles de la tabla principal con datos reales calculados
   const exportCSVResumen = useCallback(() => {
+    const budgetLabel = getReportBudgetLabels(budgetType, year).csvLabel;
     const headers = mode === 'presupuestal'
-      ? ['Mes', 'PPTO', 'Ejecutado Real', 'Variación Abs', 'Variación %', 'Disponible']
+      ? ['Mes', budgetLabel, 'Ejecutado Real', 'Variación Abs', 'Variación %', 'Disponible']
       : mode === 'contable'
-      ? ['Mes Contable', 'PPTO Asociado', 'Ejecutado Contable', 'Provisiones', 'Resultado Contable', 'Variación vs PPTO']
-      : ['Mes', 'PPTO', 'Ejecutado Real', 'Resultado Contable', 'Diferencia Real vs Contable', 'Disponible'];
+      ? ['Mes Contable', `${budgetLabel} Asociado`, 'Ejecutado Contable', 'Provisiones', 'Resultado Contable', `Variación vs ${budgetLabel}`]
+      : ['Mes', budgetLabel, 'Ejecutado Real', 'Resultado Contable', 'Diferencia Real vs Contable', 'Disponible'];
 
     const rows = filteredData.map(row => {
       if (mode === 'presupuestal') {
@@ -820,12 +888,14 @@ export default function ReportsPage() {
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `reporte_${mode}_${year}_resumen.csv`;
+    link.download = `reporte_${mode}_${budgetType}_${year}_resumen.csv`;
     link.click();
-  }, [filteredData, mode, year]);
+  }, [filteredData, mode, year, budgetType]);
 
   // Exportación CSV - Detalle (Multinivel)
   const exportCSVDetalle = useCallback(() => {
+    const budgetLabel = getReportBudgetLabels(budgetType, year).csvLabel;
+    
     if (mode !== 'presupuestal') {
       // Por ahora solo soporta modo presupuestal
       const headers = ['Mes', 'Paquete', 'Gerencia', 'Sustento', 'Tipo', 'Serie-Número', 'Fecha', 'Monto', 'Moneda', 'CECOs', 'Estado'];
@@ -833,12 +903,12 @@ export default function ReportsPage() {
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = `reporte_${mode}_${year}_detalle.csv`;
+      link.download = `reporte_${mode}_${budgetType}_${year}_detalle.csv`;
       link.click();
       return;
     }
     
-    const headers = ['Año', 'Mes', 'Paquete de Gasto', 'Gerencia', 'Área', 'Sustento', 'Tipo de Fila', 'Serie-Número', 'Fecha', 'Monto (PEN)', 'Moneda', 'CECOs', 'Estado', 'PPTO', 'Ejecutado', 'Disponible', '% Ejecución'];
+    const headers = ['Año', 'Mes', 'Paquete de Gasto', 'Gerencia', 'Área', 'Sustento', 'Tipo de Fila', 'Serie-Número', 'Fecha', 'Monto (PEN)', 'Moneda', 'CECOs', 'Estado', budgetLabel, 'Ejecutado', 'Disponible', '% Ejecución'];
     const rows: string[] = [];
     
     // Recorrer la estructura jerárquica y generar filas
@@ -903,18 +973,29 @@ export default function ReportsPage() {
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `reporte_${mode}_${year}_detalle_multinivel.csv`;
+    link.download = `reporte_${mode}_${budgetType}_${year}_detalle_multinivel.csv`;
     link.click();
-  }, [mode, year, filteredData, hierarchicalDetailsByPeriod]);
+  }, [mode, year, budgetType, filteredData, hierarchicalDetailsByPeriod]);
 
   return (
     <div className="space-y-4">
       {/* Encabezado con título y modo de reporte */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-semibold">Reportes</h1>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <h1 className="text-2xl font-semibold">Reportes</h1>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-brand-text-secondary font-medium">Modo de Vista:</span>
+            <ReportModeToggle mode={mode} onChange={setMode} />
+          </div>
+        </div>
+        
+        {/* Toggle de tipo de presupuesto */}
         <div className="flex items-center gap-3">
-          <span className="text-sm text-brand-text-secondary font-medium">Modo de Vista:</span>
-          <ReportModeToggle mode={mode} onChange={setMode} />
+          <span className="text-sm text-brand-text-secondary font-medium">Tipo de Presupuesto:</span>
+          <BudgetTypeToggle budgetType={budgetType} onChange={setBudgetType} />
+          <span className="text-xs text-brand-text-disabled italic">
+            {budgetType === 'PPTO' ? 'Mostrando presupuesto original' : 'Mostrando presupuesto revisado'}
+          </span>
         </div>
       </div>
 
@@ -1065,8 +1146,8 @@ export default function ReportsPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-medium">
-              Reporte {mode === 'presupuestal' ? 'Presupuestal' : mode === 'contable' ? 'Contable' : 'Mixto'}
-              {' '}- {year}
+              {getReportBudgetLabels(budgetType, year).titleLabel}
+              {' '}({mode === 'presupuestal' ? 'Presupuestal' : mode === 'contable' ? 'Contable' : 'Mixto'})
             </h2>
             <div className="flex gap-2">
               <Button variant="secondary" onClick={exportCSVResumen}>
@@ -1087,7 +1168,7 @@ export default function ReportsPage() {
                   {mode === 'presupuestal' && (
                     <>
                       <Th>Mes Período</Th>
-                      <Th className="text-right">PPTO</Th>
+                      <Th className="text-right">{getReportBudgetLabels(budgetType, year).columnLabel}</Th>
                       <Th className="text-right">Ejecutado Real</Th>
                       <Th className="text-right">Variación Abs</Th>
                       <Th className="text-right">Variación %</Th>
@@ -1097,17 +1178,17 @@ export default function ReportsPage() {
                   {mode === 'contable' && (
                     <>
                       <Th>Mes Contable</Th>
-                      <Th className="text-right">PPTO Asociado</Th>
+                      <Th className="text-right">{getReportBudgetLabels(budgetType, year).columnLabel} Asociado</Th>
                       <Th className="text-right">Ejecutado Contable</Th>
                       <Th className="text-right">Provisiones</Th>
                       <Th className="text-right">Resultado Contable</Th>
-                      <Th className="text-right">Variación vs PPTO</Th>
+                      <Th className="text-right">Variación vs {getReportBudgetLabels(budgetType, year).shortLabel}</Th>
                     </>
                   )}
                   {mode === 'mixto' && (
                     <>
                       <Th>Mes Período</Th>
-                      <Th className="text-right">PPTO</Th>
+                      <Th className="text-right">{getReportBudgetLabels(budgetType, year).columnLabel}</Th>
                       <Th className="text-right">Ejecutado Real</Th>
                       <Th className="text-right">Resultado Contable</Th>
                       <Th className="text-right">Diferencia R vs C</Th>

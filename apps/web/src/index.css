@@ -65,15 +65,22 @@ body {
   width: 4rem; /* w-16 = 64px = 4rem - solo iconos */
 }
 
-/* Ajustar links del sidebar cuando está colapsado */
-.sidebar-collapsed nav a {
+/* Ajustar links y botones del sidebar cuando está colapsado */
+.sidebar-collapsed nav a,
+.sidebar-collapsed nav button {
   justify-content: center;
   padding-left: 0.75rem;
   padding-right: 0.75rem;
 }
 
-/* Prevenir que textos largos se partan en múltiples líneas */
-.sidebar-fixed nav a {
+/* Ocultar la flecha de expansión cuando está colapsado */
+.sidebar-collapsed nav button svg.chevron-icon {
+  display: none;
+}
+
+/* Prevenir que textos largos se partan en múltiples líneas durante la animación */
+.sidebar-fixed nav a,
+.sidebar-fixed nav button {
   white-space: nowrap;
 }
 

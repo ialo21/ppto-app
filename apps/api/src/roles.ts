@@ -6,12 +6,73 @@ const prisma = new PrismaClient();
 
 export async function registerRoleRoutes(app: FastifyInstance) {
   
-  // GET /permissions - Listar todos los permisos disponibles
+  // GET /permissions - Listar todos los permisos disponibles (lista plana)
   app.get("/permissions", { preHandler: [requireAuth, requirePermission("manage_roles")] }, async () => {
     const permissions = await prisma.permission.findMany({
-      orderBy: { name: "asc" }
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
     });
     return permissions;
+  });
+
+  // GET /permissions/tree - Listar permisos en estructura jerárquica para UI de roles
+  // Retorna módulos con sus submódulos anidados
+  app.get("/permissions/tree", { preHandler: [requireAuth, requirePermission("manage_roles")] }, async () => {
+    const permissions = await prisma.permission.findMany({
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
+    });
+
+    // Construir estructura jerárquica
+    // 1. Permisos sin padre (módulos principales o permisos simples)
+    // 2. Permisos con padre (submódulos)
+    
+    type PermissionNode = {
+      id: number;
+      key: string;
+      name: string;
+      description: string | null;
+      module: string | null;
+      parentKey: string | null;
+      sortOrder: number;
+      children: PermissionNode[];
+    };
+
+    const permissionMap = new Map<string, PermissionNode>();
+    const rootPermissions: PermissionNode[] = [];
+
+    // Primera pasada: crear nodos
+    for (const perm of permissions) {
+      permissionMap.set(perm.key, {
+        id: perm.id,
+        key: perm.key,
+        name: perm.name,
+        description: perm.description,
+        module: perm.module,
+        parentKey: perm.parentKey,
+        sortOrder: perm.sortOrder,
+        children: []
+      });
+    }
+
+    // Segunda pasada: construir jerarquía
+    for (const perm of permissions) {
+      const node = permissionMap.get(perm.key)!;
+      
+      if (perm.parentKey && permissionMap.has(perm.parentKey)) {
+        // Es un submódulo, agregarlo al padre
+        const parent = permissionMap.get(perm.parentKey)!;
+        parent.children.push(node);
+      } else {
+        // Es un módulo principal o permiso sin padre
+        rootPermissions.push(node);
+      }
+    }
+
+    // Ordenar children por sortOrder
+    for (const node of permissionMap.values()) {
+      node.children.sort((a, b) => a.sortOrder - b.sortOrder);
+    }
+
+    return rootPermissions;
   });
 
   // GET /roles - Listar todos los roles

@@ -84,6 +84,7 @@ interface DashboardData {
   year: number;
   versionId: number | null;
   mode: DashboardMode;
+  budgetType?: 'PPTO' | 'RPPTO'; // Tipo de presupuesto activo desde backend
   filters: {
     supportId: number | null;
     costCenterId: number | null;
@@ -133,6 +134,39 @@ interface Period {
   year: number;
   month: number;
   label?: string;
+}
+
+// ══════════════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Obtiene las etiquetas dinámicas según el tipo de presupuesto
+ */
+function getBudgetLabels(budgetType: 'PPTO' | 'RPPTO' | undefined, year: number) {
+  const isPPTO = !budgetType || budgetType === 'PPTO';
+  
+  return {
+    // Etiqueta corta para KPIs y gráficos
+    shortLabel: isPPTO ? 'PPTO' : 'RPPTO',
+    
+    // Etiqueta descriptiva para títulos
+    fullLabel: isPPTO ? `Presupuesto total ${year}` : `Presupuesto revisado ${year}`,
+    
+    // Etiqueta para disponible/resultado
+    availableLabel: isPPTO ? 'PPTO – Ejecutado Real' : 'RPPTO – Ejecutado Real',
+    
+    // Etiqueta para columna en tabla
+    columnLabel: isPPTO ? `PPTO ${year}` : `RPPTO ${year}`,
+    
+    // Etiqueta para detalle
+    detailLabel: isPPTO ? `Detalle PPTO ${year}` : `Detalle RPPTO ${year}`,
+    
+    // Indicador visual
+    typeIndicator: isPPTO 
+      ? { text: 'Presupuesto Original', color: 'text-blue-600' }
+      : { text: 'Presupuesto Revisado', color: 'text-purple-600' }
+  };
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -685,11 +719,22 @@ export default function Dashboard() {
           {/* Título, descripción y controles en una sola fila para desktop */}
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-brand-text-primary">
-                Dashboard
-              </h1>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl sm:text-3xl font-bold text-brand-text-primary">
+                  Dashboard
+                </h1>
+                {data && data.budgetType && (
+                  <span className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full ${
+                    data.budgetType === 'RPPTO' 
+                      ? 'bg-purple-100 text-purple-700 border border-purple-300' 
+                      : 'bg-blue-100 text-blue-700 border border-blue-300'
+                  }`}>
+                    {data.budgetType === 'RPPTO' ? '📊 RPPTO (Revisado)' : '📋 PPTO (Original)'}
+                  </span>
+                )}
+              </div>
               <p className="text-sm text-brand-text-secondary mt-1">
-                Vista de presupuesto y ejecución
+                Vista de presupuesto y ejecución{data && data.budgetType ? ` - Mostrando ${data.budgetType === 'RPPTO' ? 'presupuesto revisado' : 'presupuesto original'}` : ''}
               </p>
             </div>
             
@@ -899,10 +944,10 @@ export default function Dashboard() {
                 ══════════════════════════════════════════════════════════════ */}
             <div className="w-full grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
               <KpiCard
-                title="PPTO"
+                title={getBudgetLabels(data.budgetType, year).shortLabel}
                 value={data.totals.budget}
                 icon={Wallet}
-                description={`Presupuesto total ${year}`}
+                description={getBudgetLabels(data.budgetType, year).fullLabel}
               />
               <KpiCard
                 title="Ejecutado"
@@ -928,7 +973,7 @@ export default function Dashboard() {
                   value={data.totals.available}
                   icon={CheckCircle2}
                   highlighted={true}
-                  description="PPTO - Ejecutado Real"
+                  description={getBudgetLabels(data.budgetType, year).availableLabel}
                 />
               ) : (
                 <KpiCard
@@ -1003,7 +1048,7 @@ export default function Dashboard() {
                       {/* Barras */}
                       <Bar 
                         dataKey="budget" 
-                        name="PPTO" 
+                        name={getBudgetLabels(data.budgetType, year).shortLabel}
                         fill="#8A96A2" 
                         radius={[4, 4, 0, 0]}
                         maxBarSize={60}
@@ -1126,7 +1171,7 @@ export default function Dashboard() {
                   {additionalMetrics?.executionRate.toFixed(1)}%
                 </div>
                 <p className="text-xs text-brand-text-secondary mt-1">
-                  Ejecutado / PPTO Total
+                  Ejecutado / {getBudgetLabels(data.budgetType, year).shortLabel} Total
                 </p>
                 <div className="mt-3 bg-brand-background rounded-full h-2 overflow-hidden">
                   <div 
@@ -1151,7 +1196,7 @@ export default function Dashboard() {
                     {additionalMetrics?.provisionsRate.toFixed(1)}%
                   </div>
                   <p className="text-xs text-brand-text-secondary mt-1">
-                    Provisiones / PPTO Total
+                    Provisiones / {getBudgetLabels(data.budgetType, year).shortLabel} Total
                   </p>
                   <div className="mt-3 bg-brand-background rounded-full h-2 overflow-hidden">
                     <div 
@@ -1176,7 +1221,9 @@ export default function Dashboard() {
                   {additionalMetrics?.availableRate.toFixed(1)}%
                 </div>
                 <p className="text-xs text-brand-text-secondary mt-1">
-                  {mode === "execution" ? "Disponible / PPTO Total" : "Saldo / PPTO Total"}
+                  {mode === "execution" 
+                    ? `Disponible / ${getBudgetLabels(data.budgetType, year).shortLabel} Total` 
+                    : `Saldo / ${getBudgetLabels(data.budgetType, year).shortLabel} Total`}
                 </p>
                 <div className="mt-3 bg-brand-background rounded-full h-2 overflow-hidden">
                   <div 
@@ -1307,7 +1354,7 @@ export default function Dashboard() {
                   <div className="flex items-center gap-2">
                     <BarChart3 size={18} className="text-brand-primary" />
                     <h3 className="text-[14px] lg:text-[15px] font-semibold text-brand-text-primary uppercase tracking-wide">
-                      Detalle PPTO {year}
+                      {getBudgetLabels(data.budgetType, year).detailLabel}
                     </h3>
                   </div>
                   <p className="text-xs text-brand-text-secondary mt-1">
@@ -1338,7 +1385,7 @@ export default function Dashboard() {
                             Sustento
                           </th>
                           <th className="text-right text-[10px] sm:text-xs font-semibold text-brand-text-secondary uppercase tracking-wide p-3 border-b border-brand-border-light">
-                            PPTO {year}
+                            {getBudgetLabels(data.budgetType, year).columnLabel}
                           </th>
                           {mode === "execution" ? (
                             <>

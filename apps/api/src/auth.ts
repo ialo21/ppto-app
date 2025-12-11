@@ -149,14 +149,31 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
 }
 
 // Middleware para verificar permiso específico
+// Soporta permisos jerárquicos: si se verifica 'ocs:listado', también acepta 'ocs' (permiso global)
 export function requirePermission(permissionKey: string) {
   return async (request: FastifyRequest, reply: FastifyReply) => {
     await requireAuth(request, reply);
     
     const user = (request as any).user as AuthUser;
-    if (!user || !user.permissions.includes(permissionKey)) {
+    if (!user) {
       return reply.code(403).send({ error: "No tienes permiso para acceder a este recurso" });
     }
+    
+    // Verificar permiso directo
+    if (user.permissions.includes(permissionKey)) {
+      return; // Tiene el permiso específico
+    }
+    
+    // Si es un submódulo (contiene ':'), verificar también el permiso padre (acceso global)
+    // Ej: si requiere 'ocs:listado' pero tiene 'ocs' → permitir acceso
+    if (permissionKey.includes(':')) {
+      const parentPermission = permissionKey.split(':')[0];
+      if (user.permissions.includes(parentPermission)) {
+        return; // Tiene el permiso padre (acceso global)
+      }
+    }
+    
+    return reply.code(403).send({ error: "No tienes permiso para acceder a este recurso" });
   };
 }
 

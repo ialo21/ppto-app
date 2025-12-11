@@ -11,12 +11,24 @@ import { AuthProvider, useAuth } from "./contexts/AuthContext";
 const qc = new QueryClient();
 
 // Mapeo de permisos a rutas del sidebar
+// Nota: Los items con `children` son grupos desplegables
+// Para submódulos, se verifica el permiso específico O el permiso global del padre (gracias a hasPermission mejorado)
 const sidebarItems = [
   { path: "/", label: "Dashboard", icon: Home, permission: "dashboard", end: true },
   { path: "/assistant", label: "Asistente", icon: Sparkles, permission: "assistant" },
   { path: "/reports", label: "Reportes", icon: BarChart3, permission: "reports" },
   { path: "/invoices", label: "Facturas", icon: FileText, permission: "facturas" },
-  { path: "/purchase-orders", label: "Órdenes de Compra", icon: ShoppingCart, permission: "ocs" },
+  { 
+    path: "/purchase-orders", 
+    label: "Órdenes de Compra", 
+    icon: ShoppingCart, 
+    permission: "ocs",  // Permiso global (acceso completo) o al menos un submódulo
+    children: [
+      { path: "/purchase-orders/listado", label: "Listado", permission: "ocs:listado" },
+      { path: "/purchase-orders/gestion", label: "Gestión / Registro", permission: "ocs:gestion" },
+      { path: "/purchase-orders/solicitud", label: "Solicitud de OC", permission: "ocs:solicitud" }
+    ]
+  },
   { path: "/provisions", label: "Provisiones", icon: Calendar, permission: "provisiones" },
   { path: "/ppto", label: "PPTO", icon: Wallet, permission: "ppto" },
   { path: "/settings", label: "Catálogos", icon: Archive, permission: "catalogos" }
@@ -40,13 +52,29 @@ function Sidebar({
   const { hasPermission } = useAuth();
   const link = "flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 text-white/90 hover:bg-white/20 hover:text-white";
   const active = "bg-white/30 text-white font-medium";
+  const sublink = "flex items-center gap-3 px-3 py-2 pl-10 rounded-xl transition-all duration-200 text-white/80 hover:bg-white/15 hover:text-white text-sm";
+  const subactive = "bg-white/20 text-white font-medium";
   
   // Estados locales para controlar las animaciones
   const [isClosing, setIsClosing] = useState(false);
   const [isOpening, setIsOpening] = useState(false);
   
+  // Estado para controlar qué grupos están expandidos
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  
   // Filtrar items según permisos del usuario
-  const allowedItems = sidebarItems.filter(item => hasPermission(item.permission));
+  // Para módulos con submódulos, mostrar si tiene permiso global O al menos un submódulo
+  const allowedItems = sidebarItems.filter(item => {
+    // Verificar permiso principal
+    if (hasPermission(item.permission)) return true;
+    
+    // Si tiene hijos, verificar si tiene acceso a al menos uno
+    if (item.children && item.children.length > 0) {
+      return item.children.some(child => hasPermission(child.permission));
+    }
+    
+    return false;
+  });
   
   // Efecto para animar la apertura del sidebar
   useEffect(() => {
@@ -88,6 +116,19 @@ function Sidebar({
     }
   };
   
+  // Handler para expandir/colapsar grupos
+  const toggleGroup = (path: string) => {
+    setExpandedGroups(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(path)) {
+        newSet.delete(path);
+      } else {
+        newSet.add(path);
+      }
+      return newSet;
+    });
+  };
+  
   // En mobile: si no está abierto ni cerrándose, no renderizar nada
   if (isMobile && !isOpen && !isClosing) {
     return null;
@@ -119,6 +160,59 @@ function Sidebar({
         <nav className="space-y-1">
           {allowedItems.map(item => {
             const Icon = item.icon;
+            const hasChildren = item.children && item.children.length > 0;
+            const isExpanded = expandedGroups.has(item.path);
+            
+            // Si tiene hijos, renderizar grupo desplegable
+            if (hasChildren) {
+              return (
+                <div key={item.path}>
+                  {/* Botón padre para expandir/colapsar */}
+                  <button
+                    onClick={() => toggleGroup(item.path)}
+                    className={`${link} w-full justify-between`}
+                    title={item.label}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Icon size={18} className="flex-shrink-0"/>
+                      {(!isCollapsed || isMobile) && <span>{item.label}</span>}
+                    </div>
+                    {(!isCollapsed || isMobile) && (
+                      <svg 
+                        className={`w-4 h-4 chevron-icon transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                        fill="none" 
+                        stroke="currentColor" 
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    )}
+                  </button>
+                  
+                  {/* Subitems (solo si está expandido y no colapsado) */}
+                  {isExpanded && (!isCollapsed || isMobile) && (
+                    <div className="mt-1 space-y-1">
+                      {item.children.filter(child => 
+                        // hasPermission verifica automáticamente el permiso específico O el padre
+                        hasPermission(child.permission)
+                      ).map(child => (
+                        <NavLink
+                          key={child.path}
+                          to={child.path}
+                          className={({isActive}) => `${sublink} ${isActive ? subactive : ""}`}
+                          title={child.label}
+                          onClick={handleLinkClick}
+                        >
+                          <span>{child.label}</span>
+                        </NavLink>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+            
+            // Si no tiene hijos, renderizar link normal
             return (
               <NavLink 
                 key={item.path}
@@ -348,6 +442,11 @@ import CatalogsPage from "./pages/SettingsPage";
 import LoginPage from "./pages/LoginPage";
 import RolesPage from "./pages/RolesPage";
 
+// Submódulos de Órdenes de Compra
+import OcListadoPage from "./pages/purchase-orders/OcListadoPage";
+import OcGestionPage from "./pages/purchase-orders/OcGestionPage";
+import OcSolicitudPage from "./pages/purchase-orders/OcSolicitudPage";
+
 const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
   { element: <AppLayout />, children: [
@@ -355,7 +454,11 @@ const router = createBrowserRouter([
     { path: "/assistant", element: <AssistantPage /> },
     { path: "/reports", element: <ReportsPage /> },
     { path: "/invoices", element: <InvoicesPage /> },
-    { path: "/purchase-orders", element: <PurchaseOrdersPage /> },
+    // Rutas de Órdenes de Compra (con submódulos)
+    { path: "/purchase-orders", element: <Navigate to="/purchase-orders/gestion" replace /> }, // Redirigir a Gestión por defecto
+    { path: "/purchase-orders/listado", element: <OcListadoPage /> },
+    { path: "/purchase-orders/gestion", element: <OcGestionPage /> },
+    { path: "/purchase-orders/solicitud", element: <OcSolicitudPage /> },
     { path: "/provisions", element: <ProvisionsPage /> },
     { path: "/ppto", element: <BudgetPage /> },
     { path: "/settings", element: <CatalogsPage /> },

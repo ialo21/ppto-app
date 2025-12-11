@@ -120,6 +120,7 @@ export function requirePermission(permissionKey: string) {
 
 export async function registerAuthRoutes(app: FastifyInstance) {
   const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+  const enableDevAuth = process.env.ENABLE_DEV_AUTH === "true";
   
   // Verificar si el correo pertenece al dominio permitido
   function isAllowedEmail(email: string): boolean {
@@ -242,6 +243,42 @@ export async function registerAuthRoutes(app: FastifyInstance) {
 
     return reply.redirect(authUrl);
   });
+
+  // POST /auth/dev-login - Solo disponible en desarrollo para saltar OAuth
+  if (enableDevAuth) {
+    app.post("/auth/dev-login", async (request, reply) => {
+      const body = request.body as { email?: string; name?: string };
+      const email = body?.email?.trim();
+      const name = body?.name?.trim() || "Dev User";
+
+      if (!email) {
+        return reply.code(400).send({ error: "Email requerido para dev-login" });
+      }
+
+      let user = await prisma.user.findUnique({ where: { email } });
+      let isNewUser = false;
+
+      if (!user) {
+        user = await prisma.user.create({
+          data: {
+            email,
+            name,
+            googleId: `dev-${Date.now()}`,
+            active: true
+          }
+        });
+        isNewUser = true;
+      }
+
+      await ensureSuperAdminRole(user.id, email);
+      if (isNewUser) {
+        await ensureViewerRole(user.id, email);
+      }
+
+      request.session.set("userId", user.id);
+      return reply.send({ success: true });
+    });
+  }
 
   // GET /auth/google/callback - Callback de Google OAuth
   app.get("/auth/google/callback", async (request, reply) => {

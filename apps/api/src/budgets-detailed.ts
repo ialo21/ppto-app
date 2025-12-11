@@ -2,6 +2,7 @@ import { FastifyInstance } from "fastify";
 import { PrismaClient, Prisma } from "@prisma/client";
 import { z } from "zod";
 import { ensureYearPeriods } from "./periods";
+import { BudgetType, getActiveBudgetType } from "./budget-helpers";
 
 const prisma = new PrismaClient();
 
@@ -10,6 +11,7 @@ const listDetailedSchema = z.object({
   periodId: z.coerce.number(),
   year: z.coerce.number().optional(), // Optional: to auto-create periods for year
   versionId: z.coerce.number().optional(),
+  budgetType: z.enum(["PPTO", "RPPTO"]).optional(), // Tipo de presupuesto
   search: z.string().optional(),
   managementId: z.coerce.number().optional(),
   areaId: z.coerce.number().optional(),
@@ -21,6 +23,7 @@ const listDetailedSchema = z.object({
 const batchUpsertSchema = z.object({
   versionId: z.number().optional(),
   periodId: z.number(),
+  budgetType: z.enum(["PPTO", "RPPTO"]).optional(), // Tipo de presupuesto
   items: z.array(z.object({
     supportId: z.number(),
     costCenterId: z.number(),
@@ -40,6 +43,7 @@ export async function registerDetailedBudgetRoutes(app: FastifyInstance) {
     
     const { periodId, year, search, managementId, areaId, packageId, conceptId } = q.data;
     let versionId = q.data.versionId;
+    let budgetType: BudgetType = q.data.budgetType || "PPTO";
     
     // Ensure year periods exist if year param provided
     if (year) {
@@ -95,12 +99,13 @@ export async function registerDetailedBudgetRoutes(app: FastifyInstance) {
       orderBy: { name: "asc" }
     });
 
-    // Get existing budget allocations for this period
+    // Get existing budget allocations for this period and budget type
     const existingAllocations = await prisma.budgetAllocation.findMany({
       where: {
         versionId,
         periodId,
-        costCenterId: { not: null }
+        costCenterId: { not: null },
+        budgetType // Filtrar por tipo de presupuesto
       }
     });
 
@@ -159,6 +164,7 @@ export async function registerDetailedBudgetRoutes(app: FastifyInstance) {
     return {
       versionId,
       periodId,
+      budgetType, // Incluir tipo en la respuesta
       period: {
         year: period.year,
         month: period.month,
@@ -180,6 +186,7 @@ export async function registerDetailedBudgetRoutes(app: FastifyInstance) {
     if (!p.success) return reply.code(400).send(p.error);
     
     let { versionId, periodId, items } = p.data;
+    const budgetType: BudgetType = p.data.budgetType || "PPTO";
     
     // Get active version if not specified
     if (!versionId) {
@@ -226,11 +233,12 @@ export async function registerDetailedBudgetRoutes(app: FastifyInstance) {
       for (const it of items) {
         const row = await tx.budgetAllocation.upsert({
           where: {
-            ux_alloc_version_period_support_ceco: {
+            ux_alloc_version_period_support_ceco_type: {
               versionId,
               periodId,
               supportId: it.supportId,
-              costCenterId: it.costCenterId
+              costCenterId: it.costCenterId,
+              budgetType // Incluir budgetType en el constraint
             }
           },
           update: { 
@@ -242,7 +250,8 @@ export async function registerDetailedBudgetRoutes(app: FastifyInstance) {
             supportId: it.supportId,
             costCenterId: it.costCenterId,
             amountLocal: new Prisma.Decimal(it.amountPen),
-            currency: "PEN"
+            currency: "PEN",
+            budgetType // Incluir budgetType al crear
           }
         });
         out.push(row);
@@ -269,6 +278,7 @@ export async function registerDetailedBudgetRoutes(app: FastifyInstance) {
     const areaId = (req.query as any).areaId ? Number((req.query as any).areaId) : undefined;
     const packageId = (req.query as any).packageId ? Number((req.query as any).packageId) : undefined;
     const conceptId = (req.query as any).conceptId ? Number((req.query as any).conceptId) : undefined;
+    const budgetType: BudgetType = (req.query as any).budgetType || "PPTO";
 
     if (!year) return reply.code(400).send({ error: "year es requerido" });
 
@@ -315,13 +325,14 @@ export async function registerDetailedBudgetRoutes(app: FastifyInstance) {
       orderBy: { name: "asc" }
     });
 
-    // Get all allocations for the year
+    // Get all allocations for the year and budget type
     const periodIds = periods.map(p => p.id);
     const allocations = await prisma.budgetAllocation.findMany({
       where: {
         versionId: version.id,
         periodId: { in: periodIds },
-        costCenterId: { not: null }
+        costCenterId: { not: null },
+        budgetType // Filtrar por tipo de presupuesto
       }
     });
 
@@ -389,6 +400,7 @@ export async function registerDetailedBudgetRoutes(app: FastifyInstance) {
     return {
       versionId: version.id,
       year,
+      budgetType, // Incluir tipo en la respuesta
       rows,
       monthTotals,
       yearTotal
@@ -401,6 +413,7 @@ export async function registerDetailedBudgetRoutes(app: FastifyInstance) {
    */
   app.put("/budgets/annual/batch", async (req, reply) => {
     const changes = (req.body as any).changes;
+    const budgetType: BudgetType = (req.body as any).budgetType || "PPTO";
 
     if (!Array.isArray(changes)) {
       return reply.code(400).send({ error: "changes debe ser un array" });
@@ -432,11 +445,12 @@ export async function registerDetailedBudgetRoutes(app: FastifyInstance) {
       for (const change of validChanges) {
         const row = await tx.budgetAllocation.upsert({
           where: {
-            ux_alloc_version_period_support_ceco: {
+            ux_alloc_version_period_support_ceco_type: {
               versionId: version.id,
               periodId: change.periodId,
               supportId: change.supportId,
-              costCenterId: change.costCenterId
+              costCenterId: change.costCenterId,
+              budgetType
             }
           },
           update: {
@@ -448,7 +462,8 @@ export async function registerDetailedBudgetRoutes(app: FastifyInstance) {
             supportId: change.supportId,
             costCenterId: change.costCenterId,
             amountLocal: new Prisma.Decimal(change.amountPen),
-            currency: "PEN"
+            currency: "PEN",
+            budgetType
           }
         });
         out.push(row);
@@ -461,6 +476,144 @@ export async function registerDetailedBudgetRoutes(app: FastifyInstance) {
       success: true,
       count: result.length,
       skipped: changes.length - validChanges.length
+    };
+  });
+
+  /**
+   * GET /budgets/annual/summary?year=YYYY
+   * Retorna resumen de PPTO y RPPTO para un año
+   * Útil para mostrar las cards en la UI
+   */
+  app.get("/budgets/annual/summary", async (req, reply) => {
+    const year = Number((req.query as any).year);
+    if (!year) return reply.code(400).send({ error: "year es requerido" });
+
+    // Ensure all 12 periods exist for the year
+    await ensureYearPeriods(year);
+
+    // Get active version
+    const version = await prisma.budgetVersion.findFirst({ where: { status: "ACTIVE" } });
+    if (!version) return reply.code(400).send({ error: "No hay versión ACTIVE" });
+
+    const periods = await prisma.period.findMany({
+      where: { year },
+      select: { id: true, month: true }
+    });
+
+    const periodIds = periods.map(p => p.id);
+
+    // Obtener totales y métricas para PPTO
+    const pptoAllocations = await prisma.budgetAllocation.findMany({
+      where: {
+        versionId: version.id,
+        periodId: { in: periodIds },
+        budgetType: "PPTO"
+      },
+      select: { amountLocal: true, supportId: true, periodId: true }
+    });
+
+    const pptoTotal = pptoAllocations.reduce((sum, a) => sum + Number(a.amountLocal), 0);
+    const pptoSupports = new Set(pptoAllocations.map(a => a.supportId)).size;
+    
+    // Meses con PPTO (meses que tienen al menos un registro con monto != 0)
+    const pptoMonthsSet = new Set<number>();
+    pptoAllocations.forEach(a => {
+      if (Number(a.amountLocal) !== 0) {
+        const period = periods.find(p => p.id === a.periodId);
+        if (period) pptoMonthsSet.add(period.month);
+      }
+    });
+    const pptoMonthsWithBudget = pptoMonthsSet.size;
+    const pptoAvgMonthly = pptoMonthsWithBudget > 0 ? pptoTotal / pptoMonthsWithBudget : 0;
+
+    // Obtener totales y métricas para RPPTO
+    const rpptoAllocations = await prisma.budgetAllocation.findMany({
+      where: {
+        versionId: version.id,
+        periodId: { in: periodIds },
+        budgetType: "RPPTO"
+      },
+      select: { amountLocal: true, supportId: true, periodId: true }
+    });
+
+    const rpptoTotal = rpptoAllocations.reduce((sum, a) => sum + Number(a.amountLocal), 0);
+    const rpptoSupports = new Set(rpptoAllocations.map(a => a.supportId)).size;
+    
+    // Meses con RPPTO
+    const rpptoMonthsSet = new Set<number>();
+    rpptoAllocations.forEach(a => {
+      if (Number(a.amountLocal) !== 0) {
+        const period = periods.find(p => p.id === a.periodId);
+        if (period) rpptoMonthsSet.add(period.month);
+      }
+    });
+    const rpptoMonthsWithBudget = rpptoMonthsSet.size;
+    const rpptoAvgMonthly = rpptoMonthsWithBudget > 0 ? rpptoTotal / rpptoMonthsWithBudget : 0;
+
+    return {
+      year,
+      versionId: version.id,
+      ppto: {
+        exists: pptoTotal > 0,
+        total: pptoTotal,
+        supportsWithBudget: pptoSupports,
+        monthsWithBudget: pptoMonthsWithBudget,
+        avgMonthly: pptoAvgMonthly
+      },
+      rppto: {
+        exists: rpptoTotal > 0,
+        total: rpptoTotal,
+        supportsWithBudget: rpptoSupports,
+        monthsWithBudget: rpptoMonthsWithBudget,
+        avgMonthly: rpptoAvgMonthly
+      },
+      activeBudgetType: rpptoTotal > 0 ? "RPPTO" : "PPTO"
+    };
+  });
+
+  /**
+   * DELETE /budgets/annual/delete
+   * Elimina todo el presupuesto (PPTO o RPPTO) de un año específico
+   * 
+      * Body: { year: number, budgetType: 'PPTO' | 'RPPTO' }
+   */
+  app.delete("/budgets/annual/delete", async (req, reply) => {
+    const year = Number((req.body as any).year);
+    const budgetType: BudgetType = (req.body as any).budgetType || "PPTO";
+
+    if (!year) return reply.code(400).send({ error: "year es requerido" });
+
+    // Get active version
+    const version = await prisma.budgetVersion.findFirst({ where: { status: "ACTIVE" } });
+    if (!version) return reply.code(400).send({ error: "No hay versión ACTIVE" });
+
+    // Get all periods for the year
+    const periods = await prisma.period.findMany({
+      where: { year },
+      select: { id: true }
+    });
+
+    if (periods.length === 0) {
+      return reply.code(404).send({ error: "No hay períodos para ese año" });
+    }
+
+    const periodIds = periods.map(p => p.id);
+
+    // Delete all allocations for the year and budget type
+    const result = await prisma.budgetAllocation.deleteMany({
+      where: {
+        versionId: version.id,
+        periodId: { in: periodIds },
+        budgetType
+      }
+    });
+
+    return {
+      success: true,
+      year,
+      budgetType,
+      deletedCount: result.count,
+      message: `Eliminados ${result.count} registros de ${budgetType} para el año ${year}`
     };
   });
 }

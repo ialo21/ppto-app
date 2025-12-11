@@ -196,9 +196,14 @@ model BudgetAllocation {
   period       Period  @relation(fields: [periodId], references: [id])
   amountLocal  Decimal
   currency     String  @default("PEN")
+  
+  // Tipo de presupuesto: PPTO (original) o RPPTO (revisado)
+  // Permite mantener ambos tipos para un mismo año, período y sustento
+  budgetType   String  @default("PPTO") // 'PPTO' | 'RPPTO'
 
-  @@unique([versionId, periodId, supportId, costCenterId], name: "ux_alloc_version_period_support_ceco")
+  @@unique([versionId, periodId, supportId, costCenterId, budgetType], name: "ux_alloc_version_period_support_ceco_type")
   @@index([periodId, costCenterId], name: "ix_alloc_period_ceco")
+  @@index([budgetType], name: "ix_alloc_budget_type")
 }
 
 model Vendor {

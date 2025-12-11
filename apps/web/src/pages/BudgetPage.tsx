@@ -15,6 +15,7 @@ import { formatPeriodLabel } from "../utils/periodFormat";
 import { ChevronDown, ChevronUp, Wallet, FileText, TrendingUp, Calendar } from "lucide-react";
 
 type ViewMode = "monthly" | "annual";
+type BudgetType = 'PPTO' | 'RPPTO';
 
 interface BudgetRow {
   supportId: number;
@@ -59,6 +60,26 @@ interface AnnualEditedValue {
   error?: string;
 }
 
+interface BudgetSummary {
+  year: number;
+  versionId: number;
+  ppto: {
+    exists: boolean;
+    total: number;
+    supportsWithBudget: number;
+    monthsWithBudget: number;
+    avgMonthly: number;
+  };
+  rppto: {
+    exists: boolean;
+    total: number;
+    supportsWithBudget: number;
+    monthsWithBudget: number;
+    avgMonthly: number;
+  };
+  activeBudgetType: BudgetType;
+}
+
 const LOCAL_STORAGE_KEYS = {
   viewMode: "ppto.viewMode",
   year: "ppto.year",
@@ -87,6 +108,9 @@ export default function BudgetPage() {
     const saved = localStorage.getItem(LOCAL_STORAGE_KEYS.showDetailTable);
     return saved !== null ? saved === "true" : false;
   });
+
+  // Budget type selection (PPTO or RPPTO)
+  const [selectedBudgetType, setSelectedBudgetType] = useState<BudgetType>('PPTO');
 
   // State
   const [selectedYear, setSelectedYear] = useState<number | undefined>(() => {
@@ -263,19 +287,35 @@ export default function BudgetPage() {
 
   // Build query params for annual view (without search, we'll filter client-side)
   const annualParams = useMemo(() => {
-    const params: any = { year: selectedYear };
+    const params: any = { 
+      year: selectedYear,
+      budgetType: selectedBudgetType // Include budget type
+    };
     if (managementId) params.managementId = managementId;
     if (areaId) params.areaId = areaId;
     if (packageId) params.packageId = packageId;
     if (conceptId) params.conceptId = conceptId;
     return params;
-  }, [selectedYear, managementId, areaId, packageId, conceptId]);
+  }, [selectedYear, selectedBudgetType, managementId, areaId, packageId, conceptId]);
 
   // Fetch annual budget data
   const { data: annualData, refetch: refetchAnnual } = useQuery({
     queryKey: ["budgets-annual", annualParams],
     enabled: viewMode === "annual" && !!selectedYear,
     queryFn: async () => (await api.get("/budgets/annual", { params: annualParams })).data
+  });
+
+  // Fetch budget summary (PPTO vs RPPTO metrics)
+  const { data: budgetSummary } = useQuery<BudgetSummary>({
+    queryKey: ["budgets-annual-summary", selectedYear],
+    queryFn: async () => {
+      if (!selectedYear) return null;
+      const res = await api.get("/budgets/annual/summary", { 
+        params: { year: selectedYear } 
+      });
+      return res.data;
+    },
+    enabled: viewMode === "annual" && !!selectedYear
   });
 
   // Monthly batch save
@@ -319,18 +359,40 @@ export default function BudgetPage() {
           amountPen: parseFloat(e.value) || 0
         }));
       
-      return (await api.put("/budgets/annual/batch", { changes })).data;
+      return (await api.put("/budgets/annual/batch", { 
+        changes,
+        budgetType: selectedBudgetType // Include budget type
+      })).data;
     },
     onSuccess: (data) => {
       toast.success(`Cambios guardados: ${data.count} actualizados${data.skipped > 0 ? `, ${data.skipped} omitidos (períodos cerrados)` : ""}`);
       setAnnualEdited(new Map());
       queryClient.invalidateQueries({ queryKey: ["budgets-detailed"] });
       queryClient.invalidateQueries({ queryKey: ["budgets-annual"] });
+      queryClient.invalidateQueries({ queryKey: ["budgets-annual-summary"] });
       refetchAnnual();
     },
     onError: (error: any) => {
       const message = error.response?.data?.error || "Error al guardar";
       toast.error(message);
+    }
+  });
+
+  // Delete budget mutation (PPTO or RPPTO)
+  const deleteBudgetMutation = useMutation({
+    mutationFn: async ({ year, budgetType }: { year: number; budgetType: BudgetType }) => {
+      return await api.delete("/budgets/annual/delete", { 
+        data: { year, budgetType } 
+      });
+    },
+    onSuccess: (_, variables) => {
+      toast.success(`${variables.budgetType} del año ${variables.year} eliminado exitosamente`);
+      queryClient.invalidateQueries({ queryKey: ["budgets-annual"] });
+      queryClient.invalidateQueries({ queryKey: ["budgets-annual-summary"] });
+      refetchAnnual();
+    },
+    onError: () => {
+      toast.error("Error al eliminar el presupuesto");
     }
   });
 
@@ -1218,94 +1280,277 @@ export default function BudgetPage() {
           {/* ANNUAL VIEW */}
           {viewMode === "annual" && selectedYear && annualData && (
             <>
-              {/* Summary Section - KPI Cards (Annual) */}
-              <div className="mb-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {/* Total PPTO Anual */}
-                  <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1">
-                        <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
-                          Total PPTO {selectedYear}
-                        </p>
-                      </div>
-                      <div className="p-2 rounded-lg bg-brand-background">
-                        <Wallet size={18} className="text-brand-primary" strokeWidth={2} />
-                      </div>
-                    </div>
-                    <div className="text-2xl font-bold text-brand-text-primary">
-                      S/ {formatNumber(annualTotals.yearTotal)}
+              {/* Summary Section - KPI Cards (Annual) with PPTO/RPPTO support */}
+              <div className="mb-6 space-y-6">
+                {/* Toggle PPTO/RPPTO - Solo si ambos existen */}
+                {budgetSummary?.ppto?.exists && budgetSummary?.rppto?.exists && (
+                  <div className="flex justify-center">
+                    <div className="inline-flex rounded-lg border border-brand-border bg-white p-1">
+                      <button
+                        onClick={() => setSelectedBudgetType('PPTO')}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                          selectedBudgetType === 'PPTO'
+                            ? 'bg-brand-primary text-white shadow-sm'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Ver PPTO
+                      </button>
+                      <button
+                        onClick={() => setSelectedBudgetType('RPPTO')}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                          selectedBudgetType === 'RPPTO'
+                            ? 'bg-brand-primary text-white shadow-sm'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Ver RPPTO
+                      </button>
                     </div>
                   </div>
+                )}
 
-                  {/* Total Sustentos */}
-                  <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1">
-                        <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
-                          Sustentos con PPTO
-                        </p>
+                {/* CARDS PPTO */}
+                {budgetSummary?.ppto?.exists && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-700 mb-3">
+                      PPTO (Original)
+                      {budgetSummary.activeBudgetType === 'PPTO' && (
+                        <span className="ml-2 text-xs font-normal text-green-600">● Activo</span>
+                      )}
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {/* Card 1: Total PPTO */}
+                      <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
+                              Total PPTO {selectedYear}
+                            </p>
+                          </div>
+                          <div className="p-2 rounded-lg bg-brand-background">
+                            <Wallet size={18} className="text-brand-primary" strokeWidth={2} />
+                          </div>
+                        </div>
+                        <div className="text-2xl font-bold text-brand-text-primary">
+                          S/ {formatNumber(budgetSummary.ppto.total)}
+                        </div>
                       </div>
-                      <div className="p-2 rounded-lg bg-brand-background">
-                        <FileText size={18} className="text-blue-600" strokeWidth={2} />
-                      </div>
-                    </div>
-                    <div className="text-2xl font-bold text-brand-text-primary">
-                      {annualMetrics.totalSupports}
-                    </div>
-                  </div>
 
-                  {/* Promedio Mensual */}
-                  <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1">
-                        <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
-                          Promedio Mensual
-                        </p>
+                      {/* Card 2: Sustentos con PPTO */}
+                      <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
+                              Sustentos con PPTO
+                            </p>
+                          </div>
+                          <div className="p-2 rounded-lg bg-brand-background">
+                            <FileText size={18} className="text-blue-600" strokeWidth={2} />
+                          </div>
+                        </div>
+                        <div className="text-2xl font-bold text-brand-text-primary">
+                          {budgetSummary.ppto.supportsWithBudget}
+                        </div>
                       </div>
-                      <div className="p-2 rounded-lg bg-brand-background">
-                        <TrendingUp size={18} className="text-green-600" strokeWidth={2} />
-                      </div>
-                    </div>
-                    <div className="text-2xl font-bold text-brand-text-primary">
-                      S/ {formatNumber(annualMetrics.avgMonthly)}
-                    </div>
-                  </div>
 
-                  {/* Meses con PPTO */}
-                  <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1">
-                        <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
-                          Meses con PPTO
-                        </p>
+                      {/* Card 3: Promedio Mensual PPTO */}
+                      <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
+                              Promedio Mensual
+                            </p>
+                          </div>
+                          <div className="p-2 rounded-lg bg-brand-background">
+                            <TrendingUp size={18} className="text-green-600" strokeWidth={2} />
+                          </div>
+                        </div>
+                        <div className="text-2xl font-bold text-brand-text-primary">
+                          S/ {formatNumber(budgetSummary.ppto.avgMonthly)}
+                        </div>
                       </div>
-                      <div className="p-2 rounded-lg bg-brand-background">
-                        <Calendar size={18} className="text-purple-600" strokeWidth={2} />
+
+                      {/* Card 4: Meses con PPTO */}
+                      <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
+                              Meses con PPTO
+                            </p>
+                          </div>
+                          <div className="p-2 rounded-lg bg-brand-background">
+                            <Calendar size={18} className="text-purple-600" strokeWidth={2} />
+                          </div>
+                        </div>
+                        <div className="text-2xl font-bold text-brand-text-primary">
+                          {budgetSummary.ppto.monthsWithBudget} / 12
+                        </div>
                       </div>
-                    </div>
-                    <div className="text-2xl font-bold text-brand-text-primary">
-                      {annualMetrics.monthsWithBudget} / 12
                     </div>
                   </div>
-                </div>
+                )}
+
+                {/* CARDS RPPTO - Solo si existe */}
+                {budgetSummary?.rppto?.exists && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-700 mb-3">
+                      RPPTO (Revisado)
+                      {budgetSummary.activeBudgetType === 'RPPTO' && (
+                        <span className="ml-2 text-xs font-normal text-green-600">● Activo en Dashboard</span>
+                      )}
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {/* Card 1: Total RPPTO */}
+                      <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
+                              Total RPPTO {selectedYear}
+                            </p>
+                          </div>
+                          <div className="p-2 rounded-lg bg-brand-background">
+                            <Wallet size={18} className="text-brand-primary" strokeWidth={2} />
+                          </div>
+                        </div>
+                        <div className="text-2xl font-bold text-brand-text-primary">
+                          S/ {formatNumber(budgetSummary.rppto.total)}
+                        </div>
+                      </div>
+
+                      {/* Card 2: Sustentos con RPPTO */}
+                      <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
+                              Sustentos con RPPTO
+                            </p>
+                          </div>
+                          <div className="p-2 rounded-lg bg-brand-background">
+                            <FileText size={18} className="text-blue-600" strokeWidth={2} />
+                          </div>
+                        </div>
+                        <div className="text-2xl font-bold text-brand-text-primary">
+                          {budgetSummary.rppto.supportsWithBudget}
+                        </div>
+                      </div>
+
+                      {/* Card 3: Promedio Mensual RPPTO */}
+                      <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
+                              Promedio Mensual
+                            </p>
+                          </div>
+                          <div className="p-2 rounded-lg bg-brand-background">
+                            <TrendingUp size={18} className="text-green-600" strokeWidth={2} />
+                          </div>
+                        </div>
+                        <div className="text-2xl font-bold text-brand-text-primary">
+                          S/ {formatNumber(budgetSummary.rppto.avgMonthly)}
+                        </div>
+                      </div>
+
+                      {/* Card 4: Meses con RPPTO */}
+                      <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
+                              Meses con RPPTO
+                            </p>
+                          </div>
+                          <div className="p-2 rounded-lg bg-brand-background">
+                            <Calendar size={18} className="text-purple-600" strokeWidth={2} />
+                          </div>
+                        </div>
+                        <div className="text-2xl font-bold text-brand-text-primary">
+                          {budgetSummary.rppto.monthsWithBudget} / 12
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Toggle Detail Table Button */}
-              <div className="mb-4 flex items-center justify-between">
-                <Button
-                  variant={showDetailTable ? "primary" : "secondary"}
-                  size="sm"
-                  onClick={() => setShowDetailTable(!showDetailTable)}
-                  className="flex items-center gap-2"
-                >
-                  {showDetailTable ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                  {showDetailTable ? "Ocultar detalle de sustentos" : "Mostrar detalle de sustentos"}
-                </Button>
+              {/* Botones de detalle y acciones */}
+              <div className="mb-4 flex items-center justify-between flex-wrap gap-4">
+                <div className="flex gap-2">
+                  {/* Botón detalle PPTO - Siempre visible si no hay budgetSummary o si existe PPTO */}
+                  {(!budgetSummary || budgetSummary?.ppto?.exists) && (
+                    <Button
+                      variant={showDetailTable && selectedBudgetType === 'PPTO' ? "primary" : "secondary"}
+                      size="sm"
+                      onClick={() => {
+                        setSelectedBudgetType('PPTO');
+                        setShowDetailTable(!showDetailTable || selectedBudgetType !== 'PPTO');
+                      }}
+                      className="flex items-center gap-2"
+                    >
+                      {showDetailTable && selectedBudgetType === 'PPTO' ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      {showDetailTable && selectedBudgetType === 'PPTO' ? "Ocultar" : "Mostrar"} detalle de PPTO
+                    </Button>
+                  )}
+                  
+                  {/* Botón detalle RPPTO - Solo si existe RPPTO */}
+                  {budgetSummary?.rppto?.exists && (
+                    <Button
+                      variant={showDetailTable && selectedBudgetType === 'RPPTO' ? "primary" : "secondary"}
+                      size="sm"
+                      onClick={() => {
+                        setSelectedBudgetType('RPPTO');
+                        setShowDetailTable(!showDetailTable || selectedBudgetType !== 'RPPTO');
+                      }}
+                      className="flex items-center gap-2"
+                    >
+                      {showDetailTable && selectedBudgetType === 'RPPTO' ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      {showDetailTable && selectedBudgetType === 'RPPTO' ? "Ocultar" : "Mostrar"} detalle de RPPTO
+                    </Button>
+                  )}
+                </div>
+
+                {/* Botones de eliminación */}
+                <div className="flex gap-2">
+                  {budgetSummary?.ppto?.exists && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        if (confirm(`¿Eliminar todo el PPTO del año ${selectedYear}?\n\nEsta acción no se puede deshacer.`)) {
+                          deleteBudgetMutation.mutate({ year: selectedYear!, budgetType: 'PPTO' });
+                        }
+                      }}
+                      disabled={deleteBudgetMutation.isPending}
+                      className="border-red-300 text-red-700 hover:bg-red-50 hover:border-red-400"
+                    >
+                      Eliminar PPTO {selectedYear}
+                    </Button>
+                  )}
+                  
+                  {budgetSummary?.rppto?.exists && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        if (confirm(`¿Eliminar todo el RPPTO del año ${selectedYear}?\n\nEl sistema volverá a usar PPTO como referencia.`)) {
+                          deleteBudgetMutation.mutate({ year: selectedYear!, budgetType: 'RPPTO' });
+                        }
+                      }}
+                      disabled={deleteBudgetMutation.isPending}
+                      className="border-red-300 text-red-700 hover:bg-red-50 hover:border-red-400"
+                    >
+                      Eliminar RPPTO {selectedYear}
+                    </Button>
+                  )}
+                </div>
+
                 {showDetailTable && (
-                  <div className="text-sm text-slate-600">
+                  <div className="text-sm text-slate-600 w-full sm:w-auto">
                     {filteredAnnualRows.length} fila{filteredAnnualRows.length !== 1 ? 's' : ''}
                     {debouncedSearch && ` para "${debouncedSearch}"`}
+                    <span className="ml-2 font-medium">
+                      ({selectedBudgetType})
+                    </span>
                   </div>
                 )}
               </div>
@@ -1503,6 +1748,7 @@ export default function BudgetPage() {
               additionalParams={{ type: "budget", year: bulkYear }}
               onSuccess={handleCSVSuccess}
               showOverwriteBlanks={true}
+              showBudgetTypeSelector={true}
             />
           )}
         </>

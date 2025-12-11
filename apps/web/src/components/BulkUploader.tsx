@@ -31,6 +31,7 @@ interface BulkUploaderProps {
   additionalParams?: Record<string, any>;
   onSuccess?: () => void;
   showOverwriteBlanks?: boolean;
+  showBudgetTypeSelector?: boolean; // Mostrar selector PPTO/RPPTO
 }
 
 export default function BulkUploader({
@@ -41,11 +42,13 @@ export default function BulkUploader({
   templateFilename = "template.csv",
   additionalParams = {},
   onSuccess,
-  showOverwriteBlanks = false
+  showOverwriteBlanks = false,
+  showBudgetTypeSelector = false
 }: BulkUploaderProps) {
   const [file, setFile] = useState<File | null>(null);
   const [isDryRun, setIsDryRun] = useState(true);
   const [overwriteBlanks, setOverwriteBlanks] = useState(false);
+  const [budgetType, setBudgetType] = useState<'PPTO' | 'RPPTO'>('PPTO');
   const [result, setResult] = useState<BulkResponse | null>(null);
   const [filterType, setFilterType] = useState("all");
   const [filterAction, setFilterAction] = useState("all");
@@ -60,7 +63,8 @@ export default function BulkUploader({
       const params = new URLSearchParams({
         dryRun: String(dryRun),
         ...additionalParams,
-        ...(showOverwriteBlanks ? { overwriteBlanks: String(overwriteBlanks) } : {})
+        ...(showOverwriteBlanks ? { overwriteBlanks: String(overwriteBlanks) } : {}),
+        ...(showBudgetTypeSelector ? { budgetType } : {})
       });
 
       const response = await api.post(`${uploadUrl}?${params.toString()}`, formData, {
@@ -323,6 +327,39 @@ export default function BulkUploader({
                 — Simula la carga sin guardar cambios
               </span>
             </div>
+
+            {showBudgetTypeSelector && (
+              <div className="space-y-2">
+                <label className="block text-sm font-medium">Tipo de Presupuesto</label>
+                <div className="inline-flex rounded-lg border border-slate-300 bg-white p-1">
+                  <button
+                    type="button"
+                    onClick={() => setBudgetType('PPTO')}
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                      budgetType === 'PPTO'
+                        ? 'bg-brand-primary text-white shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    PPTO (Original)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBudgetType('RPPTO')}
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                      budgetType === 'RPPTO'
+                        ? 'bg-brand-primary text-white shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    RPPTO (Revisado)
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Selecciona si deseas cargar presupuesto original (PPTO) o revisado (RPPTO)
+                </p>
+              </div>
+            )}
 
             {showOverwriteBlanks && (
               <div className="flex items-center gap-2">

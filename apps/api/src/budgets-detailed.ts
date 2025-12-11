@@ -8,7 +8,7 @@ const prisma = new PrismaClient();
 
 // Schema for listing detailed budget allocations
 const listDetailedSchema = z.object({
-  periodId: z.coerce.number(),
+  periodId: z.coerce.number().optional(), // Optional if year is provided
   year: z.coerce.number().optional(), // Optional: to auto-create periods for year
   versionId: z.coerce.number().optional(),
   budgetType: z.enum(["PPTO", "RPPTO"]).optional(), // Tipo de presupuesto
@@ -17,6 +17,9 @@ const listDetailedSchema = z.object({
   areaId: z.coerce.number().optional(),
   packageId: z.coerce.number().optional(),
   conceptId: z.coerce.number().optional()
+}).refine(data => data.periodId || data.year, {
+  message: "Either periodId or year must be provided",
+  path: ["periodId"]
 });
 
 // Schema for batch upsert of detailed allocations
@@ -41,13 +44,28 @@ export async function registerDetailedBudgetRoutes(app: FastifyInstance) {
     const q = listDetailedSchema.safeParse(req.query);
     if (!q.success) return reply.code(400).send(q.error);
     
-    const { periodId, year, search, managementId, areaId, packageId, conceptId } = q.data;
+    let { periodId, year, search, managementId, areaId, packageId, conceptId } = q.data;
     let versionId = q.data.versionId;
     let budgetType: BudgetType = q.data.budgetType || "PPTO";
     
     // Ensure year periods exist if year param provided
     if (year) {
       await ensureYearPeriods(year);
+    }
+    
+    // If year provided but no periodId, use January of that year
+    if (year && !periodId) {
+      const januaryPeriod = await prisma.period.findFirst({
+        where: { year, month: 1 }
+      });
+      if (januaryPeriod) {
+        periodId = januaryPeriod.id;
+      }
+    }
+    
+    // Validate periodId is now set
+    if (!periodId) {
+      return reply.code(400).send({ error: "No se pudo determinar el período" });
     }
     
     // Get active version if not specified

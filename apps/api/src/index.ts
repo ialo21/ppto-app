@@ -23,6 +23,12 @@ import { ensureYearPeriods } from "./periods";
 
 const app = Fastify({ logger: true });
 
+// Configurar encoding UTF-8 para todas las respuestas
+app.addHook('onSend', async (request, reply, payload) => {
+  reply.header('Content-Type', 'application/json; charset=utf-8');
+  return payload;
+});
+
 // CORS - permitir credenciales para sesiones
 const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
 // Permitir múltiples orígenes para desarrollo en red

@@ -269,7 +269,7 @@ function generateTemplateCSV(): string {
 }
 
 // Procesador principal de carga masiva
-async function processBulkCSV(rows: CsvRow[], dryRun: boolean, year?: number, overwriteBlanks?: boolean): Promise<BulkResponse> {
+async function processBulkCSV(rows: CsvRow[], dryRun: boolean, year?: number, overwriteBlanks?: boolean, budgetType?: string): Promise<BulkResponse> {
   const results: RowResult[] = [];
   const byType: Record<string, { created: number; updated: number; skipped: number; errors: number }> = {};
 
@@ -320,7 +320,7 @@ async function processBulkCSV(rows: CsvRow[], dryRun: boolean, year?: number, ov
           result = await processSupport(data, rowNum, dryRun);
           break;
         case "Budget":
-          result = await processBudget(data, rowNum, dryRun, year, overwriteBlanks);
+          result = await processBudget(data, rowNum, dryRun, year, overwriteBlanks, budgetType);
           break;
         default:
           result = {
@@ -951,7 +951,9 @@ async function processSupport(data: any, rowNum: number, dryRun: boolean): Promi
   };
 }
 
-async function processBudget(data: any, rowNum: number, dryRun: boolean, year?: number, overwriteBlanks?: boolean): Promise<RowResult> {
+async function processBudget(data: any, rowNum: number, dryRun: boolean, year?: number, overwriteBlanks?: boolean, budgetType?: string): Promise<RowResult> {
+  // Determinar tipo de presupuesto: PPTO (original) o RPPTO (revisado)
+  const effectiveBudgetType = budgetType || "PPTO";
   const supportName = data.supportName?.trim();
   const costCenterCode = data.costCenterCode?.trim();
 
@@ -1140,13 +1142,16 @@ async function processBudget(data: any, rowNum: number, dryRun: boolean, year?: 
   if (!dryRun) {
     await prisma.$transaction(async tx => {
       for (const { periodId, amountPen } of upserts) {
+        // Adaptado al nombre real del unique input generado por Prisma
+        // El constraint incluye budgetType para diferenciar PPTO de RPPTO
         await tx.budgetAllocation.upsert({
           where: {
-            ux_alloc_version_period_support_ceco: {
+            ux_alloc_version_period_support_ceco_type: {
               versionId: version.id,
               periodId,
               supportId: support.id,
-              costCenterId: costCenter.id
+              costCenterId: costCenter.id,
+              budgetType: effectiveBudgetType
             }
           },
           update: { amountLocal: amountPen },
@@ -1156,7 +1161,8 @@ async function processBudget(data: any, rowNum: number, dryRun: boolean, year?: 
             supportId: support.id,
             costCenterId: costCenter.id,
             amountLocal: amountPen,
-            currency: "PEN"
+            currency: "PEN",
+            budgetType: effectiveBudgetType
           }
         });
       }
@@ -1244,6 +1250,7 @@ export async function registerBulkRoutes(app: FastifyInstance) {
       const year = (req.query as any).year ? Number((req.query as any).year) : undefined;
       const overwriteBlanks = (req.query as any).overwriteBlanks === "true";
       const typeParam = (req.query as any).type; // "budget", "support", etc.
+      const budgetType = (req.query as any).budgetType; // "PPTO" | "RPPTO"
 
       // Validar cada fila con esquema específico por tipo
       const validatedRows: CsvRow[] = [];
@@ -1327,7 +1334,7 @@ export async function registerBulkRoutes(app: FastifyInstance) {
       }
 
       // Procesar
-      const result = await processBulkCSV(validatedRows, dryRun, year, overwriteBlanks);
+      const result = await processBulkCSV(validatedRows, dryRun, year, overwriteBlanks, budgetType);
 
       // Si hay errores en el procesamiento, devolver 422
       if (result.summary.errors > 0) {

@@ -57,14 +57,15 @@ export async function registerBudgetRoutes(app: FastifyInstance) {
     const result = await prisma.$transaction(async (tx) => {
       const out = [];
       for (const it of items) {
-        // Usar el nuevo constraint que incluye costCenterId (null para vista simple)
+        // Usar el constraint correcto que incluye budgetType (PPTO por defecto para vista simple)
         const row = await tx.budgetAllocation.upsert({
           where: {
-            ux_alloc_version_period_support_ceco: { 
+            ux_alloc_version_period_support_ceco_type: { 
               versionId, 
               periodId, 
               supportId: it.supportId,
-              costCenterId: null as any // Vista simple sin CECO
+              costCenterId: null as any, // Vista simple sin CECO
+              budgetType: "PPTO"
             }
           },
           update: { amountLocal: new Prisma.Decimal(it.amountLocal) },
@@ -74,7 +75,8 @@ export async function registerBudgetRoutes(app: FastifyInstance) {
             supportId: it.supportId,
             costCenterId: null, // Vista simple sin CECO
             amountLocal: new Prisma.Decimal(it.amountLocal),
-            currency: "PEN"
+            currency: "PEN",
+            budgetType: "PPTO"
           }
         });
         out.push(row);

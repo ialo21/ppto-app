@@ -222,6 +222,15 @@ export async function registerOcRoutes(app: FastifyInstance) {
           });
         }
 
+        // Crear entrada inicial en historial de estados
+        await tx.oCStatusHistory.create({
+          data: {
+            ocId: oc.id,
+            status: oc.estado,
+            changedAt: oc.fechaRegistro
+          }
+        });
+
         // Retornar OC con relaciones incluidas
         return await tx.oC.findUnique({
           where: { id: oc.id },
@@ -319,8 +328,9 @@ export async function registerOcRoutes(app: FastifyInstance) {
 
       if (data.budgetPeriodFromId !== undefined) updateData.budgetPeriodFromId = data.budgetPeriodFromId;
       if (data.budgetPeriodToId !== undefined) updateData.budgetPeriodToId = data.budgetPeriodToId;
-      if (data.incidenteOc !== undefined) updateData.incidenteOc = data.incidenteOc || null;
-      if (data.solicitudOc !== undefined) updateData.solicitudOc = data.solicitudOc || null;
+      // Fix: Permitir borrar incidenteOc y solicitudOc (string vacío -> null)
+      if (data.incidenteOc !== undefined) updateData.incidenteOc = data.incidenteOc.trim() === "" ? null : data.incidenteOc;
+      if (data.solicitudOc !== undefined) updateData.solicitudOc = data.solicitudOc.trim() === "" ? null : data.solicitudOc;
       if (data.fechaRegistro !== undefined) updateData.fechaRegistro = new Date(data.fechaRegistro);
       if (data.supportId !== undefined) updateData.supportId = data.supportId;
       if (data.periodoEnFechasText !== undefined) updateData.periodoEnFechasText = data.periodoEnFechasText || null;
@@ -332,7 +342,8 @@ export async function registerOcRoutes(app: FastifyInstance) {
       if (data.moneda !== undefined) updateData.moneda = data.moneda;
       if (data.importeSinIgv !== undefined) updateData.importeSinIgv = new Prisma.Decimal(data.importeSinIgv);
       if (data.estado !== undefined) updateData.estado = data.estado;
-      if (data.numeroOc !== undefined) updateData.numeroOc = data.numeroOc || null;
+      // Fix: Permitir actualizar numeroOc a null cuando viene vacío (acepta string vacío explícitamente)
+      if (data.numeroOc !== undefined) updateData.numeroOc = data.numeroOc.trim() === "" ? null : data.numeroOc;
       if (data.comentario !== undefined) updateData.comentario = data.comentario || null;
       if (data.articuloId !== undefined) updateData.articuloId = data.articuloId;
       if (data.cecoId !== undefined) updateData.cecoId = data.cecoId;
@@ -410,21 +421,35 @@ export async function registerOcRoutes(app: FastifyInstance) {
     }
 
     try {
-      const updated = await prisma.oC.update({
-        where: { id },
-        data: { estado },
-        include: {
-          support: { select: { id: true, code: true, name: true } },
-          budgetPeriodFrom: { select: { id: true, year: true, month: true, label: true } },
-          budgetPeriodTo: { select: { id: true, year: true, month: true, label: true } },
-          articulo: { select: { id: true, code: true, name: true } },
-          ceco: { select: { id: true, code: true, name: true } },
-          costCenters: { 
-            include: { 
-              costCenter: { select: { id: true, code: true, name: true } }
+      // Usar transacción para actualizar estado y registrar en historial
+      const updated = await prisma.$transaction(async (tx) => {
+        // Actualizar estado de la OC
+        const oc = await tx.oC.update({
+          where: { id },
+          data: { estado },
+          include: {
+            support: { select: { id: true, code: true, name: true } },
+            budgetPeriodFrom: { select: { id: true, year: true, month: true, label: true } },
+            budgetPeriodTo: { select: { id: true, year: true, month: true, label: true } },
+            articulo: { select: { id: true, code: true, name: true } },
+            ceco: { select: { id: true, code: true, name: true } },
+            costCenters: { 
+              include: { 
+                costCenter: { select: { id: true, code: true, name: true } }
+              }
             }
           }
-        }
+        });
+
+        // Registrar cambio en historial
+        await tx.oCStatusHistory.create({
+          data: {
+            ocId: id,
+            status: estado
+          }
+        });
+
+        return oc;
       });
 
       return updated;
@@ -434,6 +459,33 @@ export async function registerOcRoutes(app: FastifyInstance) {
       }
       console.error("Error updating OC status:", err);
       return reply.code(500).send({ error: "Error al actualizar estado de OC" });
+    }
+  });
+
+  // Get OC Status History
+  app.get("/ocs/:id/status-history", { preHandler: [requireAuth, requirePermission("ocs")] }, async (req, reply) => {
+    const id = Number((req.params as any).id);
+
+    try {
+      const history = await prisma.oCStatusHistory.findMany({
+        where: { ocId: id },
+        orderBy: { changedAt: 'asc' },
+        select: {
+          id: true,
+          status: true,
+          changedAt: true,
+          changedBy: true,
+          note: true
+        }
+      });
+
+      return history;
+    } catch (err: any) {
+      console.error('[GET /ocs/:id/status-history] Error:', err);
+      return reply.code(500).send({ 
+        error: "Error al obtener historial de estados",
+        details: process.env.NODE_ENV === 'development' ? err.message : undefined
+      });
     }
   });
 

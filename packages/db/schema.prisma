@@ -399,6 +399,7 @@ model OC {
   // Relaciones
   invoices               Invoice[]
   costCenters            OCCostCenter[]  // M:N con CostCenter
+  statusHistory          OCStatusHistory[]  // Historial de cambios de estado
   
   @@index([supportId], name: "ix_oc_support")
   @@index([estado], name: "ix_oc_estado")
@@ -429,6 +430,19 @@ model OCCostCenter {
   @@unique([ocId, costCenterId], name: "ux_oc_costcenter_pair")
   @@index([ocId], name: "ix_occostcenter_oc")
   @@index([costCenterId], name: "ix_occostcenter_costcenter")
+}
+
+model OCStatusHistory {
+  id        Int       @id @default(autoincrement())
+  ocId      Int
+  oc        OC        @relation(fields: [ocId], references: [id], onDelete: Cascade)
+  status    OcStatus
+  changedAt DateTime  @default(now())
+  changedBy Int?
+  note      String?
+
+  @@index([ocId], name: "ix_ocstatushistory_oc")
+  @@index([changedAt], name: "ix_ocstatushistory_changed_at")
 }
 
 model Provision {

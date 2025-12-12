@@ -5,9 +5,11 @@ import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
 import FilterSelect from "../../components/ui/FilterSelect";
 import Button from "../../components/ui/Button";
+import Modal from "../../components/ui/Modal";
+import OcStatusTimeline from "../../components/OcStatusTimeline";
 import { formatNumber } from "../../utils/numberFormat";
 import { formatPeriodLabel } from "../../utils/periodFormat";
-import { ExternalLink, TrendingUp, Package, Users, DollarSign } from "lucide-react";
+import { ExternalLink, TrendingUp, Package, Users, DollarSign, Clock } from "lucide-react";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -138,7 +140,7 @@ function StatCard({
 /**
  * Tarjeta individual de OC
  */
-function OcCard({ oc }: { oc: any }) {
+function OcCard({ oc, onOpenTimeline }: { oc: any; onOpenTimeline: (ocId: number) => void }) {
   const hasLink = oc.linkCotizacion && oc.linkCotizacion.trim();
   
   const handleViewClick = () => {
@@ -150,11 +152,14 @@ function OcCard({ oc }: { oc: any }) {
   return (
     <Card className="hover:shadow-lg transition-shadow duration-200">
       <CardContent className="p-4">
-        {/* Header: Número OC + Estado */}
+        {/* Header: Número OC / INC + Estado */}
         <div className="flex items-start justify-between mb-3">
           <div>
             <h3 className="text-lg font-bold text-brand-text-primary">
-              {oc.numeroOc || "Sin número"}
+              {/* Prioridad: numeroOc > INC > Solicitud > "INC PENDIENTE" */}
+              {oc.numeroOc || 
+               (oc.incidenteOc ? `INC ${oc.incidenteOc}` : 
+               (oc.solicitudOc ? `SOL ${oc.solicitudOc}` : "INC PENDIENTE"))}
             </h3>
             <p className="text-xs text-brand-text-disabled">
               {new Date(oc.fechaRegistro).toLocaleDateString('es-PE', {
@@ -228,18 +233,31 @@ function OcCard({ oc }: { oc: any }) {
           </p>
         </div>
         
-        {/* Botón Ver Cotización */}
-        <Button
-          size="sm"
-          variant={hasLink ? "primary" : "secondary"}
-          onClick={handleViewClick}
-          disabled={!hasLink}
-          className="w-full flex items-center justify-center gap-2"
-          title={hasLink ? "Ver cotización" : "No hay cotización registrada"}
-        >
-          <ExternalLink size={14} />
-          {hasLink ? "Ver Cotización" : "Sin Cotización"}
-        </Button>
+        {/* Botones de acción */}
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => onOpenTimeline(oc.id)}
+            className="flex items-center justify-center gap-2"
+            title="Ver historial de estados"
+          >
+            <Clock size={14} />
+            Status
+          </Button>
+          
+          <Button
+            size="sm"
+            variant={hasLink ? "primary" : "secondary"}
+            onClick={handleViewClick}
+            disabled={!hasLink}
+            className="flex items-center justify-center gap-2"
+            title={hasLink ? "Ver cotización" : "No hay cotización registrada"}
+          >
+            <ExternalLink size={14} />
+            {hasLink ? "Ver" : "Sin Link"}
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
@@ -257,6 +275,27 @@ export default function OcListadoPage() {
     estado: "",
     year: new Date().getFullYear().toString()
   });
+
+  const [selectedOcId, setSelectedOcId] = useState<number | null>(null);
+  const [isTimelineOpen, setIsTimelineOpen] = useState(false);
+
+  const { data: statusHistory, isLoading: isLoadingHistory } = useQuery({
+    queryKey: ["oc-status-history", selectedOcId],
+    queryFn: async () => (await api.get(`/ocs/${selectedOcId}/status-history`)).data,
+    enabled: selectedOcId !== null && isTimelineOpen
+  });
+
+  const handleOpenTimeline = (ocId: number) => {
+    setSelectedOcId(ocId);
+    setIsTimelineOpen(true);
+  };
+
+  const handleCloseTimeline = () => {
+    setIsTimelineOpen(false);
+    setTimeout(() => setSelectedOcId(null), 300);
+  };
+
+  const selectedOc = ocs?.find((oc: any) => oc.id === selectedOcId);
 
   // Función de búsqueda y filtrado
   const filteredOcs = useMemo(() => {
@@ -557,11 +596,35 @@ export default function OcListadoPage() {
           {/* Grid responsive: 1 columna en mobile, 2 en tablet, 3 en desktop, 4 en pantallas grandes */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredOcs.map((oc: any) => (
-              <OcCard key={oc.id} oc={oc} />
+              <OcCard key={oc.id} oc={oc} onOpenTimeline={handleOpenTimeline} />
             ))}
           </div>
         </>
       )}
+
+      {/* Modal de Timeline de Estados */}
+      <Modal
+        isOpen={isTimelineOpen}
+        onClose={handleCloseTimeline}
+        title={selectedOc ? `Estado: ${selectedOc.numeroOc || 'Sin número'}` : 'Estado de OC'}
+        size="md"
+      >
+        {isLoadingHistory ? (
+          <div className="p-8 text-center text-brand-text-secondary">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand-primary"></div>
+            <p className="mt-4">Cargando historial...</p>
+          </div>
+        ) : statusHistory && selectedOc ? (
+          <OcStatusTimeline 
+            history={statusHistory} 
+            currentStatus={selectedOc.estado}
+          />
+        ) : (
+          <div className="p-8 text-center text-brand-text-secondary">
+            No se pudo cargar el historial
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

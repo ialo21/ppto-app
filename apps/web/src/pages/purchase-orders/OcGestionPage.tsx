@@ -389,8 +389,9 @@ export default function OcGestionPage() {
       const payload: any = {
         budgetPeriodFromId: Number(form.budgetPeriodFromId),
         budgetPeriodToId: Number(form.budgetPeriodToId),
-        incidenteOc: form.incidenteOc.trim() || undefined,
-        solicitudOc: form.solicitudOc.trim() || undefined,
+        // Fix: Enviar string vacío para permitir borrar estos campos
+        incidenteOc: form.incidenteOc.trim(),
+        solicitudOc: form.solicitudOc.trim(),
         fechaRegistro: fechaISO, // Convertido a ISO completo
         supportId: Number(form.supportId),
         periodoEnFechasText: form.periodoEnFechasText.trim() || undefined,
@@ -402,7 +403,8 @@ export default function OcGestionPage() {
         moneda: form.moneda,
         importeSinIgv: parseFloat(form.importeSinIgv),
         estado: form.estado,
-        numeroOc: form.numeroOc.trim() || undefined,
+        // Fix: Enviar string vacío explícitamente para permitir borrar el número de OC
+        numeroOc: form.numeroOc.trim(),
         comentario: form.comentario.trim() || undefined,
         articuloId: form.articuloId ? Number(form.articuloId) : null,
         costCenterIds: form.costCenterIds,  // NUEVO: array de CECOs
@@ -954,7 +956,7 @@ export default function OcGestionPage() {
               <Table>
                 <thead>
                   <tr>
-                    <Th>Número OC</Th>
+                    <Th>Número OC / INC</Th>
                     <Th>Proveedor</Th>
                     <Th>Moneda</Th>
                     <Th>Importe sin IGV</Th>
@@ -969,7 +971,12 @@ export default function OcGestionPage() {
                 <tbody>
                   {filteredOcs.map((oc: any) => (
                     <tr key={oc.id}>
-                      <Td>{oc.numeroOc || "-"}</Td>
+                      <Td>
+                        {/* Prioridad: numeroOc > INC > Solicitud > "INC PENDIENTE" */}
+                        {oc.numeroOc || 
+                         (oc.incidenteOc ? `INC ${oc.incidenteOc}` : 
+                         (oc.solicitudOc ? `SOL ${oc.solicitudOc}` : "INC PENDIENTE"))}
+                      </Td>
                       <Td>{oc.proveedor}</Td>
                       <Td>{oc.moneda}</Td>
                       <Td className="text-right">{formatNumber(oc.importeSinIgv)}</Td>

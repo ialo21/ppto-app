@@ -17,7 +17,16 @@ const sidebarItems = [
   { path: "/", label: "Dashboard", icon: Home, permission: "dashboard", end: true },
   { path: "/assistant", label: "Asistente", icon: Sparkles, permission: "assistant" },
   { path: "/reports", label: "Reportes", icon: BarChart3, permission: "reports" },
-  { path: "/invoices", label: "Facturas", icon: FileText, permission: "facturas" },
+  { 
+    path: "/invoices", 
+    label: "Facturas", 
+    icon: FileText, 
+    permission: "facturas",
+    children: [
+      { path: "/invoices/listado", label: "Listado", permission: "facturas:listado" },
+      { path: "/invoices/gestion", label: "Gestión / Registro", permission: "facturas:gestion" }
+    ]
+  },
   { 
     path: "/purchase-orders", 
     label: "Órdenes de Compra", 
@@ -435,12 +444,15 @@ import Dashboard from "./pages/Dashboard";
 import AssistantPage from "./pages/AssistantPage";
 import BudgetPage from "./pages/BudgetPage";
 import PurchaseOrdersPage from "./pages/PurchaseOrdersPage";
-import InvoicesPage from "./pages/InvoicesPage";
 import ProvisionsPage from "./pages/ProvisionsPage";
 import ReportsPage from "./pages/ReportsPage";
 import CatalogsPage from "./pages/SettingsPage";
 import LoginPage from "./pages/LoginPage";
 import RolesPage from "./pages/RolesPage";
+
+// Submódulos de Facturas
+import InvoiceListadoPage from "./pages/invoices/InvoiceListadoPage";
+import InvoiceGestionPage from "./pages/invoices/InvoiceGestionPage";
 
 // Submódulos de Órdenes de Compra
 import OcListadoPage from "./pages/purchase-orders/OcListadoPage";
@@ -453,9 +465,12 @@ const router = createBrowserRouter([
     { path: "/", element: <Dashboard /> },
     { path: "/assistant", element: <AssistantPage /> },
     { path: "/reports", element: <ReportsPage /> },
-    { path: "/invoices", element: <InvoicesPage /> },
+    // Rutas de Facturas (con submódulos)
+    { path: "/invoices", element: <Navigate to="/invoices/gestion" replace /> },
+    { path: "/invoices/listado", element: <InvoiceListadoPage /> },
+    { path: "/invoices/gestion", element: <InvoiceGestionPage /> },
     // Rutas de Órdenes de Compra (con submódulos)
-    { path: "/purchase-orders", element: <Navigate to="/purchase-orders/gestion" replace /> }, // Redirigir a Gestión por defecto
+    { path: "/purchase-orders", element: <Navigate to="/purchase-orders/gestion" replace /> },
     { path: "/purchase-orders/listado", element: <OcListadoPage /> },
     { path: "/purchase-orders/gestion", element: <OcGestionPage /> },
     { path: "/purchase-orders/solicitud", element: <OcSolicitudPage /> },

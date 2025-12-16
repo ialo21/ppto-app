@@ -482,7 +482,7 @@ export default function OcListadoPage() {
                 Buscar
               </label>
               <Input
-                placeholder="🔍 OC, proveedor, sustento, CECOs..."
+                placeholder="OC, proveedor, sustento, CECOs..."
                 value={filters.search}
                 onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
               />

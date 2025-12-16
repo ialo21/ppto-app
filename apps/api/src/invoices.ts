@@ -215,7 +215,8 @@ async function calcularCamposContables(
 
 export async function registerInvoiceRoutes(app: FastifyInstance) {
   // List (con OC incluida + Paquete, Concepto, CECO + periodos y CECOs M:N)
-  app.get("/invoices", { preHandler: [requireAuth, requirePermission("facturas")] }, async (req, reply) => {
+  // Permiso: facturas:listado (o facturas global)
+  app.get("/invoices", { preHandler: [requireAuth, requirePermission("facturas:listado")] }, async (req, reply) => {
     const items = await prisma.invoice.findMany({
       orderBy: [{ createdAt: "desc" }],
       include: {
@@ -256,7 +257,8 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
   });
 
   // Get by id
-  app.get("/invoices/:id", { preHandler: [requireAuth, requirePermission("facturas")] }, async (req, reply) => {
+  // Permiso: facturas:listado (o facturas global)
+  app.get("/invoices/:id", { preHandler: [requireAuth, requirePermission("facturas:listado")] }, async (req, reply) => {
     const id = Number((req.params as any).id);
     const inv = await prisma.invoice.findUnique({
       where: { id },
@@ -292,7 +294,8 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
   });
 
   // Create (FACTURA | NOTA_CREDITO)
-  app.post("/invoices", { preHandler: [requireAuth, requirePermission("facturas")] }, async (req, reply) => {
+  // Permiso: facturas:gestion (o facturas global)
+  app.post("/invoices", { preHandler: [requireAuth, requirePermission("facturas:gestion")] }, async (req, reply) => {
     // Log en modo desarrollo
     if (process.env.NODE_ENV === "development") {
       console.log("📥 POST /invoices - Payload recibido:", JSON.stringify(req.body, null, 2));
@@ -548,7 +551,8 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
   });
 
   // Update (editar factura)
-  app.patch("/invoices/:id", async (req, reply) => {
+  // Permiso: facturas:gestion (o facturas global)
+  app.patch("/invoices/:id", { preHandler: [requireAuth, requirePermission("facturas:gestion")] }, async (req, reply) => {
     const id = Number((req.params as any).id);
     const parsed = updateInvoiceSchema.safeParse(req.body);
 
@@ -820,7 +824,8 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
   });
 
   // Delete
-  app.delete("/invoices/:id", { preHandler: [requireAuth, requirePermission("facturas")] }, async (req, reply) => {
+  // Permiso: facturas:gestion (o facturas global)
+  app.delete("/invoices/:id", { preHandler: [requireAuth, requirePermission("facturas:gestion")] }, async (req, reply) => {
     const id = Number((req.params as any).id);
     
     const existing = await prisma.invoice.findUnique({ where: { id } });
@@ -837,7 +842,8 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
   });
 
   // Update status + append history
-  app.patch("/invoices/:id/status", async (req, reply) => {
+  // Permiso: facturas:gestion (o facturas global)
+  app.patch("/invoices/:id/status", { preHandler: [requireAuth, requirePermission("facturas:gestion")] }, async (req, reply) => {
     const id = Number((req.params as any).id);
     const parsed = updateStatusSchema.safeParse(req.body);
     
@@ -871,7 +877,8 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
   });
 
   // History only
-  app.get("/invoices/:id/history", { preHandler: [requireAuth, requirePermission("facturas")] }, async (req, reply) => {
+  // Permiso: facturas:listado (o facturas global)
+  app.get("/invoices/:id/history", { preHandler: [requireAuth, requirePermission("facturas:listado")] }, async (req, reply) => {
     const id = Number((req.params as any).id);
     const rows = await prisma.invoiceStatusHistory.findMany({
       where: { invoiceId: id },
@@ -881,7 +888,8 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
   });
 
   // Obtener TC estándar sugerido para una factura
-  app.get("/invoices/tc-estandar/:year", { preHandler: [requireAuth, requirePermission("facturas")] }, async (req, reply) => {
+  // Permiso: facturas:listado (o facturas global) - útil para ambas vistas
+  app.get("/invoices/tc-estandar/:year", { preHandler: [requireAuth, requirePermission("facturas:listado")] }, async (req, reply) => {
     const year = Number((req.params as any).year);
     
     if (!year || year < 2020 || year > 2050) {
@@ -902,7 +910,8 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
   });
 
   // Consumo de una OC (útil para el frontend)
-  app.get("/invoices/oc/:ocId/consumo", { preHandler: [requireAuth, requirePermission("facturas")] }, async (req, reply) => {
+  // Permiso: facturas:listado (o facturas global) - útil para ambas vistas
+  app.get("/invoices/oc/:ocId/consumo", { preHandler: [requireAuth, requirePermission("facturas:listado")] }, async (req, reply) => {
     const ocId = Number((req.params as any).ocId);
     
     const oc = await prisma.oC.findUnique({ where: { id: ocId } });
@@ -925,7 +934,8 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
   });
 
   // Export CSV (actualizado con columnas nuevas)
-  app.get("/invoices/export/csv", { preHandler: [requireAuth, requirePermission("facturas")] }, async (req, reply) => {
+  // Permiso: facturas:listado (o facturas global)
+  app.get("/invoices/export/csv", { preHandler: [requireAuth, requirePermission("facturas:listado")] }, async (req, reply) => {
     const { status, docType } = req.query as any;
     const where: any = {};
     if (status) where.statusCurrent = String(status).toUpperCase();

@@ -25,7 +25,7 @@ export async function registerReportRoutes(app: FastifyInstance) {
 
     // Determinar qué tipo de presupuesto usar (RPPTO si existe, sino PPTO)
     const period = await prisma.period.findUnique({ where: { id: periodId }, select: { year: true } });
-    const budgetType: BudgetType = period ? await getActiveBudgetType(period.year, versionId) : "PPTO";
+    const budgetType: BudgetType = period ? await getActiveBudgetType(period.year, versionId ?? undefined) : "PPTO";
 
     // Presupuesto por sustento en el período
     const budgetRows = versionId
@@ -110,7 +110,7 @@ export async function registerReportRoutes(app: FastifyInstance) {
 
     // Determinar tipo de presupuesto activo
     const period = await prisma.period.findUnique({ where: { id: periodId }, select: { year: true } });
-    const budgetType: BudgetType = period ? await getActiveBudgetType(period.year, versionId) : "PPTO";
+    const budgetType: BudgetType = period ? await getActiveBudgetType(period.year, versionId ?? undefined) : "PPTO";
 
     // Reutilizamos la lógica del endpoint JSON:
     const budgetRows = versionId
@@ -194,7 +194,7 @@ export async function registerReportRoutes(app: FastifyInstance) {
     });
 
     // Determinar tipo de presupuesto activo para el año
-    const budgetType: BudgetType = await getActiveBudgetType(year, versionId);
+    const budgetType: BudgetType = await getActiveBudgetType(year, versionId ?? undefined);
 
     // Para cada mes: totales de budget (versión), ejecutado (GASTO PROCESADO) y provisiones (signo)
     const series = [];
@@ -283,7 +283,7 @@ export async function registerReportRoutes(app: FastifyInstance) {
     const periodToId = q.periodToId ? Number(q.periodToId) : null;
 
     // Determinar tipo de presupuesto activo para el año (RPPTO si existe, sino PPTO)
-    const budgetType: BudgetType = await getActiveBudgetType(year, versionId);
+    const budgetType: BudgetType = await getActiveBudgetType(year, versionId ?? undefined);
 
     // Traer todos los períodos del año en orden
     const allPeriods = await prisma.period.findMany({
@@ -549,6 +549,9 @@ export async function registerReportRoutes(app: FastifyInstance) {
     const periodFromId = q.periodFromId ? Number(q.periodFromId) : null;
     const periodToId = q.periodToId ? Number(q.periodToId) : null;
 
+    // Determinar tipo de presupuesto activo para el año (RPPTO si existe, sino PPTO)
+    const budgetType: BudgetType = await getActiveBudgetType(year, versionId ?? undefined);
+
     // Traer períodos del año filtrados por rango
     const allPeriods = await prisma.period.findMany({
       where: { year },
@@ -604,9 +607,9 @@ export async function registerReportRoutes(app: FastifyInstance) {
     }>();
 
     // ──────────────────────────────────────────────────────────────
-    // 1. PRESUPUESTO con filtros aplicados
+    // 1. PRESUPUESTO con filtros aplicados (usando tipo activo: RPPTO o PPTO)
     // ──────────────────────────────────────────────────────────────
-    const budgetWhere: any = { versionId, periodId: { in: periodIds } };
+    const budgetWhere: any = { versionId, periodId: { in: periodIds }, budgetType };
     if (costCenterIds.length > 0) budgetWhere.costCenterId = { in: costCenterIds };
 
     let budgetAllocations = versionId
@@ -871,6 +874,7 @@ export async function registerReportRoutes(app: FastifyInstance) {
       year, 
       versionId, 
       mode,
+      budgetType, // Incluir tipo de presupuesto activo
       rows, 
       totals 
     };

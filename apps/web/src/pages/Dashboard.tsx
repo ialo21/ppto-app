@@ -120,6 +120,7 @@ interface DashboardDetailData {
   year: number;
   versionId: number | null;
   mode: DashboardMode;
+  budgetType?: 'PPTO' | 'RPPTO'; // Tipo de presupuesto activo desde backend
   rows: DetailRow[];
   totals: {
     budget: number;

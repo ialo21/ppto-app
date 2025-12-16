@@ -20,6 +20,7 @@ import { registerAssistantRoutes } from "./assistant";
 import { registerAuthRoutes, requireAuth } from "./auth";
 import { registerRoleRoutes } from "./roles";
 import { ensureYearPeriods } from "./periods";
+import { registerRpaRoutes } from "./rpa";
 
 const app = Fastify({ logger: true });
 
@@ -123,6 +124,9 @@ await registerAuthRoutes(app);
 
 // Rutas de gestión de roles (protegidas)
 await registerRoleRoutes(app);
+
+// Rutas RPA (protegidas con API Key)
+await registerRpaRoutes(app);
 
 // Rutas específicas de la aplicación
 await registerSupportRoutes(app);

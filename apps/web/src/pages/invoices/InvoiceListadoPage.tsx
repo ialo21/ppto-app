@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
+import { useWebSocket } from "../../hooks/useWebSocket";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
 import FilterSelect from "../../components/ui/FilterSelect";
@@ -291,9 +292,17 @@ function InvoiceCard({
 }
 
 export default function InvoiceListadoPage() {
+  const queryClient = useQueryClient();
   const { data: invoices, isLoading } = useQuery<Invoice[]>({
     queryKey: ["invoices"],
     queryFn: async () => (await api.get("/invoices")).data
+  });
+
+  // WebSocket para actualizaciones en tiempo real
+  useWebSocket({
+    onInvoiceStatusChange: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["invoices"] });
+    }
   });
 
   const [filters, setFilters] = useState({

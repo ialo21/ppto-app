@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "OcStatus" ADD VALUE 'EN_PROCESO';

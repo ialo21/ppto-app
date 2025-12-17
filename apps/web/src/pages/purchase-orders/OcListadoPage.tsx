@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
+import { useWebSocket } from "../../hooks/useWebSocket";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
 import FilterSelect from "../../components/ui/FilterSelect";
@@ -46,7 +47,7 @@ import { ExternalLink, TrendingUp, Package, Users, DollarSign, Clock } from "luc
  */
 
 const ESTADOS_OC = [
-  "PENDIENTE", "PROCESAR", "PROCESADO", "APROBACION_VP",
+  "PENDIENTE", "PROCESAR", "EN_PROCESO", "PROCESADO", "APROBACION_VP",
   "ANULAR", "ANULADO", "ATENDER_COMPRAS", "ATENDIDO"
 ];
 
@@ -55,6 +56,7 @@ const getStatusColor = (estado: string): string => {
   const statusColors: Record<string, string> = {
     PENDIENTE: "bg-gray-100 text-gray-800",
     PROCESAR: "bg-yellow-100 text-yellow-800",
+    EN_PROCESO: "bg-cyan-100 text-cyan-800",
     PROCESADO: "bg-blue-100 text-blue-800",
     APROBACION_VP: "bg-purple-100 text-purple-800",
     ANULAR: "bg-orange-100 text-orange-800",
@@ -264,9 +266,17 @@ function OcCard({ oc, onOpenTimeline }: { oc: any; onOpenTimeline: (ocId: number
 }
 
 export default function OcListadoPage() {
-  const { data: ocs, isLoading } = useQuery({
+  const queryClient = useQueryClient();
+  const { data: ocs = [], isLoading } = useQuery({
     queryKey: ["ocs"],
     queryFn: async () => (await api.get("/ocs")).data
+  });
+
+  // WebSocket para actualizaciones en tiempo real
+  useWebSocket({
+    onOcStatusChange: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["ocs"] });
+    }
   });
 
   const [filters, setFilters] = useState({

@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { toast } from "sonner";
+import { useWebSocket } from "../../hooks/useWebSocket";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import FilterSelect from "../../components/ui/FilterSelect";
 import Input from "../../components/ui/Input";
@@ -47,7 +48,7 @@ const formatPeriodRange = (periodFrom: any, periodTo: any): string => {
 };
 
 const ESTADOS_OC = [
-  "PENDIENTE", "PROCESAR", "PROCESADO", "APROBACION_VP",
+  "PENDIENTE", "PROCESAR", "EN_PROCESO", "PROCESADO", "APROBACION_VP",
   "ANULAR", "ANULADO", "ATENDER_COMPRAS", "ATENDIDO"
 ];
 
@@ -165,6 +166,19 @@ export default function OcGestionPage() {
   const { data: ocs, refetch, isLoading } = useQuery({
     queryKey: ["ocs"],
     queryFn: async () => (await api.get("/ocs")).data
+  });
+
+  // WebSocket para actualizaciones en tiempo real
+  useWebSocket({
+    onOcStatusChange: (data) => {
+      console.log(`[WS] OC ${data.ocId} cambió a estado ${data.newStatus}`);
+      // Invalidar cache para refrescar la lista de OCs
+      queryClient.invalidateQueries({ queryKey: ["ocs"] });
+      toast.success(`OC actualizada: nuevo estado ${data.newStatus}`);
+    },
+    onConnected: () => {
+      console.log("[WS] Conectado - recibiendo actualizaciones en tiempo real");
+    }
   });
 
   const { data: periods } = useQuery({

@@ -21,8 +21,12 @@ import { registerAuthRoutes, requireAuth } from "./auth";
 import { registerRoleRoutes } from "./roles";
 import { ensureYearPeriods } from "./periods";
 import { registerRpaRoutes } from "./rpa";
+import { registerWebSocket } from "./websocket";
 
 const app = Fastify({ logger: true });
+
+// Registrar WebSocket ANTES de otros plugins
+await registerWebSocket(app);
 
 // Configurar encoding UTF-8 para todas las respuestas
 app.addHook('onSend', async (request, reply, payload) => {
@@ -127,6 +131,8 @@ await registerRoleRoutes(app);
 
 // Rutas RPA (protegidas con API Key)
 await registerRpaRoutes(app);
+
+console.log("[SERVER] WebSocket habilitado en /ws");
 
 // Rutas específicas de la aplicación
 await registerSupportRoutes(app);

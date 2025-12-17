@@ -1,7 +1,8 @@
-import { FastifyInstance } from "fastify";
+import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { PrismaClient, Prisma } from "@prisma/client";
-import { z } from "zod";
 import { requireAuth, requirePermission } from "./auth";
+import { z } from "zod";
+import { broadcastOcStatusChange } from "./websocket";
 
 const prisma = new PrismaClient();
 
@@ -450,6 +451,13 @@ export async function registerOcRoutes(app: FastifyInstance) {
         });
 
         return oc;
+      });
+
+      // Broadcast cambio de estado via WebSocket
+      broadcastOcStatusChange({
+        ocId: id,
+        newStatus: estado,
+        timestamp: new Date().toISOString()
       });
 
       return updated;

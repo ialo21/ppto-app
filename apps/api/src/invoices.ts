@@ -2,6 +2,7 @@ import { FastifyInstance } from "fastify";
 import { PrismaClient, Prisma } from "@prisma/client";
 import { z } from "zod";
 import { requireAuth, requirePermission } from "./auth";
+import { broadcastInvoiceStatusChange } from "./websocket";
 
 const prisma = new PrismaClient();
 
@@ -871,6 +872,13 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
         status: parsed.data.status as any,
         note: parsed.data.note ?? null
       }
+    });
+
+    // Broadcast cambio de estado via WebSocket
+    broadcastInvoiceStatusChange({
+      invoiceId: id,
+      newStatus: parsed.data.status,
+      timestamp: new Date().toISOString()
     });
 
     return updated;

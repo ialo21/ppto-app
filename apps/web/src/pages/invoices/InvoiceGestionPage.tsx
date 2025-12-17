@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect, useRef } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { toast } from "sonner";
+import { useWebSocket } from "../../hooks/useWebSocket";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
 import FilterSelect from "../../components/ui/FilterSelect";
@@ -95,6 +96,15 @@ function formatPeriodsRange(periods: { year: number; month: number }[]): string 
 
 export default function InvoiceGestionPage() {
   const queryClient = useQueryClient();
+
+  // WebSocket para actualizaciones en tiempo real
+  useWebSocket({
+    onInvoiceStatusChange: (data) => {
+      console.log(`[WS] Factura ${data.invoiceId} cambió a estado ${data.newStatus}`);
+      queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      toast.success(`Factura actualizada: nuevo estado ${data.newStatus}`);
+    }
+  });
 
   // Queries
   const { data: invoices, isLoading } = useQuery<Invoice[]>({

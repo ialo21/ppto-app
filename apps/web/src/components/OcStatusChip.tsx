@@ -10,6 +10,7 @@ import { createPortal } from "react-dom";
  * Estados de OC (según schema Prisma):
  * - PENDIENTE
  * - PROCESAR
+ * - EN_PROCESO (robot RPA procesando actualmente)
  * - PROCESADO
  * - APROBACION_VP
  * - ANULAR
@@ -21,6 +22,7 @@ import { createPortal } from "react-dom";
 const OC_STATUSES = [
   { value: "PENDIENTE", label: "Pendiente", color: "bg-gray-100 text-gray-800" },
   { value: "PROCESAR", label: "Procesar", color: "bg-yellow-100 text-yellow-800" },
+  { value: "EN_PROCESO", label: "En Proceso", color: "bg-cyan-100 text-cyan-800" },
   { value: "PROCESADO", label: "Procesado", color: "bg-blue-100 text-blue-800" },
   { value: "APROBACION_VP", label: "Aprobación VP", color: "bg-purple-100 text-purple-800" },
   { value: "ANULAR", label: "Anular", color: "bg-orange-100 text-orange-800" },

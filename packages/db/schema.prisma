@@ -44,6 +44,7 @@ enum ExpenseType {
 enum OcStatus {
   PENDIENTE
   PROCESAR
+  EN_PROCESO
   PROCESADO
   APROBACION_VP
   ANULAR

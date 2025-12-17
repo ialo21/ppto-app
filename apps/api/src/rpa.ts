@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { PrismaClient, Prisma } from "@prisma/client";
 import { z } from "zod";
+import { broadcastOcStatusChange } from "./websocket";
 
 const prisma = new PrismaClient();
 
@@ -140,31 +141,62 @@ export async function registerRpaRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: "ID inválido" });
       }
 
-      const oc = await prisma.oC.findUnique({
-        where: { id },
-        include: {
-          support: { select: { id: true, code: true, name: true } },
-          articulo: { select: { id: true, code: true, name: true } },
-          costCenters: {
-            include: {
-              costCenter: { select: { id: true, code: true, name: true } }
-            }
-          },
-          budgetPeriodFrom: { select: { id: true, year: true, month: true, label: true } },
-          budgetPeriodTo: { select: { id: true, year: true, month: true, label: true } }
+      // Transacción atómica: verificar estado PROCESAR y cambiar a EN_PROCESO
+      const result = await prisma.$transaction(async (tx) => {
+        const oc = await tx.oC.findUnique({
+          where: { id },
+          select: { id: true, estado: true }
+        });
+
+        if (!oc) {
+          throw { code: 404, message: "OC no encontrada" };
         }
+
+        if (oc.estado !== "PROCESAR") {
+          throw { 
+            code: 409, 
+            message: "OC no disponible para procesar",
+            currentState: oc.estado
+          };
+        }
+
+        // Cambiar estado a EN_PROCESO (lock atómico)
+        const updated = await tx.oC.update({
+          where: { id },
+          data: { estado: "EN_PROCESO" },
+          include: {
+            support: { select: { id: true, code: true, name: true } },
+            articulo: { select: { id: true, code: true, name: true } },
+            costCenters: {
+              include: {
+                costCenter: { select: { id: true, code: true, name: true } }
+              }
+            },
+            budgetPeriodFrom: { select: { id: true, year: true, month: true, label: true } },
+            budgetPeriodTo: { select: { id: true, year: true, month: true, label: true } }
+          }
+        });
+
+        // Registrar cambio en historial
+        await tx.oCStatusHistory.create({
+          data: {
+            ocId: id,
+            status: "EN_PROCESO",
+            note: "Reclamado por RPA para procesamiento"
+          }
+        });
+
+        return updated;
       });
 
-      if (!oc) {
-        return reply.code(404).send({ error: "OC no encontrada" });
-      }
+      // Broadcast cambio de estado via WebSocket
+      broadcastOcStatusChange({
+        ocId: id,
+        newStatus: "EN_PROCESO",
+        timestamp: new Date().toISOString()
+      });
 
-      if (oc.estado !== "PROCESAR") {
-        return reply.code(409).send({ 
-          error: "OC no disponible para procesar",
-          currentState: oc.estado
-        });
-      }
+      const oc = result;
 
       const motivoParts: string[] = [];
       
@@ -218,6 +250,16 @@ export async function registerRpaRoutes(app: FastifyInstance) {
 
       return { oc: mapped };
     } catch (err: any) {
+      if (err.code === 404) {
+        return reply.code(404).send({ error: err.message });
+      }
+      if (err.code === 409) {
+        return reply.code(409).send({ 
+          error: err.message,
+          currentState: err.currentState
+        });
+      }
+
       console.error('[RPA] Error claiming OC:', err);
       return reply.code(500).send({ 
         error: "Error al reclamar OC",
@@ -254,10 +296,10 @@ export async function registerRpaRoutes(app: FastifyInstance) {
           throw { code: 404, message: "OC no encontrada" };
         }
 
-        if (oc.estado !== "PROCESAR") {
+        if (oc.estado !== "EN_PROCESO") {
           throw { 
             code: 409, 
-            message: "OC no está en estado PROCESAR",
+            message: "OC no está en estado EN_PROCESO",
             currentState: oc.estado
           };
         }
@@ -303,7 +345,9 @@ export async function registerRpaRoutes(app: FastifyInstance) {
             errorNote = `Error RPA: ${data.errorMessage}`;
           }
 
-          const updateData: any = {};
+          const updateData: any = {
+            estado: "PENDIENTE"  // Volver a PENDIENTE en caso de error
+          };
           
           if (data.errorMessage) {
             const currentComment = oc.comentario || "";
@@ -313,18 +357,15 @@ export async function registerRpaRoutes(app: FastifyInstance) {
               : errorPrefix;
           }
 
-          let updated = oc;
-          if (Object.keys(updateData).length > 0) {
-            updated = await tx.oC.update({
-              where: { id },
-              data: updateData
-            });
-          }
+          const updated = await tx.oC.update({
+            where: { id },
+            data: updateData
+          });
 
           await tx.oCStatusHistory.create({
             data: {
               ocId: id,
-              status: "PROCESAR",
+              status: "PENDIENTE",
               note: errorNote
             }
           });
@@ -332,10 +373,25 @@ export async function registerRpaRoutes(app: FastifyInstance) {
           return { 
             success: false, 
             oc: updated, 
-            message: "Error registrado, OC mantiene estado PROCESAR para reintento" 
+            message: "Error registrado, OC vuelve a estado PENDIENTE" 
           };
         }
       });
+
+      // Broadcast cambio de estado via WebSocket
+      if (result.success) {
+        broadcastOcStatusChange({
+          ocId: id,
+          newStatus: "PROCESADO",
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        broadcastOcStatusChange({
+          ocId: id,
+          newStatus: "PENDIENTE",
+          timestamp: new Date().toISOString()
+        });
+      }
 
       return result;
     } catch (err: any) {

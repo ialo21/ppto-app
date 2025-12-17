@@ -1,3 +1,28 @@
+# A) Generar backup en prod (VM)
+
+Genera un backup de la base de datos PostgreSQL con encoding UTF-8 correcto.
+
+## Comando para generar backup
+
+```bash
+# Generar backup con encoding UTF-8 correcto
+docker exec ppto-app-db-1 pg_dump \
+  -U ppto \
+  -d ppto \
+  --encoding=UTF8 \
+  --no-owner \
+  --no-acl \
+  --clean \
+  --if-exists \
+  > backup-ppto-$(date +%Y-%m-%d).sql
+```
+
+**Resultado:** Se creará un archivo `backup-ppto-YYYY-MM-DD.sql` en el directorio actual.
+
+**Nota:** Este comando preserva correctamente los caracteres con tildes (á, é, í, ó, ú, ñ) gracias al flag `--encoding=UTF8`.
+
+---
+
 # B) Restaurar backup en prod (VM)
 
 **Advertencia:** esto borra todo el schema `public`. Hazlo solo cuando estés seguro.

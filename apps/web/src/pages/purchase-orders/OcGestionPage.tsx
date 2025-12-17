@@ -174,7 +174,9 @@ export default function OcGestionPage() {
       console.log(`[WS] OC ${data.ocId} cambió a estado ${data.newStatus}`);
       // Invalidar cache para refrescar la lista de OCs
       queryClient.invalidateQueries({ queryKey: ["ocs"] });
-      toast.success(`OC actualizada: nuevo estado ${data.newStatus}`);
+      // NOTA: No mostrar toast aquí para evitar duplicados.
+      // El toast ya se muestra en updateStatusMutation.onSuccess cuando el usuario actual cambia el estado.
+      // Este handler es principalmente para sincronizar cambios hechos por otros usuarios/sistemas.
     },
     onConnected: () => {
       console.log("[WS] Conectado - recibiendo actualizaciones en tiempo real");
@@ -603,7 +605,40 @@ export default function OcGestionPage() {
           <h1 className="text-2xl font-semibold">Gestión de Órdenes de Compra</h1>
           <p className="text-sm text-slate-600 mt-1">Registro y administración de OCs</p>
         </div>
-        <Button onClick={() => setShowForm(!showForm)}>
+        <Button onClick={() => {
+          if (showForm) {
+            // Cancelar: cerrar formulario y limpiar estado
+            resetForm();
+          } else {
+            // Nueva OC: asegurar estado limpio antes de abrir
+            setEditingId(null);
+            setFieldErrors({});
+            setForm({
+              budgetPeriodFromId: "",
+              budgetPeriodToId: "",
+              incidenteOc: "",
+              solicitudOc: "",
+              fechaRegistro: new Date().toISOString().split("T")[0],
+              supportId: "",
+              periodoEnFechasText: "",
+              descripcion: "",
+              nombreSolicitante: "",
+              correoSolicitante: "",
+              proveedor: "",
+              ruc: "",
+              moneda: "PEN",
+              importeSinIgv: "",
+              estado: "PENDIENTE",
+              numeroOc: "",
+              comentario: "",
+              articuloId: "",
+              cecoId: "",
+              costCenterIds: [],
+              linkCotizacion: ""
+            });
+            setShowForm(true);
+          }
+        }}>
           {showForm ? "Cancelar" : "Nueva OC"}
         </Button>
       </div>

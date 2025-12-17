@@ -164,7 +164,7 @@ export default function BulkUploader({
             <div>
               <div className="font-semibold">Errores en el CSV:</div>
               <ul className="list-disc ml-4 mt-1">
-                {messages.map((msg, i) => (
+                {messages.map((msg: string, i: number) => (
                   <li key={i} className="text-xs">{msg}</li>
                 ))}
               </ul>

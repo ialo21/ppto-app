@@ -16,7 +16,7 @@ import { registerOcRoutes } from "./oc";
 import { registerBulkRoutes } from "./bulk";
 import { registerExchangeRateRoutes } from "./exchange-rates";
 import { registerProvisionRoutes } from "./provisions";
-import { registerAssistantRoutes } from "./assistant";
+import { registerAssistantRoutes } from "./assistant-v2";
 import { registerAuthRoutes, requireAuth } from "./auth";
 import { registerRoleRoutes } from "./roles";
 import { ensureYearPeriods } from "./periods";

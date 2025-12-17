@@ -3,6 +3,9 @@ import { api } from "../lib/api";
 import Button from "../components/ui/Button";
 import { Send, Sparkles, MessageSquare, AlertCircle, Bot, User } from "lucide-react";
 import { toast } from "sonner";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import remarkBreaks from "remark-breaks";
 
 /**
  * Asistente conversacional con Gemini 2.5 Flash
@@ -206,9 +209,17 @@ export default function AssistantPage() {
                     : "bg-brand-background text-brand-text-primary border border-brand-border"
                 }`}
               >
-                <p className="text-sm whitespace-pre-wrap leading-relaxed">
-                  {message.content}
-                </p>
+                {message.role === "assistant" ? (
+                  <div className="text-sm leading-relaxed prose prose-sm max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0 prose-strong:font-semibold">
+                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                      {message.content}
+                    </ReactMarkdown>
+                  </div>
+                ) : (
+                  <p className="text-sm whitespace-pre-wrap leading-relaxed">
+                    {message.content}
+                  </p>
+                )}
                 <p
                   className={`text-[10px] mt-2 ${
                     message.role === "user"

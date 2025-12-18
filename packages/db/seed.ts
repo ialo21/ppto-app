@@ -378,10 +378,22 @@ async function main() {
     { key: "ocs:gestion", name: "OC - Gestión", description: "Registro y administración de órdenes de compra", module: "ocs", parentKey: "ocs", sortOrder: 2 },
     { key: "ocs:solicitud", name: "OC - Solicitud", description: "Solicitud de nuevas órdenes de compra", module: "ocs", parentKey: "ocs", sortOrder: 3 },
     
+    // Facturas - Submódulos (ahora con estructura jerárquica)
+    { key: "facturas:listado", name: "Facturas - Listado", description: "Vista de consulta de facturas", module: "facturas", parentKey: "facturas", sortOrder: 1 },
+    { key: "facturas:gestion", name: "Facturas - Gestión", description: "Registro y administración de facturas", module: "facturas", parentKey: "facturas", sortOrder: 2 },
+    
+    // Aprobaciones - Módulo padre
+    { key: "aprobaciones", name: "Aprobaciones", description: "Módulo de aprobaciones de facturas y OCs", module: null, parentKey: null, sortOrder: 5 },
+    // Aprobaciones - Submódulos Facturas
+    { key: "aprobaciones:facturas_head", name: "Aprobación Facturas - Head", description: "Aprobación de facturas nivel Head", module: "aprobaciones", parentKey: "aprobaciones", sortOrder: 1 },
+    { key: "aprobaciones:facturas_vp", name: "Aprobación Facturas - VP", description: "Aprobación de facturas nivel VP (montos altos)", module: "aprobaciones", parentKey: "aprobaciones", sortOrder: 2 },
+    // Aprobaciones - Submódulos OCs
+    { key: "aprobaciones:ocs_vp", name: "Aprobación OCs - VP", description: "Aprobación de órdenes de compra nivel VP", module: "aprobaciones", parentKey: "aprobaciones", sortOrder: 3 },
+    
     // Otros módulos principales
-    { key: "provisiones", name: "Provisiones", description: "Gestión de provisiones", module: null, parentKey: null, sortOrder: 6 },
-    { key: "ppto", name: "Presupuesto", description: "Gestión del presupuesto", module: null, parentKey: null, sortOrder: 7 },
-    { key: "catalogos", name: "Catálogos", description: "Administración de catálogos maestros", module: null, parentKey: null, sortOrder: 8 },
+    { key: "provisiones", name: "Provisiones", description: "Gestión de provisiones", module: null, parentKey: null, sortOrder: 8 },
+    { key: "ppto", name: "Presupuesto", description: "Gestión del presupuesto", module: null, parentKey: null, sortOrder: 9 },
+    { key: "catalogos", name: "Catálogos", description: "Administración de catálogos maestros", module: null, parentKey: null, sortOrder: 10 },
     { key: "manage_roles", name: "Gestión de Roles", description: "Administrar roles y permisos (solo super admin)", module: null, parentKey: null, sortOrder: 99 }
   ];
 

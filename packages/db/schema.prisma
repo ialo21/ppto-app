@@ -22,7 +22,9 @@ enum ClState {
 
 enum InvStatus {
   INGRESADO 
-  EN_APROBACION 
+  EN_APROBACION       // DEPRECATED: usar APROBACION_HEAD o APROBACION_VP
+  APROBACION_HEAD     // Nueva: Aprobación por Head (primer nivel)
+  APROBACION_VP       // Nueva: Aprobación por VP (segundo nivel, si supera umbral)
   EN_CONTABILIDAD 
   EN_TESORERIA 
   EN_ESPERA_DE_PAGO 
@@ -88,6 +90,16 @@ model ExchangeRate {
   id   Int     @id @default(autoincrement())
   year Int     @unique
   rate Decimal
+}
+
+model ApprovalThreshold {
+  id            Int      @id @default(autoincrement())
+  key           String   @unique  // 'INVOICE_VP_THRESHOLD' para facturas
+  description   String?            // Descripción del umbral
+  amountPEN     Decimal            // Monto umbral en Soles (PEN) con IGV
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model Support {

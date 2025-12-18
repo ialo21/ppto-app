@@ -1160,7 +1160,9 @@ export default function InvoiceGestionPage() {
               }}
               options={[
                 { value: "INGRESADO", label: "INGRESADO" },
-                { value: "EN_APROBACION", label: "EN APROBACIÓN" },
+                { value: "APROBACION_HEAD", label: "APROBACIÓN HEAD" },
+                { value: "APROBACION_VP", label: "APROBACIÓN VP" },
+                { value: "EN_APROBACION", label: "EN APROBACIÓN (legacy)" },
                 { value: "EN_CONTABILIDAD", label: "EN CONTABILIDAD" },
                 { value: "EN_TESORERIA", label: "EN TESORERÍA" },
                 { value: "EN_ESPERA_DE_PAGO", label: "EN ESPERA DE PAGO" },

@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createBrowserRouter, RouterProvider, NavLink, Outlet, Navigate, useNavigate } from "react-router-dom";
 import "./index.css";
 import { Toaster } from "sonner";
-import { Home, Wallet, FileText, BarChart3, Archive, ShoppingCart, Calendar, Menu, X, Sparkles, Shield, LogOut, User } from "lucide-react";
+import { Home, Wallet, FileText, BarChart3, Archive, ShoppingCart, Calendar, Menu, X, Sparkles, Shield, LogOut, User, ClipboardCheck } from "lucide-react";
 import Button from "./components/ui/Button";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 
@@ -36,6 +36,17 @@ const sidebarItems = [
       { path: "/purchase-orders/listado", label: "Listado", permission: "ocs:listado" },
       { path: "/purchase-orders/gestion", label: "Gestión / Registro", permission: "ocs:gestion" },
       { path: "/purchase-orders/solicitud", label: "Solicitud de OC", permission: "ocs:solicitud" }
+    ]
+  },
+  {
+    path: "/approvals",
+    label: "Aprobaciones",
+    icon: ClipboardCheck,
+    permission: "aprobaciones",
+    children: [
+      { path: "/approvals/invoices/head", label: "Facturas - Head", permission: "aprobaciones:facturas_head" },
+      { path: "/approvals/invoices/vp", label: "Facturas - VP", permission: "aprobaciones:facturas_vp" },
+      { path: "/approvals/ocs/vp", label: "OCs - VP", permission: "aprobaciones:ocs_vp" }
     ]
   },
   { path: "/provisions", label: "Provisiones", icon: Calendar, permission: "provisiones" },
@@ -459,6 +470,11 @@ import OcListadoPage from "./pages/purchase-orders/OcListadoPage";
 import OcGestionPage from "./pages/purchase-orders/OcGestionPage";
 import OcSolicitudPage from "./pages/purchase-orders/OcSolicitudPage";
 
+// Submódulos de Aprobaciones
+import AprobacionHeadFacturasPage from "./pages/approvals/AprobacionHeadFacturasPage";
+import AprobacionVPFacturasPage from "./pages/approvals/AprobacionVPFacturasPage";
+import AprobacionVPOCsPage from "./pages/approvals/AprobacionVPOCsPage";
+
 const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
   { element: <AppLayout />, children: [
@@ -474,6 +490,11 @@ const router = createBrowserRouter([
     { path: "/purchase-orders/listado", element: <OcListadoPage /> },
     { path: "/purchase-orders/gestion", element: <OcGestionPage /> },
     { path: "/purchase-orders/solicitud", element: <OcSolicitudPage /> },
+    // Rutas de Aprobaciones (con submódulos)
+    { path: "/approvals", element: <Navigate to="/approvals/invoices/head" replace /> },
+    { path: "/approvals/invoices/head", element: <AprobacionHeadFacturasPage /> },
+    { path: "/approvals/invoices/vp", element: <AprobacionVPFacturasPage /> },
+    { path: "/approvals/ocs/vp", element: <AprobacionVPOCsPage /> },
     { path: "/provisions", element: <ProvisionsPage /> },
     { path: "/ppto", element: <BudgetPage /> },
     { path: "/settings", element: <CatalogsPage /> },

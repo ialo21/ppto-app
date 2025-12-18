@@ -22,6 +22,7 @@ import { registerRoleRoutes } from "./roles";
 import { ensureYearPeriods } from "./periods";
 import { registerRpaRoutes } from "./rpa";
 import { registerWebSocket } from "./websocket";
+import { registerApprovalRoutes } from "./approvals";
 
 const app = Fastify({ logger: true });
 
@@ -146,6 +147,7 @@ await registerReportRoutes(app);
 await registerMasterRoutes(app);
 await registerBulkRoutes(app);
 await registerExchangeRateRoutes(app);
+await registerApprovalRoutes(app);
 await registerAssistantRoutes(app);
 
 const port = Number(process.env.API_PORT || 3001);

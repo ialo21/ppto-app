@@ -63,7 +63,7 @@ type Invoice = {
 };
 
 const ESTADOS_FACTURA = [
-  "INGRESADO", "EN_APROBACION", "EN_CONTABILIDAD",
+  "INGRESADO", "EN_APROBACION", "APROBACION_HEAD", "APROBACION_VP", "EN_CONTABILIDAD",
   "EN_TESORERIA", "EN_ESPERA_DE_PAGO", "PAGADO", "RECHAZADO"
 ];
 
@@ -74,8 +74,10 @@ const getStatusColor = (estado: string): string => {
   const statusColors: Record<string, string> = {
     INGRESADO: "bg-gray-100 text-gray-800",
     EN_APROBACION: "bg-yellow-100 text-yellow-800",
+    APROBACION_HEAD: "bg-yellow-100 text-yellow-800",
+    APROBACION_VP: "bg-purple-100 text-purple-800",
     EN_CONTABILIDAD: "bg-blue-100 text-blue-800",
-    EN_TESORERIA: "bg-purple-100 text-purple-800",
+    EN_TESORERIA: "bg-indigo-100 text-indigo-800",
     EN_ESPERA_DE_PAGO: "bg-orange-100 text-orange-800",
     PAGADO: "bg-green-100 text-green-800",
     RECHAZADO: "bg-red-100 text-red-800"

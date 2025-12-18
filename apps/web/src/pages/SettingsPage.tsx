@@ -32,6 +32,7 @@ type Support = {
   expenseConcept: { id: number; name: string; packageId: number } | null;
 };
 type ExchangeRate = { id: number; year: number; rate: number };
+type ApprovalThreshold = { id: number; key: string; description: string | null; amountPEN: number; active: boolean };
 
 type ManagementOption = { management: string; areas: string[] };
 
@@ -42,7 +43,7 @@ const expenseTypes = [
   { label: "Distribuible", value: "DISTRIBUIBLE" }
 ];
 
-type SectionKey = "packages" | "costCenters" | "articulos" | "managements" | "supports" | "exchangeRates" | "bulk";
+type SectionKey = "packages" | "costCenters" | "articulos" | "managements" | "supports" | "exchangeRates" | "approvalThresholds" | "bulk";
 
 const sections: Array<{ key: SectionKey; label: string; description: string }> = [
   { key: "packages", label: "Paquetes & Conceptos", description: "Gestiona paquetes y sus conceptos de gasto asociados." },
@@ -51,6 +52,7 @@ const sections: Array<{ key: SectionKey; label: string; description: string }> =
   { key: "managements", label: "Gerencias & Áreas", description: "Gestiona gerencias y sus áreas organizacionales." },
   { key: "supports", label: "Sustentos", description: "Administra el catálogo completo de sustentos." },
   { key: "exchangeRates", label: "Tipos de cambio (TC)", description: "Gestiona tipos de cambio anuales para conversión USD → PEN." },
+  { key: "approvalThresholds", label: "Umbrales de Aprobación", description: "Configura umbrales monetarios para aprobaciones VP de facturas." },
   { key: "bulk", label: "Carga masiva (CSV)", description: "Importa múltiples ítems de catálogos desde un archivo CSV." }
 ];
 
@@ -105,6 +107,13 @@ function useExchangeRates() {
   });
 }
 
+function useApprovalThresholds() {
+  return useQuery({
+    queryKey: ["approval-thresholds"],
+    queryFn: async () => (await api.get("/approval-thresholds")).data as ApprovalThreshold[]
+  });
+}
+
 export default function CatalogsPage() {
   const queryClient = useQueryClient();
 
@@ -146,6 +155,7 @@ export default function CatalogsPage() {
   
   const [supportForm, setSupportForm] = useState(INITIAL_SUPPORT_FORM);
   const [exchangeRateForm, setExchangeRateForm] = useState({ id: "", year: "", rate: "" });
+  const [approvalThresholdForm, setApprovalThresholdForm] = useState({ id: "", amountPEN: "" });
 
   const conceptRows = useMemo(() => {
     const list: Array<ExpenseConcept & { packageName: string }> = [];
@@ -481,6 +491,24 @@ export default function CatalogsPage() {
     },
     onError: (error: any) => {
       const errorMsg = error.response?.data?.error || "No se pudo eliminar el tipo de cambio";
+      toast.error(errorMsg);
+    }
+  });
+
+  // Approval Thresholds mutations
+  const approvalThresholdsQuery = useApprovalThresholds();
+  
+  const saveApprovalThreshold = useMutation({
+    mutationFn: async (data: { id: number; amountPEN: number }) => {
+      return (await api.put(`/approval-thresholds/${data.id}`, { amountPEN: data.amountPEN })).data;
+    },
+    onSuccess: () => {
+      toast.success("Umbral de aprobación actualizado");
+      setApprovalThresholdForm({ id: "", amountPEN: "" });
+      queryClient.invalidateQueries({ queryKey: ["approval-thresholds"] });
+    },
+    onError: (error: any) => {
+      const errorMsg = error.response?.data?.error || "No se pudo actualizar el umbral";
       toast.error(errorMsg);
     }
   });
@@ -1409,6 +1437,129 @@ export default function CatalogsPage() {
                   ))}
                 </tbody>
               </Table>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {section === "approvalThresholds" && (
+        <Card>
+          <CardHeader>
+            <h2 className="text-xl font-semibold">Umbrales de Aprobación</h2>
+            <p className="text-sm text-slate-600">
+              Configura los umbrales monetarios para determinar qué facturas requieren aprobación VP.
+              <br />
+              <strong>Regla:</strong> Si el monto total con IGV de una factura supera el umbral, pasa a Aprobación VP después de Head.
+            </p>
+          </CardHeader>
+          <CardContent>
+            {approvalThresholdsQuery.isLoading && <div className="text-center py-4">Cargando...</div>}
+            {approvalThresholdsQuery.data && approvalThresholdsQuery.data.length === 0 && (
+              <div className="text-center py-4 text-slate-500">
+                No hay umbrales configurados. Ejecute el seed de la base de datos para crear el umbral por defecto.
+              </div>
+            )}
+            {approvalThresholdsQuery.data && approvalThresholdsQuery.data.length > 0 && (
+              <div className="space-y-4">
+                {approvalThresholdsQuery.data.map((threshold: ApprovalThreshold) => (
+                  <div key={threshold.id} className="border rounded-lg p-4 bg-slate-50">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-lg">
+                          {threshold.key === "INVOICE_VP_THRESHOLD" 
+                            ? "Umbral VP para Facturas" 
+                            : threshold.key}
+                        </h3>
+                        <p className="text-sm text-slate-600 mt-1">
+                          {threshold.description || "Monto con IGV a partir del cual se requiere aprobación VP"}
+                        </p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${
+                            threshold.active ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                          }`}>
+                            {threshold.active ? "Activo" : "Inactivo"}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-3">
+                        {approvalThresholdForm.id === threshold.id.toString() ? (
+                          <>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium">S/</span>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                placeholder="Monto en PEN"
+                                value={approvalThresholdForm.amountPEN}
+                                onChange={(e: any) => setApprovalThresholdForm({ 
+                                  ...approvalThresholdForm, 
+                                  amountPEN: e.target.value 
+                                })}
+                                className="w-32"
+                              />
+                            </div>
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                const amount = Number(approvalThresholdForm.amountPEN);
+                                if (!amount || amount <= 0) {
+                                  toast.error("El monto debe ser mayor a 0");
+                                  return;
+                                }
+                                saveApprovalThreshold.mutate({
+                                  id: threshold.id,
+                                  amountPEN: amount
+                                });
+                              }}
+                              disabled={saveApprovalThreshold.isPending}
+                            >
+                              Guardar
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setApprovalThresholdForm({ id: "", amountPEN: "" })}
+                            >
+                              Cancelar
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <div className="text-right">
+                              <div className="text-2xl font-bold text-brand-primary">
+                                S/ {Number(threshold.amountPEN).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                              </div>
+                              <div className="text-xs text-slate-500">con IGV</div>
+                            </div>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => setApprovalThresholdForm({
+                                id: threshold.id.toString(),
+                                amountPEN: threshold.amountPEN.toString()
+                              })}
+                            >
+                              Editar
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                
+                <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <h4 className="font-semibold text-blue-800 mb-2">💡 Ejemplo de funcionamiento</h4>
+                  <p className="text-sm text-blue-700">
+                    Si el umbral es <strong>S/ 10,000</strong> y una factura tiene un monto total con IGV de:
+                  </p>
+                  <ul className="text-sm text-blue-700 mt-2 space-y-1">
+                    <li>• <strong>S/ 8,500</strong> → Aprobado por Head → pasa directo a Contabilidad</li>
+                    <li>• <strong>S/ 12,000</strong> → Aprobado por Head → pasa a Aprobación VP → VP aprueba → Contabilidad</li>
+                  </ul>
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>

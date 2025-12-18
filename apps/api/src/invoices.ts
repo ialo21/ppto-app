@@ -52,7 +52,7 @@ const updateInvoiceSchema = z.object({
 
 const updateStatusSchema = z.object({
   status: z.enum([
-    "INGRESADO", "EN_APROBACION", "EN_CONTABILIDAD",
+    "INGRESADO", "EN_APROBACION", "APROBACION_HEAD", "APROBACION_VP", "EN_CONTABILIDAD",
     "EN_TESORERIA", "EN_ESPERA_DE_PAGO", "PAGADO", "RECHAZADO"
   ]),
   note: z.string().optional()

@@ -29,8 +29,20 @@ const INVOICE_STATUS_CONFIG: Record<string, {
     bgColor: "bg-gray-100",
     iconColor: "text-gray-600"
   },
+  APROBACION_HEAD: { 
+    label: "Aprobación Head", 
+    color: "text-yellow-800", 
+    bgColor: "bg-yellow-100",
+    iconColor: "text-yellow-600"
+  },
+  APROBACION_VP: { 
+    label: "Aprobación VP", 
+    color: "text-purple-800", 
+    bgColor: "bg-purple-100",
+    iconColor: "text-purple-600"
+  },
   EN_APROBACION: { 
-    label: "En Aprobación", 
+    label: "En Aprobación (legacy)", 
     color: "text-yellow-800", 
     bgColor: "bg-yellow-100",
     iconColor: "text-yellow-600"
@@ -43,9 +55,9 @@ const INVOICE_STATUS_CONFIG: Record<string, {
   },
   EN_TESORERIA: { 
     label: "En Tesorería", 
-    color: "text-purple-800", 
-    bgColor: "bg-purple-100",
-    iconColor: "text-purple-600"
+    color: "text-indigo-800", 
+    bgColor: "bg-indigo-100",
+    iconColor: "text-indigo-600"
   },
   EN_ESPERA_DE_PAGO: { 
     label: "En Espera de Pago", 
@@ -70,10 +82,12 @@ const INVOICE_STATUS_CONFIG: Record<string, {
 /**
  * Flujo ideal de estados de Facturas
  * RECHAZADO NO está incluido en el flujo normal (solo aparece si la factura fue rechazada)
+ * Nota: APROBACION_VP es opcional (solo para facturas que superen el umbral)
  */
 const IDEAL_FLOW = [
   "INGRESADO", 
-  "EN_APROBACION", 
+  "APROBACION_HEAD",
+  "APROBACION_VP",
   "EN_CONTABILIDAD", 
   "EN_TESORERIA", 
   "EN_ESPERA_DE_PAGO", 

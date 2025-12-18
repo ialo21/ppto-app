@@ -464,70 +464,116 @@ export default function AprobacionVPOCsPage() {
         title={`Detalle OC: ${selectedOC?.numeroOc || ''}`}
       >
         {selectedOC && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className="text-gray-500">Estado</p>
-                <p className="font-medium">{selectedOC.estado}</p>
+          <div className="space-y-6 p-2">
+            {/* Identificación */}
+            <section className="space-y-3">
+              <h4 className="text-xs font-semibold text-brand-text-disabled uppercase tracking-wide border-b pb-2">
+                Identificación
+              </h4>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
+                <div>
+                  <p className="text-gray-500 text-xs mb-1">Número OC</p>
+                  <p className="font-semibold text-brand-text-primary">{selectedOC.numeroOc || "-"}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 text-xs mb-1">Estado</p>
+                  <p className="font-medium">{selectedOC.estado}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 text-xs mb-1">Sustento</p>
+                  <p className="font-medium">{selectedOC.support?.name || "-"}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 text-xs mb-1">Artículo</p>
+                  <p className="font-medium">{selectedOC.articulo?.name || "-"}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-gray-500">Proveedor</p>
-                <p className="font-medium">{selectedOC.proveedor}</p>
+            </section>
+
+            {/* Proveedor y Montos */}
+            <section className="space-y-3">
+              <h4 className="text-xs font-semibold text-brand-text-disabled uppercase tracking-wide border-b pb-2">
+                Proveedor y Montos
+              </h4>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
+                <div className="col-span-2">
+                  <p className="text-gray-500 text-xs mb-1">Proveedor</p>
+                  <p className="font-medium">{selectedOC.proveedor}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 text-xs mb-1">RUC</p>
+                  <p className="font-medium">{selectedOC.ruc}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 text-xs mb-1">Moneda</p>
+                  <p className="font-medium">{selectedOC.moneda}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 text-xs mb-1">Monto sin IGV</p>
+                  <p className="font-medium">
+                    {selectedOC.moneda === "USD" ? "$" : "S/"} {formatNumber(selectedOC.importeSinIgv)}
+                  </p>
+                </div>
+                <div className="col-span-2 bg-brand-background rounded-lg p-3">
+                  <p className="text-gray-500 text-xs mb-1">Monto con IGV</p>
+                  <p className="font-bold text-xl text-brand-text-primary">
+                    {selectedOC.moneda === "USD" ? "$" : "S/"} {formatNumber(calcularMontoConIGV(Number(selectedOC.importeSinIgv)))}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-gray-500">RUC</p>
-                <p className="font-medium">{selectedOC.ruc}</p>
+            </section>
+
+            {/* Solicitante */}
+            <section className="space-y-3">
+              <h4 className="text-xs font-semibold text-brand-text-disabled uppercase tracking-wide border-b pb-2">
+                Solicitante
+              </h4>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
+                <div>
+                  <p className="text-gray-500 text-xs mb-1">Nombre</p>
+                  <p className="font-medium">{selectedOC.nombreSolicitante}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 text-xs mb-1">Correo</p>
+                  <p className="font-medium text-brand-primary">{selectedOC.correoSolicitante}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-gray-500">Moneda</p>
-                <p className="font-medium">{selectedOC.moneda}</p>
-              </div>
-              <div>
-                <p className="text-gray-500">Monto sin IGV</p>
-                <p className="font-medium">{formatNumber(selectedOC.importeSinIgv)}</p>
-              </div>
-              <div>
-                <p className="text-gray-500">Monto con IGV</p>
-                <p className="font-bold text-lg">
-                  {formatNumber(calcularMontoConIGV(Number(selectedOC.importeSinIgv)))}
-                </p>
-              </div>
-              <div>
-                <p className="text-gray-500">Sustento</p>
-                <p className="font-medium">{selectedOC.support?.name || "-"}</p>
-              </div>
-              <div>
-                <p className="text-gray-500">Artículo</p>
-                <p className="font-medium">{selectedOC.articulo?.name || "-"}</p>
-              </div>
-              <div className="col-span-2">
-                <p className="text-gray-500">Solicitante</p>
-                <p className="font-medium">{selectedOC.nombreSolicitante} ({selectedOC.correoSolicitante})</p>
-              </div>
-            </div>
+            </section>
+
+            {/* Centros de Costo */}
             {selectedOC.costCenters && selectedOC.costCenters.length > 0 && (
-              <div>
-                <p className="text-gray-500 text-sm mb-2">Centros de Costo</p>
+              <section className="space-y-3">
+                <h4 className="text-xs font-semibold text-brand-text-disabled uppercase tracking-wide border-b pb-2">
+                  Centros de Costo
+                </h4>
                 <div className="flex flex-wrap gap-2">
                   {selectedOC.costCenters.map(cc => (
-                    <span key={cc.id} className="px-2 py-1 bg-gray-100 rounded text-xs">
+                    <span key={cc.id} className="px-3 py-1.5 bg-gray-100 rounded-lg text-xs font-medium">
                       {cc.costCenter.code} - {cc.costCenter.name}
                     </span>
                   ))}
                 </div>
-              </div>
+              </section>
             )}
+
+            {/* Descripción */}
             {selectedOC.descripcion && (
-              <div>
-                <p className="text-gray-500 text-sm">Descripción</p>
-                <p className="text-sm mt-1 p-2 bg-gray-50 rounded">{selectedOC.descripcion}</p>
-              </div>
+              <section className="space-y-3">
+                <h4 className="text-xs font-semibold text-brand-text-disabled uppercase tracking-wide border-b pb-2">
+                  Descripción
+                </h4>
+                <p className="text-sm p-3 bg-gray-50 rounded-lg leading-relaxed">{selectedOC.descripcion}</p>
+              </section>
             )}
+
+            {/* Comentario */}
             {selectedOC.comentario && (
-              <div>
-                <p className="text-gray-500 text-sm">Comentario</p>
-                <p className="text-sm mt-1 p-2 bg-yellow-50 rounded">{selectedOC.comentario}</p>
-              </div>
+              <section className="space-y-3">
+                <h4 className="text-xs font-semibold text-brand-text-disabled uppercase tracking-wide border-b pb-2">
+                  Comentario
+                </h4>
+                <p className="text-sm p-3 bg-yellow-50 rounded-lg leading-relaxed">{selectedOC.comentario}</p>
+              </section>
             )}
           </div>
         )}

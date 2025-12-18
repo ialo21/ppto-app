@@ -140,7 +140,7 @@ function InvoiceCard({
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
                 <h3 className="text-lg font-bold text-brand-text-primary">
-                  {invoice.ultimusIncident || "Sin incidente"}
+                  {invoice.ultimusIncident ? `INC ${invoice.ultimusIncident}` : "Sin incidente"}
                 </h3>
                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${
                   invoice.docType === "NOTA_CREDITO" 
@@ -190,6 +190,14 @@ function InvoiceCard({
               <div className="col-span-2">
                 <p className="text-brand-text-disabled text-xs">Períodos</p>
                 <p className="font-medium">{formatPeriodsRange(invoice.periods.map(p => p.period))}</p>
+              </div>
+            )}
+            {invoice.detalle && (
+              <div className="col-span-2">
+                <p className="text-brand-text-disabled text-xs">Detalle</p>
+                <p className="text-xs text-brand-text-secondary line-clamp-2" title={invoice.detalle}>
+                  {invoice.detalle}
+                </p>
               </div>
             )}
           </div>
@@ -431,61 +439,88 @@ export default function AprobacionHeadFacturasPage() {
         title={`Detalle Factura: ${selectedInvoice?.numberNorm || ''}`}
       >
         {selectedInvoice && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className="text-gray-500">Tipo</p>
-                <p className="font-medium">{selectedInvoice.docType}</p>
+          <div className="space-y-6 p-2">
+            {/* Identificación */}
+            <section className="space-y-3">
+              <h4 className="text-xs font-semibold text-brand-text-disabled uppercase tracking-wide border-b pb-2">
+                Identificación
+              </h4>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
+                <div>
+                  <p className="text-gray-500 text-xs mb-1">Incidente Ultimus</p>
+                  <p className="font-semibold text-brand-text-primary">
+                    {selectedInvoice.ultimusIncident ? `INC ${selectedInvoice.ultimusIncident}` : "-"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-500 text-xs mb-1">Tipo</p>
+                  <p className="font-medium">{selectedInvoice.docType === "NOTA_CREDITO" ? "Nota de Crédito" : "Factura"}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 text-xs mb-1">Estado</p>
+                  <p className="font-medium">{selectedInvoice.statusCurrent}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 text-xs mb-1">OC Asociada</p>
+                  <p className="font-medium">{selectedInvoice.oc?.numeroOc || "-"}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-gray-500">Estado</p>
-                <p className="font-medium">{selectedInvoice.statusCurrent}</p>
+            </section>
+
+            {/* Proveedor y Montos */}
+            <section className="space-y-3">
+              <h4 className="text-xs font-semibold text-brand-text-disabled uppercase tracking-wide border-b pb-2">
+                Proveedor y Montos
+              </h4>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
+                <div className="col-span-2">
+                  <p className="text-gray-500 text-xs mb-1">Proveedor</p>
+                  <p className="font-medium">{selectedInvoice.oc?.proveedor || "-"}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 text-xs mb-1">Moneda</p>
+                  <p className="font-medium">{selectedInvoice.currency}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 text-xs mb-1">Monto sin IGV</p>
+                  <p className="font-medium">
+                    {getCurrencySymbol(selectedInvoice.currency)} {formatNumber(selectedInvoice.montoSinIgv || 0)}
+                  </p>
+                </div>
+                <div className="col-span-2 bg-brand-background rounded-lg p-3">
+                  <p className="text-gray-500 text-xs mb-1">Monto con IGV</p>
+                  <p className="font-bold text-xl text-brand-text-primary">
+                    {getCurrencySymbol(selectedInvoice.currency)} {formatNumber(calcularMontoConIGV(selectedInvoice.montoSinIgv ? Number(selectedInvoice.montoSinIgv) : 0))}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-gray-500">Proveedor</p>
-                <p className="font-medium">{selectedInvoice.oc?.proveedor || "-"}</p>
-              </div>
-              <div>
-                <p className="text-gray-500">OC</p>
-                <p className="font-medium">{selectedInvoice.oc?.numeroOc || "-"}</p>
-              </div>
-              <div>
-                <p className="text-gray-500">Moneda</p>
-                <p className="font-medium">{selectedInvoice.currency}</p>
-              </div>
-              <div>
-                <p className="text-gray-500">Monto sin IGV</p>
-                <p className="font-medium">{formatNumber(selectedInvoice.montoSinIgv || 0)}</p>
-              </div>
-              <div>
-                <p className="text-gray-500">Monto con IGV (PEN)</p>
-                <p className="font-bold text-lg">
-                  S/ {formatNumber(calcularMontoConIGV(selectedInvoice.montoSinIgv ? Number(selectedInvoice.montoSinIgv) : 0))}
-                </p>
-              </div>
-              <div>
-                <p className="text-gray-500">Incidente Ultimus</p>
-                <p className="font-medium">{selectedInvoice.ultimusIncident || "-"}</p>
-              </div>
-            </div>
+            </section>
+
+            {/* Centros de Costo */}
             {selectedInvoice.costCenters && selectedInvoice.costCenters.length > 0 && (
-              <div>
-                <p className="text-gray-500 text-sm mb-2">Centros de Costo</p>
+              <section className="space-y-3">
+                <h4 className="text-xs font-semibold text-brand-text-disabled uppercase tracking-wide border-b pb-2">
+                  Centros de Costo
+                </h4>
                 <div className="flex flex-wrap gap-2">
                   {selectedInvoice.costCenters.map(cc => (
-                    <span key={cc.id} className="px-2 py-1 bg-gray-100 rounded text-xs">
+                    <span key={cc.id} className="px-3 py-1.5 bg-gray-100 rounded-lg text-xs font-medium">
                       {cc.costCenter.code} - {cc.costCenter.name}
                       {cc.amount && ` (${formatNumber(Number(cc.amount))})`}
                     </span>
                   ))}
                 </div>
-              </div>
+              </section>
             )}
+
+            {/* Detalle */}
             {selectedInvoice.detalle && (
-              <div>
-                <p className="text-gray-500 text-sm">Detalle</p>
-                <p className="text-sm mt-1 p-2 bg-gray-50 rounded">{selectedInvoice.detalle}</p>
-              </div>
+              <section className="space-y-3">
+                <h4 className="text-xs font-semibold text-brand-text-disabled uppercase tracking-wide border-b pb-2">
+                  Detalle
+                </h4>
+                <p className="text-sm p-3 bg-gray-50 rounded-lg leading-relaxed">{selectedInvoice.detalle}</p>
+              </section>
             )}
           </div>
         )}

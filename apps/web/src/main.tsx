@@ -66,7 +66,7 @@ function Sidebar({
   isOpen: boolean;
   isMobile: boolean;
   onMouseEnter?: () => void;
-  onMouseLeave?: () => void;
+  onMouseLeave?: (e: React.MouseEvent) => void;
   onClose?: () => void;
 }){
   const { hasPermission } = useAuth();
@@ -136,16 +136,16 @@ function Sidebar({
     }
   };
   
-  // Handler para expandir/colapsar grupos
+  // Handler para expandir/colapsar grupos (comportamiento acordeón: solo uno a la vez)
   const toggleGroup = (path: string) => {
     setExpandedGroups(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(path)) {
-        newSet.delete(path);
+      if (prev.has(path)) {
+        // Si ya está expandido, colapsarlo
+        return new Set();
       } else {
-        newSet.add(path);
+        // Si no está expandido, expandirlo y colapsar los demás
+        return new Set([path]);
       }
-      return newSet;
     });
   };
   
@@ -389,8 +389,15 @@ function AppLayout(){
     }
   };
   
-  const handleMouseLeave = () => {
+  const handleMouseLeave = (e: React.MouseEvent) => {
     if (isDesktop) {
+      // Ignorar si el cursor salió hacia el borde izquierdo del viewport
+      // Esto evita el flicker cuando el usuario mueve el cursor al extremo izquierdo
+      // donde el navegador tiene un área mínima fuera del contenedor de la app
+      const EDGE_THRESHOLD = 5; // píxeles desde el borde izquierdo
+      if (e.clientX <= EDGE_THRESHOLD) {
+        return; // No colapsar - el cursor está en el borde del viewport
+      }
       setIsCollapsedDesktop(true);
     }
   };

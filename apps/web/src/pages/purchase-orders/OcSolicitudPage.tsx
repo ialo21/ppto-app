@@ -744,7 +744,7 @@ export default function OcSolicitudPage() {
           <CardHeader className="pb-3">
             <h4 className="text-sm font-semibold text-brand-text-primary flex items-center gap-2">
               <DollarSign size={16} className="text-brand-primary" />
-              Información del Proveedor
+              Información del Proveedor y Monto
             </h4>
           </CardHeader>
           <CardContent className="text-sm space-y-1">

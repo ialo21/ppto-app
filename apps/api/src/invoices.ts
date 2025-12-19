@@ -23,6 +23,7 @@ const createInvoiceSchema = z.object({
   ultimusIncident: z.string().optional(),
   detalle: z.string().optional(),
   // Campos para "sin OC"
+  proveedorId: z.number().int().positive().optional(),
   proveedor: z.string().optional(),
   moneda: z.enum(["PEN", "USD"]).optional(),
   // Tipo de cambio override (opcional)
@@ -41,6 +42,7 @@ const updateInvoiceSchema = z.object({
   allocations: z.array(allocationSchema).min(1).optional(),
   ultimusIncident: z.string().optional(),
   detalle: z.string().optional(),
+  proveedorId: z.number().int().positive().optional(),
   proveedor: z.string().optional(),
   moneda: z.enum(["PEN", "USD"]).optional(),
   exchangeRateOverride: z.number().positive().optional(),
@@ -491,8 +493,8 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
           montoPEN_tcEstandar: camposContables.montoPEN_tcEstandar !== null ? new Prisma.Decimal(camposContables.montoPEN_tcEstandar) : null,
           montoPEN_tcReal: camposContables.montoPEN_tcReal !== null ? new Prisma.Decimal(camposContables.montoPEN_tcReal) : null,
           diferenciaTC: camposContables.diferenciaTC !== null ? new Prisma.Decimal(camposContables.diferenciaTC) : null,
-          // Legacy: mantener null
-          vendorId: null,
+          // Proveedor (nuevo o legacy)
+          vendorId: data.proveedorId ?? null,
           totalForeign: null,
           totalLocal: null
         }
@@ -763,7 +765,7 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
           }),
           ...(data.ultimusIncident !== undefined && { ultimusIncident: data.ultimusIncident }),
           ...(data.detalle !== undefined && { detalle: data.detalle }),
-          ...(data.proveedor !== undefined && !data.ocId && { /* campo proveedor si se agrega */ }),
+          ...(data.proveedorId !== undefined && { vendorId: data.proveedorId }),
           ...(data.moneda !== undefined && !data.ocId && { currency: data.moneda }),
           // Campos contables (si se recalcularon)
           ...(camposContables && {

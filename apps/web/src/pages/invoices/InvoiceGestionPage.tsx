@@ -11,11 +11,13 @@ import { Table, Th, Td } from "../../components/ui/Table";
 import StatusChip from "../../components/StatusChip";
 import YearMonthPicker from "../../components/YearMonthPicker";
 import { formatNumber } from "../../utils/numberFormat";
+import ProveedorSelector from "../../components/ProveedorSelector";
 
 type OC = {
   id: number;
   numeroOc: string | null;
   proveedor: string;
+  proveedorRef?: { razonSocial?: string | null; ruc?: string | null } | null;
   moneda: string;
   importeSinIgv: number;
   support: { id: number; name: string };
@@ -31,6 +33,7 @@ type Invoice = {
     id: number;
     numeroOc: string | null;
     proveedor: string;
+    proveedorRef?: { razonSocial?: string | null; ruc?: string | null } | null;
     moneda: string;
     importeSinIgv: number;
     support: {
@@ -45,6 +48,7 @@ type Invoice = {
     budgetPeriodFrom?: { id: number; year: number; month: number };
     budgetPeriodTo?: { id: number; year: number; month: number };
   } | null;
+  vendorId?: number | null;
   docType: string;
   numberNorm: string | null;
   currency: string;
@@ -153,6 +157,7 @@ export default function InvoiceGestionPage() {
     exchangeRateOverride: "",
     ultimusIncident: "",
     detalle: "",
+    proveedorId: null as number | null,
     proveedor: "",
     moneda: "PEN",
     // Campos contables
@@ -359,6 +364,7 @@ export default function InvoiceGestionPage() {
       exchangeRateOverride: "",
       ultimusIncident: "",
       detalle: "",
+      proveedorId: null,
       proveedor: "",
       moneda: "PEN",
       mesContable: "",
@@ -394,6 +400,7 @@ export default function InvoiceGestionPage() {
       exchangeRateOverride: invoice.exchangeRateOverride ? String(invoice.exchangeRateOverride) : "",
       ultimusIncident: invoice.ultimusIncident || "",
       detalle: invoice.detalle || "",
+      proveedorId: (invoice as any).vendorId || null,
       proveedor: invoice.oc?.proveedor || "",
       moneda: invoice.currency || "PEN",
       mesContable: invoice.mesContable || "",
@@ -466,7 +473,7 @@ export default function InvoiceGestionPage() {
       const errors: Record<string, string> = {};
       if (hasOC && !form.ocId) errors.ocId = "OC es requerida";
       if (!hasOC && !form.supportId) errors.supportId = "Sustento es requerido";
-      if (!hasOC && !form.proveedor.trim()) errors.proveedor = "Proveedor es requerido";
+      if (!hasOC && !form.proveedorId) errors.proveedor = "Proveedor es requerido";
       if (!form.numberNorm.trim()) errors.numberNorm = "Número es requerido";
       if (!form.montoSinIgv || Number(form.montoSinIgv) < 0) errors.montoSinIgv = "Monto inválido";
       if (!periodFromId || !periodToId) errors.periodIds = "Debe seleccionar rango de periodos (desde → hasta)";
@@ -521,7 +528,7 @@ export default function InvoiceGestionPage() {
       };
 
       if (!hasOC) {
-        payload.proveedor = form.proveedor.trim();
+        payload.proveedorId = form.proveedorId;
         payload.moneda = form.moneda;
       }
 
@@ -771,15 +778,24 @@ export default function InvoiceGestionPage() {
                   />
                   {fieldErrors.supportId && <p className="text-xs text-red-600 mt-1">{fieldErrors.supportId}</p>}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Proveedor *</label>
-                  <Input
-                    placeholder="Proveedor"
-                    value={form.proveedor}
-                    onChange={(e) => handleFormChange("proveedor", e.target.value)}
-                    className={fieldErrors.proveedor ? "border-red-500" : ""}
+                <div className="md:col-span-2">
+                  <ProveedorSelector
+                    label="Proveedor *"
+                    placeholder="Buscar o crear proveedor..."
+                    value={form.proveedorId}
+                    onChange={(proveedorId, proveedor) => {
+                      setForm(f => ({
+                        ...f,
+                        proveedorId,
+                        proveedor: proveedor?.razonSocial || f.proveedor
+                      }));
+                      if (proveedorId) {
+                        setFieldErrors(e => ({ ...e, proveedor: "" }));
+                      }
+                    }}
+                    error={fieldErrors.proveedor}
+                    allowCreate={true}
                   />
-                  {fieldErrors.proveedor && <p className="text-xs text-red-600 mt-1">{fieldErrors.proveedor}</p>}
                 </div>
                 <div>
                   <FilterSelect

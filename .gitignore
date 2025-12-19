@@ -4,3 +4,4 @@ dist
 pnpm-lock.yaml
 .DS_Store
 ultimus_robot_OCs_api
+gdrive-service-account.json

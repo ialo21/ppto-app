@@ -303,4 +303,184 @@ export async function registerMasterRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "no se pudo eliminar el área (en uso?)" });
     }
   });
+
+  // ============ PROVEEDORES ============
+  
+  const proveedorSchema = z.object({
+    id: z.number().int().positive().optional(),
+    razonSocial: z.string().min(1, "Razón social es requerida").trim(),
+    ruc: z.string().regex(/^\d{11}$/, "RUC debe tener exactamente 11 dígitos"),
+    active: z.boolean().optional()
+  });
+
+  // Listar proveedores (con búsqueda opcional)
+  app.get("/proveedores", { preHandler: requireAuth }, async (req) => {
+    const { search, active } = req.query as any;
+    
+    const where: any = {};
+    
+    // Filtro por estado activo (por defecto solo activos)
+    if (active === "false") {
+      where.active = false;
+    } else if (active === "all") {
+      // No filtrar por active
+    } else {
+      where.active = true;
+    }
+    
+    // Búsqueda por razón social o RUC
+    if (search) {
+      where.OR = [
+        { razonSocial: { contains: search, mode: "insensitive" } },
+        { ruc: { contains: search } }
+      ];
+    }
+    
+    return prisma.proveedor.findMany({
+      where,
+      orderBy: { razonSocial: "asc" },
+      include: {
+        _count: {
+          select: { ocs: true }
+        }
+      }
+    });
+  });
+
+  // Obtener proveedor por ID
+  app.get("/proveedores/:id", { preHandler: requireAuth }, async (req, reply) => {
+    const id = Number((req.params as any).id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "id invalido" });
+    
+    const proveedor = await prisma.proveedor.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: { ocs: true }
+        }
+      }
+    });
+    
+    if (!proveedor) return reply.code(404).send({ error: "Proveedor no encontrado" });
+    return proveedor;
+  });
+
+  // Crear o actualizar proveedor
+  app.post("/proveedores", { preHandler: [requireAuth, requirePermission("catalogos")] }, async (req, reply) => {
+    const parsed = proveedorSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: "VALIDATION_ERROR",
+        issues: parsed.error.errors.map(err => ({
+          path: err.path,
+          message: err.message
+        }))
+      });
+    }
+    
+    const { id, razonSocial, ruc, active = true } = parsed.data;
+    
+    // Verificar unicidad de RUC (excepto para el mismo registro)
+    const existingByRuc = await prisma.proveedor.findUnique({ where: { ruc } });
+    if (existingByRuc && existingByRuc.id !== id) {
+      return reply.code(422).send({
+        error: "VALIDATION_ERROR",
+        issues: [{ path: ["ruc"], message: "Ya existe un proveedor con este RUC" }]
+      });
+    }
+    
+    try {
+      if (id) {
+        // Actualizar
+        return await prisma.proveedor.update({
+          where: { id },
+          data: { razonSocial, ruc, active }
+        });
+      }
+      // Crear
+      return await prisma.proveedor.create({
+        data: { razonSocial, ruc, active }
+      });
+    } catch (err: any) {
+      console.error("Error saving proveedor:", err);
+      return reply.code(500).send({ error: "Error al guardar el proveedor" });
+    }
+  });
+
+  // Buscar o crear proveedor (para uso en formularios - crea si no existe)
+  app.post("/proveedores/find-or-create", { preHandler: requireAuth }, async (req, reply) => {
+    const parsed = proveedorSchema.omit({ id: true, active: true }).safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: "VALIDATION_ERROR",
+        issues: parsed.error.errors.map(err => ({
+          path: err.path,
+          message: err.message
+        }))
+      });
+    }
+    
+    const { razonSocial, ruc } = parsed.data;
+    
+    // Buscar por RUC primero
+    let proveedor = await prisma.proveedor.findUnique({ where: { ruc } });
+    
+    if (proveedor) {
+      // Si existe pero con diferente razón social, actualizar
+      if (proveedor.razonSocial !== razonSocial) {
+        proveedor = await prisma.proveedor.update({
+          where: { id: proveedor.id },
+          data: { razonSocial }
+        });
+      }
+      return { proveedor, created: false };
+    }
+    
+    // Crear nuevo proveedor
+    proveedor = await prisma.proveedor.create({
+      data: { razonSocial, ruc, active: true }
+    });
+    
+    return { proveedor, created: true };
+  });
+
+  // Eliminar proveedor
+  app.delete("/proveedores/:id", { preHandler: [requireAuth, requirePermission("catalogos")] }, async (req, reply) => {
+    const id = Number((req.params as any).id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "id invalido" });
+    
+    // Verificar si tiene OCs asociadas
+    const ocsCount = await prisma.oC.count({ where: { proveedorId: id } });
+    if (ocsCount > 0) {
+      return reply.code(400).send({ 
+        error: `No se puede eliminar: el proveedor tiene ${ocsCount} OC(s) asociada(s). Puede desactivarlo en su lugar.`
+      });
+    }
+    
+    try {
+      await prisma.proveedor.delete({ where: { id } });
+      return { ok: true };
+    } catch {
+      return reply.code(400).send({ error: "No se pudo eliminar el proveedor" });
+    }
+  });
+
+  // Desactivar proveedor (soft delete)
+  app.patch("/proveedores/:id/toggle-active", { preHandler: [requireAuth, requirePermission("catalogos")] }, async (req, reply) => {
+    const id = Number((req.params as any).id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "id invalido" });
+    
+    const proveedor = await prisma.proveedor.findUnique({ where: { id } });
+    if (!proveedor) return reply.code(404).send({ error: "Proveedor no encontrado" });
+    
+    try {
+      const updated = await prisma.proveedor.update({
+        where: { id },
+        data: { active: !proveedor.active }
+      });
+      return updated;
+    } catch {
+      return reply.code(500).send({ error: "Error al actualizar el proveedor" });
+    }
+  });
 }

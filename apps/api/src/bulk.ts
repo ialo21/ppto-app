@@ -1179,12 +1179,14 @@ async function processBudget(data: any, rowNum: number, dryRun: boolean, year?: 
 
 export async function registerBulkRoutes(app: FastifyInstance) {
   // Registrar plugin multipart para subida de archivos
-  await app.register(multipart, {
-    limits: {
-      fileSize: 5 * 1024 * 1024, // 5 MB
-      files: 1
-    }
-  });
+  if (!app.hasDecorator("multipartErrors")) {
+    await app.register(multipart, {
+      limits: {
+        fileSize: 5 * 1024 * 1024, // 5 MB
+        files: 1
+      }
+    });
+  }
 
   // Endpoint para descargar plantilla CSV
   app.get("/bulk/template", async (req, reply) => {

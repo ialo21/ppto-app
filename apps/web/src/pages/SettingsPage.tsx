@@ -33,6 +33,7 @@ type Support = {
 };
 type ExchangeRate = { id: number; year: number; rate: number };
 type ApprovalThreshold = { id: number; key: string; description: string | null; amountPEN: number; active: boolean };
+type Proveedor = { id: number; razonSocial: string; ruc: string; active: boolean; _count?: { ocs: number } };
 
 type ManagementOption = { management: string; areas: string[] };
 
@@ -43,7 +44,7 @@ const expenseTypes = [
   { label: "Distribuible", value: "DISTRIBUIBLE" }
 ];
 
-type SectionKey = "packages" | "costCenters" | "articulos" | "managements" | "supports" | "exchangeRates" | "approvalThresholds" | "bulk";
+type SectionKey = "packages" | "costCenters" | "articulos" | "managements" | "supports" | "proveedores" | "exchangeRates" | "approvalThresholds" | "bulk";
 
 const sections: Array<{ key: SectionKey; label: string; description: string }> = [
   { key: "packages", label: "Paquetes & Conceptos", description: "Gestiona paquetes y sus conceptos de gasto asociados." },
@@ -51,6 +52,7 @@ const sections: Array<{ key: SectionKey; label: string; description: string }> =
   { key: "articulos", label: "Artículos", description: "Gestiona el catálogo de artículos para las órdenes de compra." },
   { key: "managements", label: "Gerencias & Áreas", description: "Gestiona gerencias y sus áreas organizacionales." },
   { key: "supports", label: "Sustentos", description: "Administra el catálogo completo de sustentos." },
+  { key: "proveedores", label: "Proveedores", description: "Gestiona el catálogo de proveedores para OCs y facturas." },
   { key: "exchangeRates", label: "Tipos de cambio (TC)", description: "Gestiona tipos de cambio anuales para conversión USD → PEN." },
   { key: "approvalThresholds", label: "Umbrales de Aprobación", description: "Configura umbrales monetarios para aprobaciones VP de facturas." },
   { key: "bulk", label: "Carga masiva (CSV)", description: "Importa múltiples ítems de catálogos desde un archivo CSV." }
@@ -114,6 +116,13 @@ function useApprovalThresholds() {
   });
 }
 
+function useProveedores() {
+  return useQuery({
+    queryKey: ["proveedores"],
+    queryFn: async () => (await api.get("/proveedores?active=all")).data as Proveedor[]
+  });
+}
+
 export default function CatalogsPage() {
   const queryClient = useQueryClient();
 
@@ -123,6 +132,7 @@ export default function CatalogsPage() {
   const articulosQuery = useArticulos();
   const managementsQuery = useManagements();
   const areasQuery = useAreas();
+  const proveedoresQuery = useProveedores();
 
   const [section, setSection] = useState<SectionKey>("packages");
   const [selectedPackageId, setSelectedPackageId] = useState<number | null>(null);
@@ -156,6 +166,8 @@ export default function CatalogsPage() {
   const [supportForm, setSupportForm] = useState(INITIAL_SUPPORT_FORM);
   const [exchangeRateForm, setExchangeRateForm] = useState({ id: "", year: "", rate: "" });
   const [approvalThresholdForm, setApprovalThresholdForm] = useState({ id: "", amountPEN: "" });
+  const [proveedorForm, setProveedorForm] = useState({ id: "", razonSocial: "", ruc: "" });
+  const [proveedorSearch, setProveedorSearch] = useState("");
 
   const conceptRows = useMemo(() => {
     const list: Array<ExpenseConcept & { packageName: string }> = [];
@@ -512,6 +524,60 @@ export default function CatalogsPage() {
       toast.error(errorMsg);
     }
   });
+
+  // Proveedores mutations
+  const saveProveedor = useMutation({
+    mutationFn: async () => {
+      const razonSocial = proveedorForm.razonSocial.trim();
+      const ruc = proveedorForm.ruc.trim();
+      if (!razonSocial) throw new Error("La razón social es obligatoria");
+      if (!/^\d{11}$/.test(ruc)) throw new Error("RUC debe tener 11 dígitos");
+      const payload: { id?: number; razonSocial: string; ruc: string } = { razonSocial, ruc };
+      if (proveedorForm.id) payload.id = Number(proveedorForm.id);
+      return (await api.post("/proveedores", payload)).data;
+    },
+    onSuccess: () => {
+      toast.success("Proveedor guardado");
+      setProveedorForm({ id: "", razonSocial: "", ruc: "" });
+      queryClient.invalidateQueries({ queryKey: ["proveedores"] });
+    },
+    onError: (error: any) => {
+      const errorMsg = error.response?.data?.issues?.[0]?.message || error.response?.data?.error || "No se pudo guardar el proveedor";
+      toast.error(errorMsg);
+    }
+  });
+
+  const deleteProveedor = useMutation({
+    mutationFn: async (id: number) => (await api.delete(`/proveedores/${id}`)).data,
+    onSuccess: () => {
+      toast.success("Proveedor eliminado");
+      if (proveedorForm.id) setProveedorForm({ id: "", razonSocial: "", ruc: "" });
+      queryClient.invalidateQueries({ queryKey: ["proveedores"] });
+    },
+    onError: (error: any) => {
+      const errorMsg = error.response?.data?.error || "No se pudo eliminar el proveedor";
+      toast.error(errorMsg);
+    }
+  });
+
+  const toggleProveedorActive = useMutation({
+    mutationFn: async (id: number) => (await api.patch(`/proveedores/${id}/toggle-active`)).data,
+    onSuccess: (data: Proveedor) => {
+      toast.success(data.active ? "Proveedor activado" : "Proveedor desactivado");
+      queryClient.invalidateQueries({ queryKey: ["proveedores"] });
+    },
+    onError: () => toast.error("No se pudo cambiar el estado del proveedor")
+  });
+
+  // Filtro de proveedores
+  const filteredProveedores = useMemo(() => {
+    if (!proveedorSearch.trim()) return proveedoresQuery.data || [];
+    const search = proveedorSearch.toLowerCase();
+    return (proveedoresQuery.data || []).filter(p =>
+      p.razonSocial.toLowerCase().includes(search) ||
+      p.ruc.includes(search)
+    );
+  }, [proveedoresQuery.data, proveedorSearch]);
 
   const selectedSection = sections.find(s => s.key === section);
 
@@ -1315,6 +1381,129 @@ export default function CatalogsPage() {
                           >
                             Eliminar
                           </Button>
+                        </div>
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {section === "proveedores" && (
+        <Card>
+          <CardHeader>
+            <h2 className="text-xl font-semibold">Proveedores</h2>
+            <p className="text-sm text-slate-600">
+              Gestiona el catálogo de proveedores. Se usan en OCs y facturas.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="mb-6 border-b pb-4">
+              <h3 className="text-sm font-medium mb-3">
+                {proveedorForm.id ? "Editar proveedor" : "Nuevo proveedor"}
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div className="md:col-span-2">
+                  <Input
+                    placeholder="Razón social *"
+                    value={proveedorForm.razonSocial}
+                    onChange={(e: any) => setProveedorForm({ ...proveedorForm, razonSocial: e.target.value })}
+                  />
+                </div>
+                <Input
+                  placeholder="RUC (11 dígitos) *"
+                  maxLength={11}
+                  value={proveedorForm.ruc}
+                  onChange={(e: any) => setProveedorForm({ ...proveedorForm, ruc: e.target.value.replace(/\D/g, '') })}
+                />
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => saveProveedor.mutate()}
+                    disabled={saveProveedor.isPending}
+                  >
+                    {proveedorForm.id ? "Actualizar" : "Crear"}
+                  </Button>
+                  {proveedorForm.id && (
+                    <Button
+                      variant="secondary"
+                      onClick={() => setProveedorForm({ id: "", razonSocial: "", ruc: "" })}
+                    >
+                      Cancelar
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <Input
+                placeholder="Buscar por razón social o RUC..."
+                value={proveedorSearch}
+                onChange={(e: any) => setProveedorSearch(e.target.value)}
+                className="max-w-md"
+              />
+            </div>
+
+            {proveedoresQuery.isLoading ? (
+              <p className="text-slate-500 text-sm">Cargando...</p>
+            ) : (
+              <Table>
+                <thead>
+                  <tr>
+                    <Th>Razón Social</Th>
+                    <Th>RUC</Th>
+                    <Th>OCs</Th>
+                    <Th>Estado</Th>
+                    <Th>Acciones</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredProveedores.map((p) => (
+                    <tr key={p.id} className={!p.active ? "opacity-50" : ""}>
+                      <Td>{p.razonSocial}</Td>
+                      <Td className="font-mono text-sm">{p.ruc}</Td>
+                      <Td>{p._count?.ocs ?? 0}</Td>
+                      <Td>
+                        <span className={`px-2 py-1 rounded text-xs ${p.active ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"}`}>
+                          {p.active ? "Activo" : "Inactivo"}
+                        </span>
+                      </Td>
+                      <Td>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setProveedorForm({
+                              id: String(p.id),
+                              razonSocial: p.razonSocial,
+                              ruc: p.ruc
+                            })}
+                          >
+                            Editar
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleProveedorActive.mutate(p.id)}
+                          >
+                            {p.active ? "Desactivar" : "Activar"}
+                          </Button>
+                          {(p._count?.ocs ?? 0) === 0 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                if (confirm(`¿Eliminar el proveedor "${p.razonSocial}"?`)) {
+                                  deleteProveedor.mutate(p.id);
+                                }
+                              }}
+                            >
+                              Eliminar
+                            </Button>
+                          )}
                         </div>
                       </Td>
                     </tr>

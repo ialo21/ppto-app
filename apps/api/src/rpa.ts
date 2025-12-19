@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { PrismaClient, Prisma } from "@prisma/client";
 import { z } from "zod";
 import { broadcastOcStatusChange } from "./websocket";
+import { googleDriveService } from "./google-drive";
 
 const prisma = new PrismaClient();
 
@@ -385,6 +386,37 @@ export async function registerRpaRoutes(app: FastifyInstance) {
           newStatus: "PROCESADO",
           timestamp: new Date().toISOString()
         });
+
+        // Reorganizar documentos si se generó incidenteOc y Drive está habilitado
+        if (data.incidenteOc && googleDriveService.isEnabled()) {
+          try {
+            // Obtener documentos de la OC
+            const documents = await prisma.oCDocument.findMany({
+              where: { ocId: id },
+              include: { document: true }
+            });
+
+            if (documents.length > 0) {
+              // Crear carpeta del incidente y mover documentos
+              const incidentFolderId = await googleDriveService.createIncidentFolder(data.incidenteOc);
+              const fileIds = documents.map(d => d.document.driveFileId);
+              const moveResult = await googleDriveService.moveDocumentsToIncidentFolder(fileIds, incidentFolderId);
+
+              // Actualizar driveFolderId en documentos movidos
+              if (moveResult.success.length > 0) {
+                await prisma.document.updateMany({
+                  where: { driveFileId: { in: moveResult.success } },
+                  data: { driveFolderId: incidentFolderId }
+                });
+              }
+
+              console.log(`[RPA] Documentos reorganizados para OC ${id} → ${data.incidenteOc}: ${moveResult.success.length} movidos, ${moveResult.failed.length} fallidos`);
+            }
+          } catch (driveErr) {
+            // No fallar el procesamiento si hay error en Drive
+            console.error(`[RPA] Error reorganizando documentos para OC ${id}:`, driveErr);
+          }
+        }
       } else {
         broadcastOcStatusChange({
           ocId: id,

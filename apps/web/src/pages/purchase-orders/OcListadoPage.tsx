@@ -179,10 +179,10 @@ function OcCard({ oc, onOpenTimeline }: { oc: any; onOpenTimeline: (ocId: number
         {/* Proveedor */}
         <div className="mb-3">
           <p className="text-sm font-semibold text-brand-text-primary mb-1">
-            {oc.proveedor}
+            {oc.proveedorRef?.razonSocial || oc.proveedor || "Sin proveedor"}
           </p>
           <p className="text-xs text-brand-text-secondary">
-            RUC: {oc.ruc}
+            RUC: {oc.proveedorRef?.ruc || oc.ruc || "-"}
           </p>
         </div>
         
@@ -328,6 +328,9 @@ export default function OcListadoPage() {
       result = result.filter((oc: any) => {
         // Buscar en múltiples campos
         if (oc.numeroOc?.toLowerCase().includes(searchLower)) return true;
+        // Buscar en proveedor (nuevo y legacy)
+        if (oc.proveedorRef?.razonSocial?.toLowerCase().includes(searchLower)) return true;
+        if (oc.proveedorRef?.ruc?.includes(searchLower)) return true;
         if (oc.proveedor?.toLowerCase().includes(searchLower)) return true;
         if (oc.ruc?.includes(searchLower)) return true;
         if (oc.support?.name?.toLowerCase().includes(searchLower)) return true;
@@ -395,7 +398,7 @@ export default function OcListadoPage() {
     // 3. Proveedor con más OCs
     const proveedorCounts: Record<string, number> = {};
     filteredOcs.forEach((oc: any) => {
-      const proveedor = oc.proveedor || "Sin proveedor";
+      const proveedor = oc.proveedorRef?.razonSocial || oc.proveedor || "Sin proveedor";
       proveedorCounts[proveedor] = (proveedorCounts[proveedor] || 0) + 1;
     });
     

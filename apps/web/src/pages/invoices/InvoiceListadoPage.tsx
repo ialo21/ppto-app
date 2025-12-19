@@ -171,7 +171,7 @@ function InvoiceCard({
   onViewDetail: (invoice: Invoice) => void;
   onOpenTimeline: (invoiceId: number) => void;
 }) {
-  const proveedor = invoice.oc?.proveedor || "Sin proveedor";
+  const proveedor = invoice.oc?.proveedorRef?.razonSocial || invoice.oc?.proveedor || "Sin proveedor";
   const numeroOc = invoice.oc?.numeroOc || "-";
   
   return (

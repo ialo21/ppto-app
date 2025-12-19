@@ -31,8 +31,11 @@ const createOcSchema = z.object({
   descripcion: z.string().trim().optional(),
   nombreSolicitante: z.string().min(1),
   correoSolicitante: z.string().email(),
-  proveedor: z.string().min(1),
-  ruc: z.string().regex(/^\d{11}$/, "RUC debe tener 11 dígitos"),
+  // NUEVO: proveedorId (referencia a entidad Proveedor)
+  proveedorId: z.number().int().positive().optional(),
+  // DEPRECATED: campos legacy (mantener para compatibilidad)
+  proveedor: z.string().min(1).optional(),
+  ruc: z.string().regex(/^\d{11}$/, "RUC debe tener 11 dígitos").optional(),
   moneda: z.enum(["PEN", "USD"]),
   importeSinIgv: z.number().nonnegative(),
   estado: z.enum([
@@ -88,7 +91,9 @@ export async function registerOcRoutes(app: FastifyInstance) {
           { proveedor: { contains: search, mode: "insensitive" } },
           { numeroOc: { contains: search, mode: "insensitive" } },
           { ruc: { contains: search, mode: "insensitive" } },
-          { descripcion: { contains: search, mode: "insensitive" } }
+          { descripcion: { contains: search, mode: "insensitive" } },
+          { proveedorRef: { razonSocial: { contains: search, mode: "insensitive" } } },
+          { proveedorRef: { ruc: { contains: search } } }
         ];
       }
 
@@ -101,6 +106,7 @@ export async function registerOcRoutes(app: FastifyInstance) {
           budgetPeriodTo: { select: { id: true, year: true, month: true, label: true } },
           articulo: { select: { id: true, code: true, name: true } },
           ceco: { select: { id: true, code: true, name: true } },
+          proveedorRef: { select: { id: true, razonSocial: true, ruc: true } },
           costCenters: { 
             include: { 
               costCenter: { select: { id: true, code: true, name: true } }
@@ -130,6 +136,7 @@ export async function registerOcRoutes(app: FastifyInstance) {
         budgetPeriodTo: true,
         articulo: true,
         ceco: true,
+        proveedorRef: true,
         costCenters: { include: { costCenter: true } }
       }
     });
@@ -199,8 +206,11 @@ export async function registerOcRoutes(app: FastifyInstance) {
             descripcion: data.descripcion || null,
             nombreSolicitante: data.nombreSolicitante,
             correoSolicitante: data.correoSolicitante,
-            proveedor: data.proveedor,
-            ruc: data.ruc,
+            // NUEVO: usar proveedorId si está disponible
+            proveedorId: data.proveedorId || null,
+            // DEPRECATED: campos legacy (mantener para compatibilidad)
+            proveedor: data.proveedor || null,
+            ruc: data.ruc || null,
             moneda: data.moneda,
             importeSinIgv: new Prisma.Decimal(data.importeSinIgv),
             estado: data.estado || "PENDIENTE",
@@ -241,6 +251,7 @@ export async function registerOcRoutes(app: FastifyInstance) {
             budgetPeriodTo: true,
             articulo: true,
             ceco: true,
+            proveedorRef: true,
             costCenters: { include: { costCenter: true } }
           }
         });
@@ -338,8 +349,11 @@ export async function registerOcRoutes(app: FastifyInstance) {
       if (data.descripcion !== undefined) updateData.descripcion = data.descripcion || null;
       if (data.nombreSolicitante !== undefined) updateData.nombreSolicitante = data.nombreSolicitante;
       if (data.correoSolicitante !== undefined) updateData.correoSolicitante = data.correoSolicitante;
-      if (data.proveedor !== undefined) updateData.proveedor = data.proveedor;
-      if (data.ruc !== undefined) updateData.ruc = data.ruc;
+      // NUEVO: manejar proveedorId
+      if (data.proveedorId !== undefined) updateData.proveedorId = data.proveedorId;
+      // DEPRECATED: campos legacy
+      if (data.proveedor !== undefined) updateData.proveedor = data.proveedor || null;
+      if (data.ruc !== undefined) updateData.ruc = data.ruc || null;
       if (data.moneda !== undefined) updateData.moneda = data.moneda;
       if (data.importeSinIgv !== undefined) updateData.importeSinIgv = new Prisma.Decimal(data.importeSinIgv);
       if (data.estado !== undefined) updateData.estado = data.estado;
@@ -383,6 +397,7 @@ export async function registerOcRoutes(app: FastifyInstance) {
             budgetPeriodTo: true,
             articulo: true,
             ceco: true,
+            proveedorRef: true,
             costCenters: { include: { costCenter: true } }
           }
         });
@@ -434,6 +449,7 @@ export async function registerOcRoutes(app: FastifyInstance) {
             budgetPeriodTo: { select: { id: true, year: true, month: true, label: true } },
             articulo: { select: { id: true, code: true, name: true } },
             ceco: { select: { id: true, code: true, name: true } },
+            proveedorRef: { select: { id: true, razonSocial: true, ruc: true } },
             costCenters: { 
               include: { 
                 costCenter: { select: { id: true, code: true, name: true } }

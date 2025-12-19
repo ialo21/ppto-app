@@ -10,6 +10,8 @@ import Button from "../../components/ui/Button";
 import { Table, Th, Td } from "../../components/ui/Table";
 import OcStatusChip from "../../components/OcStatusChip";
 import YearMonthPicker from "../../components/YearMonthPicker";
+import OcFileUploader from "../../components/OcFileUploader";
+import ProveedorSelector from "../../components/ProveedorSelector";
 import { formatNumber } from "../../utils/numberFormat";
 import { formatPeriodLabel } from "../../utils/periodFormat";
 
@@ -220,6 +222,9 @@ export default function OcGestionPage() {
     descripcion: "",
     nombreSolicitante: "",
     correoSolicitante: "",
+    // NUEVO: proveedorId para referencia a entidad
+    proveedorId: null as number | null,
+    // DEPRECATED: mantener por compatibilidad con OCs existentes
     proveedor: "",
     ruc: "",
     moneda: "PEN",
@@ -288,6 +293,7 @@ export default function OcGestionPage() {
       descripcion: "",
       nombreSolicitante: "",
       correoSolicitante: "",
+      proveedorId: null,
       proveedor: "",
       ruc: "",
       moneda: "PEN",
@@ -555,6 +561,7 @@ export default function OcGestionPage() {
       descripcion: oc.descripcion || "",
       nombreSolicitante: oc.nombreSolicitante || "",
       correoSolicitante: oc.correoSolicitante || "",
+      proveedorId: oc.proveedorId || null,
       proveedor: oc.proveedor || "",
       ruc: oc.ruc || "",
       moneda: oc.moneda || "PEN",
@@ -624,6 +631,7 @@ export default function OcGestionPage() {
               descripcion: "",
               nombreSolicitante: "",
               correoSolicitante: "",
+              proveedorId: null,
               proveedor: "",
               ruc: "",
               moneda: "PEN",
@@ -778,24 +786,24 @@ export default function OcGestionPage() {
                 />
               </div>
 
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-1">Proveedor *</label>
-                <InputWithError 
-                  placeholder="Nombre del proveedor" 
-                  value={form.proveedor} 
-                  onChange={(e: any) => setForm(f => ({ ...f, proveedor: e.target.value }))}
+              <div className="md:col-span-3">
+                <ProveedorSelector
+                  label="Proveedor *"
+                  placeholder="Buscar o crear proveedor..."
+                  value={form.proveedorId}
+                  onChange={(proveedorId, proveedor) => {
+                    setForm(f => ({
+                      ...f,
+                      proveedorId,
+                      proveedor: proveedor?.razonSocial || f.proveedor,
+                      ruc: proveedor?.ruc || f.ruc
+                    }));
+                    if (proveedorId) {
+                      setFieldErrors(e => ({ ...e, proveedor: "", ruc: "" }));
+                    }
+                  }}
                   error={fieldErrors.proveedor}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">RUC *</label>
-                <InputWithError 
-                  placeholder="20123456789" 
-                  maxLength={11}
-                  value={form.ruc} 
-                  onChange={(e: any) => setForm(f => ({ ...f, ruc: e.target.value }))}
-                  error={fieldErrors.ruc}
+                  allowCreate={true}
                 />
               </div>
 
@@ -915,16 +923,21 @@ export default function OcGestionPage() {
                 )}
               </div>
 
-              <div className="md:col-span-3">
-                <label className="block text-sm font-medium mb-1">Link de Cotización (URL)</label>
-                <InputWithError 
-                  type="url" 
-                  placeholder="https://ejemplo.com/cotizacion" 
-                  value={form.linkCotizacion} 
-                  onChange={(e: any) => setForm(f => ({ ...f, linkCotizacion: e.target.value }))}
-                  error={fieldErrors.linkCotizacion}
-                />
-              </div>
+              {/* Documentos adjuntos - solo mostrar si es edición de OC existente */}
+              {editingId && (
+                <div className="md:col-span-3">
+                  <label className="block text-sm font-medium mb-1">Cotizaciones (PDF)</label>
+                  <OcFileUploader
+                    ocId={editingId}
+                    disabled={!['PENDIENTE', 'PROCESAR'].includes(form.estado)}
+                  />
+                  {!['PENDIENTE', 'PROCESAR'].includes(form.estado) && (
+                    <p className="text-xs text-slate-500 mt-1">
+                      Los documentos no se pueden modificar en estado {form.estado.replace(/_/g, ' ')}
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div className="md:col-span-3">
                 <label className="block text-sm font-medium mb-1">Comentario</label>

@@ -23,6 +23,8 @@ import { CheckCircle, XCircle, Eye, ShoppingCart, DollarSign, Clock, Ban, AlertT
 type OC = {
   id: number;
   numeroOc: string | null;
+  incidenteOc: string | null;
+  solicitudOc: string | null;
   estado: string;
   proveedor: string;
   ruc: string;
@@ -119,7 +121,7 @@ function OCCard({
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
                 <h3 className="text-lg font-bold text-brand-text-primary">
-                  {oc.numeroOc || "Sin número OC"}
+                  {oc.incidenteOc ? `INC ${oc.incidenteOc}` : "Sin INC"}
                 </h3>
                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
                   isAnularRequest 
@@ -141,11 +143,11 @@ function OCCard({
           <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
             <div>
               <p className="text-brand-text-disabled text-xs">Proveedor</p>
-              <p className="font-medium truncate" title={oc.proveedor}>{oc.proveedor}</p>
+              <p className="font-medium truncate" title={oc.proveedorRef?.razonSocial || oc.proveedor}>{oc.proveedorRef?.razonSocial || oc.proveedor || "Sin proveedor"}</p>
             </div>
             <div>
               <p className="text-brand-text-disabled text-xs">RUC</p>
-              <p className="font-medium">{oc.ruc}</p>
+              <p className="font-medium">{oc.proveedorRef?.ruc || oc.ruc || "-"}</p>
             </div>
             <div>
               <p className="text-brand-text-disabled text-xs">Monto sin IGV</p>
@@ -170,6 +172,14 @@ function OCCard({
               <p className="font-medium">{oc.nombreSolicitante}</p>
             </div>
           </div>
+
+          {/* Descripción */}
+          {oc.descripcion && (
+            <div className="mb-4">
+              <p className="text-brand-text-disabled text-xs uppercase tracking-wide mb-1">Descripción</p>
+              <p className="text-sm p-2 bg-gray-50 rounded-lg leading-relaxed line-clamp-3">{oc.descripcion}</p>
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex items-center gap-2 pt-3 border-t">
@@ -337,6 +347,8 @@ export default function AprobacionVPOCsPage() {
       const searchLower = search.toLowerCase();
       result = result.filter(oc => 
         oc.numeroOc?.toLowerCase().includes(searchLower) ||
+        oc.proveedorRef?.razonSocial?.toLowerCase().includes(searchLower) ||
+        oc.proveedorRef?.ruc?.includes(searchLower) ||
         oc.proveedor?.toLowerCase().includes(searchLower) ||
         oc.ruc?.includes(searchLower)
       );
@@ -498,11 +510,11 @@ export default function AprobacionVPOCsPage() {
               <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
                 <div className="col-span-2">
                   <p className="text-gray-500 text-xs mb-1">Proveedor</p>
-                  <p className="font-medium">{selectedOC.proveedor}</p>
+                  <p className="font-medium">{selectedOC.proveedorRef?.razonSocial || selectedOC.proveedor || "Sin proveedor"}</p>
                 </div>
                 <div>
                   <p className="text-gray-500 text-xs mb-1">RUC</p>
-                  <p className="font-medium">{selectedOC.ruc}</p>
+                  <p className="font-medium">{selectedOC.proveedorRef?.ruc || selectedOC.ruc || "-"}</p>
                 </div>
                 <div>
                   <p className="text-gray-500 text-xs mb-1">Moneda</p>

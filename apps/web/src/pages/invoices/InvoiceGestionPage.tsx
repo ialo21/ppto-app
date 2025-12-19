@@ -743,8 +743,8 @@ export default function InvoiceGestionPage() {
                   onChange={(value) => handleFormChange("ocId", value)}
                   options={(ocsQuery.data || []).map(oc => ({
                     value: String(oc.id),
-                    label: `${oc.numeroOc || `OC-${oc.id}`} - ${oc.proveedor} (${oc.moneda} ${formatNumber(oc.importeSinIgv)})`,
-                    searchText: `${oc.numeroOc || oc.id} ${oc.proveedor}`
+                    label: `${oc.numeroOc || `OC-${oc.id}`} - ${oc.proveedorRef?.razonSocial || oc.proveedor} (${oc.moneda} ${formatNumber(oc.importeSinIgv)})`,
+                    searchText: `${oc.numeroOc || oc.id} ${oc.proveedorRef?.razonSocial || oc.proveedor}`
                   }))}
                   className={fieldErrors.ocId ? "border-red-500" : ""}
                 />
@@ -1092,7 +1092,7 @@ export default function InvoiceGestionPage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
                 <div>
                   <span className="text-slate-600">Proveedor:</span>
-                  <p className="font-medium text-slate-900">{selectedOC.proveedor}</p>
+                  <p className="font-medium text-slate-900">{selectedOC.proveedorRef?.razonSocial || selectedOC.proveedor || "Sin proveedor"}</p>
                 </div>
                 <div>
                   <span className="text-slate-600">Moneda:</span>

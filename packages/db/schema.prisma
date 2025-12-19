@@ -55,6 +55,13 @@ enum OcStatus {
   ATENDIDO
 }
 
+enum DocumentCategory {
+  COTIZACION
+  FACTURA
+  CONTRATO
+  OTRO
+}
+
 model Period {
   id      Int     @id @default(autoincrement())
   year    Int
@@ -228,6 +235,23 @@ model Vendor {
   invoices       Invoice[]
 }
 
+// ============ PROVEEDORES ============
+// Entidad central para gestión de proveedores en todo el sistema
+model Proveedor {
+  id          Int      @id @default(autoincrement())
+  razonSocial String   // Nombre o razón social del proveedor
+  ruc         String   @unique  // RUC (11 dígitos, único)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relaciones
+  ocs         OC[]     @relation("OC_PROVEEDOR")
+  
+  @@index([ruc], name: "ix_proveedor_ruc")
+  @@index([razonSocial], name: "ix_proveedor_razon_social")
+}
+
 model PurchaseOrder {
   id       Int     @id @default(autoincrement())
   number   String  @unique
@@ -388,8 +412,13 @@ model OC {
   nombreSolicitante      String
   correoSolicitante      String
   
-  proveedor              String
-  ruc                    String
+  // DEPRECATED: campos legacy (mantener para compatibilidad/migración)
+  proveedor              String?   // Usar proveedorRef.razonSocial
+  ruc                    String?   // Usar proveedorRef.ruc
+  
+  // NUEVO: Relación con entidad Proveedor
+  proveedorId            Int?
+  proveedorRef           Proveedor? @relation("OC_PROVEEDOR", fields: [proveedorId], references: [id])
   
   moneda                 String    // PEN | USD
   importeSinIgv          Decimal
@@ -413,10 +442,12 @@ model OC {
   invoices               Invoice[]
   costCenters            OCCostCenter[]  // M:N con CostCenter
   statusHistory          OCStatusHistory[]  // Historial de cambios de estado
+  documents              OCDocument[]  // M:N con Document
   
   @@index([supportId], name: "ix_oc_support")
   @@index([estado], name: "ix_oc_estado")
   @@index([fechaRegistro], name: "ix_oc_fecha_registro")
+  @@index([proveedorId], name: "ix_oc_proveedor")
 }
 
 model SupportCostCenter {
@@ -456,6 +487,47 @@ model OCStatusHistory {
 
   @@index([ocId], name: "ix_ocstatushistory_oc")
   @@index([changedAt], name: "ix_ocstatushistory_changed_at")
+}
+
+// ============ DOCUMENTOS / ADJUNTOS ============
+
+model Document {
+  id              Int              @id @default(autoincrement())
+  
+  // Identificación en Google Drive
+  driveFileId     String           @unique  // ID del archivo en Google Drive
+  driveFolderId   String?                   // Carpeta actual en Drive
+  
+  // Metadatos del archivo
+  filename        String                    // Nombre original del archivo
+  mimeType        String                    // application/pdf, etc.
+  sizeBytes       Int?                      // Tamaño en bytes
+  
+  // Categorización
+  category        DocumentCategory @default(COTIZACION)
+  
+  // Trazabilidad
+  uploadedBy      Int?                      // ID del usuario que subió
+  uploadedAt      DateTime         @default(now())
+  
+  // Relaciones
+  ocDocuments     OCDocument[]              // M:N con OC
+  
+  @@index([driveFileId], name: "ix_document_drive_file")
+  @@index([category], name: "ix_document_category")
+}
+
+model OCDocument {
+  id          Int       @id @default(autoincrement())
+  ocId        Int
+  oc          OC        @relation(fields: [ocId], references: [id], onDelete: Cascade)
+  documentId  Int
+  document    Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@unique([ocId, documentId], name: "ux_oc_document_pair")
+  @@index([ocId], name: "ix_ocdocument_oc")
+  @@index([documentId], name: "ix_ocdocument_document")
 }
 
 model Provision {

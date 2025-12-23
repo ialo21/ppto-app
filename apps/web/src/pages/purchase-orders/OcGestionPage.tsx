@@ -885,8 +885,8 @@ export default function OcGestionPage() {
                         ?.filter((cc: any) => !form.costCenterIds.includes(cc.id))
                         .map((cc: any) => ({
                           value: String(cc.id),
-                          label: `${cc.code} - ${cc.name}`,
-                          searchText: `${cc.code} ${cc.name}`
+                          label: `${cc.code} - ${cc.name || ''}`,
+                          searchText: `${cc.code} ${cc.name || ''}`
                         })) || []}
                       className={fieldErrors.costCenterIds ? "border-red-500" : ""}
                     />
@@ -900,7 +900,7 @@ export default function OcGestionPage() {
                               key={cecoId}
                               className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md bg-brand-100 text-brand-800"
                             >
-                              <span>{ceco.code} - {ceco.name}</span>
+                              <span>{ceco.code} - {ceco.name || ''}</span>
                               <button
                                 type="button"
                                 onClick={() => setForm(f => ({

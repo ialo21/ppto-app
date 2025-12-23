@@ -1021,7 +1021,7 @@ export default function InvoicesPage() {
                         }}
                         className="rounded"
                       />
-                      <span className="flex-1 text-sm">{ceco.code} - {ceco.name}</span>
+                      <span className="flex-1 text-sm">{ceco.code} - {ceco.name || ''}</span>
                       {allocation && (
                         <>
                           <Input

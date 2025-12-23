@@ -259,8 +259,9 @@ export default function CatalogsPage() {
     mutationFn: async () => {
       const code = costCenterForm.code.trim();
       const name = costCenterForm.name.trim();
-      if (!code || !name) throw new Error("Completa los campos requeridos");
-      const payload: { id?: number; code: string; name: string } = { code, name };
+      if (!code) throw new Error("El código es obligatorio");
+      const payload: { id?: number; code: string; name?: string } = { code };
+      if (name) payload.name = name;
       if (costCenterForm.id) payload.id = Number(costCenterForm.id);
       return (await api.post("/cost-centers", payload)).data;
     },

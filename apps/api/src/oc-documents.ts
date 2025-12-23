@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { PrismaClient, DocumentCategory } from "@prisma/client";
 import multipart from "@fastify/multipart";
-import { requireAuth, requirePermission } from "./auth";
+import { requireAuth, requirePermission, requireAnyPermission } from "./auth";
 import { googleDriveService } from "./google-drive";
 
 const prisma = new PrismaClient();
@@ -17,7 +17,7 @@ export async function registerOcDocumentRoutes(app: FastifyInstance) {
   }
 
   // GET /ocs/:id/documents - Listar documentos de una OC
-  app.get("/ocs/:id/documents", { preHandler: [requireAuth, requirePermission("ocs")] }, async (req, reply) => {
+  app.get("/ocs/:id/documents", { preHandler: [requireAuth, requireAnyPermission(["ocs:solicitud", "ocs:gestion", "ocs:listado"])] }, async (req, reply) => {
     const ocId = Number((req.params as any).id);
 
     if (isNaN(ocId)) {
@@ -69,7 +69,7 @@ export async function registerOcDocumentRoutes(app: FastifyInstance) {
   });
 
   // GET /ocs/:id/documents/config - Obtener configuración de Google Drive
-  app.get("/ocs/:id/documents/config", { preHandler: [requireAuth, requirePermission("ocs")] }, async (req, reply) => {
+  app.get("/ocs/:id/documents/config", { preHandler: [requireAuth, requireAnyPermission(["ocs:solicitud", "ocs:gestion", "ocs:listado"])] }, async (req, reply) => {
     const config = googleDriveService.getConfig();
     return {
       enabled: googleDriveService.isEnabled(),
@@ -80,7 +80,8 @@ export async function registerOcDocumentRoutes(app: FastifyInstance) {
   });
 
   // POST /ocs/:id/documents - Subir documentos a una OC
-  app.post("/ocs/:id/documents", { preHandler: [requireAuth, requirePermission("ocs")] }, async (req, reply) => {
+  // Permite subir desde solicitud o gestión
+  app.post("/ocs/:id/documents", { preHandler: [requireAuth, requireAnyPermission(["ocs:solicitud", "ocs:gestion"])] }, async (req, reply) => {
     const ocId = Number((req.params as any).id);
 
     if (isNaN(ocId)) {
@@ -205,7 +206,7 @@ export async function registerOcDocumentRoutes(app: FastifyInstance) {
   });
 
   // DELETE /ocs/:id/documents/:documentId - Eliminar documento de una OC
-  app.delete("/ocs/:id/documents/:documentId", { preHandler: [requireAuth, requirePermission("ocs")] }, async (req, reply) => {
+  app.delete("/ocs/:id/documents/:documentId", { preHandler: [requireAuth, requireAnyPermission(["ocs:solicitud", "ocs:gestion"])] }, async (req, reply) => {
     const ocId = Number((req.params as any).id);
     const documentId = Number((req.params as any).documentId);
 
@@ -271,7 +272,7 @@ export async function registerOcDocumentRoutes(app: FastifyInstance) {
 
   // POST /ocs/:id/documents/organize - Reorganizar documentos a carpeta de incidente
   // Este endpoint es llamado cuando se genera el incidenteOc
-  app.post("/ocs/:id/documents/organize", { preHandler: [requireAuth, requirePermission("ocs")] }, async (req, reply) => {
+  app.post("/ocs/:id/documents/organize", { preHandler: [requireAuth, requirePermission("ocs:gestion")] }, async (req, reply) => {
     const ocId = Number((req.params as any).id);
 
     if (isNaN(ocId)) {

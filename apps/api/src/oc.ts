@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { PrismaClient, Prisma } from "@prisma/client";
-import { requireAuth, requirePermission } from "./auth";
+import { requireAuth, requirePermission, requireAnyPermission } from "./auth";
 import { z } from "zod";
 import { broadcastOcStatusChange } from "./websocket";
 
@@ -54,7 +54,7 @@ const updateOcSchema = createOcSchema.partial();
 
 export async function registerOcRoutes(app: FastifyInstance) {
   // List OCs con filtros
-  app.get("/ocs", { preHandler: [requireAuth, requirePermission("ocs")] }, async (req, reply) => {
+  app.get("/ocs", { preHandler: [requireAuth, requirePermission("ocs:listado")] }, async (req, reply) => {
     try {
       const {
         proveedor,
@@ -126,7 +126,7 @@ export async function registerOcRoutes(app: FastifyInstance) {
   });
 
   // Get OC by ID
-  app.get("/ocs/:id", { preHandler: [requireAuth, requirePermission("ocs")] }, async (req, reply) => {
+  app.get("/ocs/:id", { preHandler: [requireAuth, requirePermission("ocs:listado")] }, async (req, reply) => {
     const id = Number((req.params as any).id);
     const oc = await prisma.oC.findUnique({
       where: { id },
@@ -146,7 +146,8 @@ export async function registerOcRoutes(app: FastifyInstance) {
   });
 
   // Create OC
-  app.post("/ocs", { preHandler: [requireAuth, requirePermission("ocs")] }, async (req, reply) => {
+  // Permite crear OCs desde el módulo de solicitud O desde el módulo de gestión
+  app.post("/ocs", { preHandler: [requireAuth, requireAnyPermission(["ocs:solicitud", "ocs:gestion"])] }, async (req, reply) => {
     const parsed = createOcSchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.code(422).send({
@@ -273,7 +274,7 @@ export async function registerOcRoutes(app: FastifyInstance) {
   });
 
   // Update OC
-  app.patch("/ocs/:id", async (req, reply) => {
+  app.patch("/ocs/:id", { preHandler: [requireAuth, requirePermission("ocs:gestion")] }, async (req, reply) => {
     const id = Number((req.params as any).id);
     const parsed = updateOcSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -419,7 +420,7 @@ export async function registerOcRoutes(app: FastifyInstance) {
   });
 
   // Update OC Status (endpoint específico para cambio de estado)
-  app.patch("/ocs/:id/status", { preHandler: [requireAuth, requirePermission("ocs")] }, async (req, reply) => {
+  app.patch("/ocs/:id/status", { preHandler: [requireAuth, requirePermission("ocs:gestion")] }, async (req, reply) => {
     const id = Number((req.params as any).id);
     const { estado } = req.body as any;
 
@@ -487,7 +488,7 @@ export async function registerOcRoutes(app: FastifyInstance) {
   });
 
   // Get OC Status History
-  app.get("/ocs/:id/status-history", { preHandler: [requireAuth, requirePermission("ocs")] }, async (req, reply) => {
+  app.get("/ocs/:id/status-history", { preHandler: [requireAuth, requirePermission("ocs:listado")] }, async (req, reply) => {
     const id = Number((req.params as any).id);
 
     try {
@@ -514,7 +515,7 @@ export async function registerOcRoutes(app: FastifyInstance) {
   });
 
   // Delete OC
-  app.delete("/ocs/:id", { preHandler: [requireAuth, requirePermission("ocs")] }, async (req, reply) => {
+  app.delete("/ocs/:id", { preHandler: [requireAuth, requirePermission("ocs:gestion")] }, async (req, reply) => {
     const id = Number((req.params as any).id);
 
     try {
@@ -530,7 +531,7 @@ export async function registerOcRoutes(app: FastifyInstance) {
   });
 
   // Export CSV
-  app.get("/ocs/export/csv", { preHandler: [requireAuth, requirePermission("ocs")] }, async (req, reply) => {
+  app.get("/ocs/export/csv", { preHandler: [requireAuth, requirePermission("ocs:listado")] }, async (req, reply) => {
     const { moneda, estado, proveedor, search } = req.query as any;
     const where: any = {};
 

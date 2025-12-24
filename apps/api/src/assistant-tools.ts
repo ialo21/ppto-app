@@ -110,6 +110,11 @@ export const toolSchemas = {
   getInvoiceByNumber: z.object({
     invoiceNumber: z.string().min(1, "El número de factura no puede estar vacío"),
     year: z.number().int().min(2020).max(2100).optional()
+  }),
+  
+  getBudgetBySupport: z.object({
+    supportName: z.string().min(1, "El nombre de la línea de sustento no puede estar vacío"),
+    year: z.number().int().min(2020).max(2100)
   })
 };
 
@@ -318,6 +323,24 @@ export const toolDefinitions = [
         }
       },
       required: ["invoiceNumber"]
+    }
+  },
+  {
+    name: "getBudgetBySupport",
+    description: "Obtiene el presupuesto de una línea de sustento usando búsqueda fuzzy automática. Útil cuando el usuario pregunta directamente por el presupuesto de una línea usando lenguaje natural (ej: 'infraestructura', 'seguridad', 'servicios externos'). Esta herramienta busca automáticamente la línea más apropiada y retorna el presupuesto.",
+    parameters: {
+      type: "object",
+      properties: {
+        supportName: {
+          type: "string",
+          description: "Nombre o parte del nombre de la línea de sustento (ej: 'infraestructura', 'seguridad', 'servicios externos'). Acepta texto parcial, abreviaciones o con typos menores."
+        },
+        year: {
+          type: "number",
+          description: "Año del presupuesto (ej: 2025)"
+        }
+      },
+      required: ["supportName", "year"]
     }
   }
 ];
@@ -1285,6 +1308,180 @@ export async function listInvoicesByOcNumber(params: z.infer<typeof toolSchemas.
   };
 }
 
+export async function getBudgetBySupport(params: z.infer<typeof toolSchemas.getBudgetBySupport>) {
+  const validated = toolSchemas.getBudgetBySupport.parse(params);
+  
+  const allSupports = await getPrisma().support.findMany({
+    where: { active: true },
+    select: { id: true, name: true, code: true },
+    take: 1000
+  });
+
+  if (allSupports.length === 0) {
+    return {
+      error: "No hay líneas de sustento activas en el sistema",
+      suggestion: "Contacta al administrador"
+    };
+  }
+
+  const normalizedQuery = normalizeText(validated.supportName);
+  
+  interface SupportMatch {
+    id: number;
+    name: string;
+    code: string | null;
+    matchScore: number;
+    matchType: "exact" | "startsWith" | "partial" | "fuzzy";
+  }
+  
+  const matches: SupportMatch[] = [];
+
+  for (const support of allSupports) {
+    const normalizedName = normalizeText(support.name);
+    const normalizedCode = support.code ? normalizeText(support.code) : "";
+
+    if (normalizedName === normalizedQuery || normalizedCode === normalizedQuery) {
+      matches.push({
+        id: support.id,
+        name: support.name,
+        code: support.code,
+        matchScore: 1000,
+        matchType: "exact"
+      });
+      continue;
+    }
+
+    if (normalizedName.startsWith(normalizedQuery) || normalizedCode.startsWith(normalizedQuery)) {
+      const nameScore = normalizedName.startsWith(normalizedQuery) ? 100 - (normalizedName.length - normalizedQuery.length) : 0;
+      const codeScore = normalizedCode.startsWith(normalizedQuery) ? 100 - (normalizedCode.length - normalizedQuery.length) : 0;
+      matches.push({
+        id: support.id,
+        name: support.name,
+        code: support.code,
+        matchScore: Math.max(nameScore, codeScore),
+        matchType: "startsWith"
+      });
+      continue;
+    }
+
+    if (normalizedName.includes(normalizedQuery) || normalizedCode.includes(normalizedQuery)) {
+      matches.push({
+        id: support.id,
+        name: support.name,
+        code: support.code,
+        matchScore: 50,
+        matchType: "partial"
+      });
+      continue;
+    }
+
+    if (normalizedQuery.length >= 3) {
+      const nameDistance = levenshteinDistance(normalizedQuery, normalizedName);
+      const codeDistance = normalizedCode ? levenshteinDistance(normalizedQuery, normalizedCode) : Infinity;
+      const minDistance = Math.min(nameDistance, codeDistance);
+      
+      const maxAllowedDistance = Math.max(2, Math.floor(normalizedQuery.length * 0.4));
+      
+      if (minDistance <= maxAllowedDistance) {
+        const score = Math.max(0, 30 - minDistance * 5);
+        matches.push({
+          id: support.id,
+          name: support.name,
+          code: support.code,
+          matchScore: score,
+          matchType: "fuzzy"
+        });
+      }
+    }
+  }
+
+  if (matches.length === 0) {
+    return { 
+      error: `No se encontró ninguna línea de sustento que se parezca a "${validated.supportName}"`,
+      suggestion: "Por favor, verifica el nombre. Puedes escribir el nombre completo o una parte significativa del mismo.",
+      availableSupportsHint: allSupports.length > 0 
+        ? `Algunas líneas disponibles: ${allSupports.slice(0, 5).map(s => s.name).join(", ")}...`
+        : undefined
+    };
+  }
+
+  matches.sort((a, b) => b.matchScore - a.matchScore);
+  const bestMatch = matches[0];
+
+  const version = await getPrisma().budgetVersion.findFirst({
+    where: { status: "ACTIVE" }
+  });
+
+  if (!version) {
+    return { error: "No hay versión de presupuesto activa en el sistema" };
+  }
+
+  const periods = await getPrisma().period.findMany({
+    where: { year: validated.year },
+    orderBy: { month: "asc" }
+  });
+
+  if (periods.length === 0) {
+    return {
+      error: `No hay períodos registrados para el año ${validated.year}`,
+      suggestion: "Verifica que el año sea correcto"
+    };
+  }
+
+  const allocations = await getPrisma().budgetAllocation.findMany({
+    where: {
+      versionId: version.id,
+      supportId: bestMatch.id,
+      periodId: { in: periods.map(p => p.id) }
+    },
+    include: {
+      period: true,
+      costCenter: true
+    }
+  });
+
+  const monthlyData: { [key: number]: { month: number, amount: number } } = {};
+  let totalAnnual = 0;
+
+  periods.forEach(period => {
+    const monthAllocations = allocations.filter(a => a.periodId === period.id);
+    const monthTotal = monthAllocations.reduce(
+      (sum, alloc) => sum + Number(alloc.amountLocal),
+      0
+    );
+    
+    monthlyData[period.month] = {
+      month: period.month,
+      amount: monthTotal
+    };
+    
+    totalAnnual += monthTotal;
+  });
+
+  const monthlyArray = Object.values(monthlyData).filter(m => m.amount > 0);
+
+  return {
+    success: true,
+    year: validated.year,
+    support: {
+      id: bestMatch.id,
+      name: bestMatch.name,
+      code: bestMatch.code
+    },
+    matchInfo: {
+      inputOriginal: validated.supportName,
+      matchedName: bestMatch.name,
+      matchType: bestMatch.matchType,
+      wasExactMatch: bestMatch.matchType === "exact"
+    },
+    currency: "PEN",
+    totalAnnual,
+    monthlyData: monthlyArray,
+    versionId: version.id,
+    versionName: version.name
+  };
+}
+
 export async function getInvoiceByNumber(params: z.infer<typeof toolSchemas.getInvoiceByNumber>) {
   const validated = toolSchemas.getInvoiceByNumber.parse(params);
   
@@ -1428,5 +1625,6 @@ export const toolExecutors = {
   getOcRequestStatusByIncidentId,
   getOcByNumber,
   listInvoicesByOcNumber,
-  getInvoiceByNumber
+  getInvoiceByNumber,
+  getBudgetBySupport
 };

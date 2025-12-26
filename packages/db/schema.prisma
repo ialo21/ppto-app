@@ -140,6 +140,7 @@ model Support {
   budgetAllocations BudgetAllocation[]
   controlLines      ControlLine[]
   ocs               OC[]
+  invoices          Invoice[]            // Facturas sin OC asociadas
   costCenters       SupportCostCenter[]  // M:N con CostCenter
   provisions        Provision[]          // Provisiones asociadas
 }
@@ -268,6 +269,10 @@ model Invoice {
   // NUEVO: Relación con OC (requerido para nuevas facturas)
   ocId            Int?
   oc              OC?        @relation(fields: [ocId], references: [id], onDelete: SetNull)
+  
+  // NUEVO: Relación con Support (para facturas sin OC)
+  supportId       Int?
+  support         Support?   @relation(fields: [supportId], references: [id], onDelete: SetNull)
   
   // DEPRECATED: vendorId ahora se deriva de OC
   vendorId        Int?

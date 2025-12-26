@@ -244,6 +244,18 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
             budgetPeriodTo: { select: { id: true, year: true, month: true, label: true } }
           }
         },
+        support: {  // Sustento para facturas sin OC
+          include: {
+            expensePackage: true,
+            expenseConcept: true,
+            costCenter: true,
+            costCenters: {
+              include: {
+                costCenter: { select: { id: true, code: true, name: true } }
+              }
+            }
+          }
+        },
         vendor: true,  // Legacy
         periods: {  // Periodos de la factura (M:N)
           include: {
@@ -278,6 +290,18 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
             },
             budgetPeriodFrom: { select: { id: true, year: true, month: true, label: true } },
             budgetPeriodTo: { select: { id: true, year: true, month: true, label: true } }
+          }
+        },
+        support: {  // Sustento para facturas sin OC
+          include: {
+            expensePackage: true,
+            expenseConcept: true,
+            costCenter: true,
+            costCenters: {
+              include: {
+                costCenter: { select: { id: true, code: true, name: true } }
+              }
+            }
           }
         },
         vendor: true,
@@ -516,6 +540,7 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
       const invoice = await tx.invoice.create({
         data: {
           ocId: data.ocId ?? null,
+          supportId: data.supportId ?? null,  // Sustento para facturas sin OC
           docType: data.docType as any,
           numberNorm: data.numberNorm,
           currency,
@@ -795,6 +820,7 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
         where: { id },
         data: {
           ...(data.ocId !== undefined && { ocId: data.ocId, currency: targetOC?.moneda }),
+          ...(data.supportId !== undefined && { supportId: data.supportId }),
           ...(data.docType && { docType: data.docType as any }),
           ...(data.numberNorm && { numberNorm: data.numberNorm }),
           ...(data.montoSinIgv !== undefined && { montoSinIgv: new Prisma.Decimal(data.montoSinIgv) }),

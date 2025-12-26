@@ -23,8 +23,9 @@ const createInvoiceSchema = z.object({
   ultimusIncident: z.string().optional(),
   detalle: z.string().optional(),
   // Campos para "sin OC"
+  supportId: z.number().int().positive().optional(),  // Sustento para facturas sin OC
   proveedorId: z.number().int().positive().optional(),
-  proveedor: z.string().optional(),
+  proveedor: z.string().optional(),  // Legacy - mantener por compatibilidad
   moneda: z.enum(["PEN", "USD"]).optional(),
   // Tipo de cambio override (opcional)
   exchangeRateOverride: z.number().positive().optional(),
@@ -42,8 +43,9 @@ const updateInvoiceSchema = z.object({
   allocations: z.array(allocationSchema).min(1).optional(),
   ultimusIncident: z.string().optional(),
   detalle: z.string().optional(),
+  supportId: z.number().int().positive().optional(),  // Sustento para facturas sin OC
   proveedorId: z.number().int().positive().optional(),
-  proveedor: z.string().optional(),
+  proveedor: z.string().optional(),  // Legacy - mantener por compatibilidad
   moneda: z.enum(["PEN", "USD"]).optional(),
   exchangeRateOverride: z.number().positive().optional(),
   // Campos contables
@@ -419,17 +421,53 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
         });
       }
     } else {
-      // Sin OC: validar que se proporcionen proveedor y moneda
-      if (!data.proveedor) {
+      // Sin OC: validar que se proporcionen supportId, proveedorId y moneda
+      if (!data.supportId) {
         return reply.code(422).send({
           error: "VALIDATION_ERROR",
-          issues: [{ path: ["proveedor"], message: "Proveedor es requerido cuando no hay OC" }]
+          issues: [{ path: ["supportId"], message: "Sustento es requerido cuando no hay OC" }]
+        });
+      }
+      if (!data.proveedorId) {
+        return reply.code(422).send({
+          error: "VALIDATION_ERROR",
+          issues: [{ path: ["proveedorId"], message: "Proveedor es requerido cuando no hay OC" }]
         });
       }
       if (!data.moneda) {
         return reply.code(422).send({
           error: "VALIDATION_ERROR",
           issues: [{ path: ["moneda"], message: "Moneda es requerida cuando no hay OC" }]
+        });
+      }
+
+      // Validar que el sustento existe y obtener sus CECOs
+      const support = await prisma.support.findUnique({
+        where: { id: data.supportId },
+        include: {
+          costCenters: {
+            include: { costCenter: true }
+          }
+        }
+      });
+
+      if (!support) {
+        return reply.code(422).send({
+          error: "VALIDATION_ERROR",
+          issues: [{ path: ["supportId"], message: "Sustento no encontrado" }]
+        });
+      }
+
+      // Validar CECOs ⊆ CECOs del sustento
+      const supportCecoIds = new Set(support.costCenters.map((cc: any) => cc.costCenterId));
+      const invalidCecos = data.allocations.filter(a => !supportCecoIds.has(a.costCenterId));
+      if (invalidCecos.length > 0) {
+        return reply.code(422).send({
+          error: "VALIDATION_ERROR",
+          issues: [{
+            path: ["allocations"],
+            message: `Algunos CECOs seleccionados no están asociados al sustento: ${invalidCecos.map(a => a.costCenterId).join(", ")}`
+          }]
         });
       }
     }

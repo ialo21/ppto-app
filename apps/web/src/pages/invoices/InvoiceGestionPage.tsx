@@ -470,7 +470,7 @@ export default function InvoiceGestionPage() {
       const errors: Record<string, string> = {};
       if (hasOC && !form.ocId) errors.ocId = "OC es requerida";
       if (!hasOC && !form.supportId) errors.supportId = "Sustento es requerido";
-      if (!hasOC && !form.proveedorId) errors.proveedor = "Proveedor es requerido";
+      if (!hasOC && !form.proveedorId) errors.proveedorId = "Proveedor es requerido";
       if (!form.numberNorm.trim()) errors.numberNorm = "Número es requerido";
       if (!form.montoSinIgv || Number(form.montoSinIgv) < 0) errors.montoSinIgv = "Monto inválido";
       if (!periodFromId || !periodToId) errors.periodIds = "Debe seleccionar rango de periodos (desde → hasta)";
@@ -525,6 +525,7 @@ export default function InvoiceGestionPage() {
       };
 
       if (!hasOC) {
+        payload.supportId = form.supportId ? Number(form.supportId) : undefined;
         payload.proveedorId = form.proveedorId;
         payload.moneda = form.moneda;
       }
@@ -787,10 +788,14 @@ export default function InvoiceGestionPage() {
                         proveedor: proveedor?.razonSocial || f.proveedor
                       }));
                       if (proveedorId) {
-                        setFieldErrors(e => ({ ...e, proveedor: "" }));
+                        setFieldErrors(e => {
+                          const newErrors = { ...e };
+                          delete newErrors.proveedorId;
+                          return newErrors;
+                        });
                       }
                     }}
-                    error={fieldErrors.proveedor}
+                    error={fieldErrors.proveedorId}
                     allowCreate={true}
                   />
                 </div>

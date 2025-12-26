@@ -96,10 +96,16 @@ curl -X GET http://localhost:3001/n8n/health \
   "docType": "FACTURA",  // "FACTURA" | "NOTA_CREDITO"
   "numberNorm": "F001-00012345",  // Número de factura normalizado
   "montoSinIgv": 1500.00,  // Monto sin IGV
-  "periodIds": [45, 46, 47],  // IDs de los periodos (meses) de registro
-  "allocations": [  // Distribución por CECO
+  
+  // PERÍODOS - usar periodIds O periodKeys (al menos uno requerido)
+  "periodIds": [45, 46, 47],  // OPCIÓN 1: IDs de los periodos
+  "periodKeys": ["2024-10", "2024-11", "2024-12"],  // OPCIÓN 2: Keys YYYY-MM
+  
+  // DISTRIBUCIÓN POR CECO - usar costCenterId O costCenterCode en cada allocation
+  "allocations": [
     {
-      "costCenterId": 5,
+      "costCenterId": 5,  // OPCIÓN 1: ID del CECO
+      "costCenterCode": "CC-001",  // OPCIÓN 2: Código del CECO
       "amount": 750.00,
       "percentage": 50
     },
@@ -109,6 +115,7 @@ curl -X GET http://localhost:3001/n8n/health \
       "percentage": 50
     }
   ],
+  
   "ultimusIncident": "INC-2024-12345",  // OPCIONAL - Incidente Ultimus
   "detalle": "Servicios de consultoría diciembre 2024",  // OPCIONAL
   "proveedorId": 42,  // OPCIONAL - ID del proveedor (requerido si no hay OC)
@@ -123,8 +130,12 @@ curl -X GET http://localhost:3001/n8n/health \
 **Campos Requeridos:**
 - `numberNorm`: Número de factura
 - `montoSinIgv`: Monto sin IGV
-- `periodIds`: Al menos un periodo
-- `allocations`: Al menos un CECO con distribución
+- **Períodos** (al menos uno de los dos):
+  - `periodIds`: Array de IDs de periodos, O
+  - `periodKeys`: Array de strings formato "YYYY-MM"
+- **Allocations** (al menos uno, cada allocation debe tener uno de los dos):
+  - `costCenterId`: ID del CECO, O
+  - `costCenterCode`: Código del CECO
 
 **Campos Condicionales:**
 - **Sin OC (`ocId` no proporcionado):**
@@ -132,6 +143,12 @@ curl -X GET http://localhost:3001/n8n/health \
   - `moneda`: Moneda de la factura (requerido)
 - **Con OC (`ocId` proporcionado):**
   - Se heredan automáticamente: `moneda`, `proveedor` de la OC
+
+**Nota sobre Períodos y CECOs:**
+- Puedes usar `periodIds` (IDs numéricos) o `periodKeys` (formato "YYYY-MM")
+- Puedes usar `costCenterId` (ID numérico) o `costCenterCode` (código string) en cada allocation
+- Si usas códigos/keys, el sistema los resolverá automáticamente a IDs
+- Error 422 si algún código/key no existe en la base de datos
 
 **Validaciones Aplicadas:**
 
@@ -221,7 +238,7 @@ curl -X GET http://localhost:3001/n8n/health \
 }
 ```
 
-**Ejemplo de Uso (con OC):**
+**Ejemplo 1: Con OC usando IDs numéricos (tradicional):**
 
 ```bash
 curl -X POST http://localhost:3001/n8n/invoices \
@@ -243,7 +260,29 @@ curl -X POST http://localhost:3001/n8n/invoices \
   }'
 ```
 
-**Ejemplo de Uso (sin OC):**
+**Ejemplo 2: Con OC usando códigos y keys (nuevo, más legible):**
+
+```bash
+curl -X POST http://localhost:3001/n8n/invoices \
+  -H "Authorization: Bearer tu_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ocId": 123,
+    "docType": "FACTURA",
+    "numberNorm": "F001-00012345",
+    "montoSinIgv": 1500.00,
+    "periodKeys": ["2024-10"],
+    "allocations": [
+      {
+        "costCenterCode": "CC-001",
+        "amount": 1500.00
+      }
+    ],
+    "detalle": "Servicios de consultoría"
+  }'
+```
+
+**Ejemplo 3: Sin OC con múltiples periodos y CECOs (usando keys/codes):**
 
 ```bash
 curl -X POST http://localhost:3001/n8n/invoices \
@@ -255,11 +294,42 @@ curl -X POST http://localhost:3001/n8n/invoices \
     "montoSinIgv": 850.00,
     "moneda": "PEN",
     "proveedor": "Proveedor Sin OC SAC",
-    "periodIds": [45],
+    "periodKeys": ["2024-10", "2024-11"],
+    "allocations": [
+      {
+        "costCenterCode": "CC-001",
+        "amount": 425.00
+      },
+      {
+        "costCenterCode": "CC-002",
+        "amount": 425.00
+      }
+    ]
+  }'
+```
+
+**Ejemplo 4: Mezcla de IDs y códigos (válido):**
+
+```bash
+curl -X POST http://localhost:3001/n8n/invoices \
+  -H "Authorization: Bearer tu_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "docType": "FACTURA",
+    "numberNorm": "F001-00012345",
+    "montoSinIgv": 1200.00,
+    "moneda": "USD",
+    "proveedor": "Tech Solutions Inc",
+    "periodKeys": ["2024-12"],
+    "exchangeRateOverride": 3.75,
     "allocations": [
       {
         "costCenterId": 5,
-        "amount": 850.00
+        "amount": 600.00
+      },
+      {
+        "costCenterCode": "CC-IT",
+        "amount": 600.00
       }
     ]
   }'

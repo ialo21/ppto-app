@@ -1,10 +1,10 @@
 /**
  * Period label formatter
- * Format: YYYY-MM <mesAbrevES><YY>
- * Example: 2026-01 ene26, 2025-11 nov25
+ * Format: YYYY-MM
+ * Example: 2026-01, 2025-11
  */
 
-const MONTH_ABBREV_ES: Record<number, string> = {
+export const MONTH_ABBREV_ES: Record<number, string> = {
   1: "ene",
   2: "feb",
   3: "mar",
@@ -28,15 +28,13 @@ export interface Period {
 /**
  * Formats a period object to standardized label
  * @param period - Period object with year and month
- * @returns Formatted string: YYYY-MM <mesAbrevES><YY>
+ * @returns Formatted string: YYYY-MM
  */
 export function formatPeriodLabel(period: Period): string {
   const { year, month } = period;
   const yearStr = String(year);
   const monthStr = String(month).padStart(2, "0");
-  const yearShort = yearStr.slice(-2);
-  const monthAbbrev = MONTH_ABBREV_ES[month] || "???";
   
-  return `${yearStr}-${monthStr} ${monthAbbrev}${yearShort}`;
+  return `${yearStr}-${monthStr}`;
 }
 

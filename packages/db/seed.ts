@@ -14,7 +14,6 @@ async function main() {
   console.log("🌱 Iniciando bootstrap seed (idempotente)...");
 
   // Periodos 2026 (upsert por year+month)
-  const months = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
   for (let m = 1; m <= 12; m++) {
     await prisma.period.upsert({
       where: { 
@@ -22,12 +21,12 @@ async function main() {
         id: (await prisma.period.findFirst({ where: { year: 2026, month: m } }))?.id || 0
       },
       update: {},
-      create: { year: 2026, month: m, label: `${months[m - 1]}26` }
+      create: { year: 2026, month: m, label: null }
     }).catch(async () => {
       // Si falla upsert (id=0 no existe), verificar si ya existe
       const existing = await prisma.period.findFirst({ where: { year: 2026, month: m } });
       if (!existing) {
-        await prisma.period.create({ data: { year: 2026, month: m, label: `${months[m - 1]}26` } });
+        await prisma.period.create({ data: { year: 2026, month: m, label: null } });
       }
     });
   }

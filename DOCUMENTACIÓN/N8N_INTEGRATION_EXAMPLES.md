@@ -45,7 +45,27 @@ Recibir una factura escaneada por OCR, validar datos, y crear en el Portal PPTO 
 
 **Método:** POST  
 **URL:** `{{$node["n8n-config"].json["baseUrl"]}}/n8n/invoices`  
-**Body (JSON):**
+**Body (JSON) - Usando códigos (recomendado para legibilidad):**
+
+```json
+{
+  "ocId": {{$json["ocId"]}},
+  "docType": "FACTURA",
+  "numberNorm": "{{$json["numeroFactura"]}}",
+  "montoSinIgv": {{$json["montoSinIgv"]}},
+  "periodKeys": ["{{$json["periodo"]}}"],
+  "allocations": [
+    {
+      "costCenterCode": "{{$json["codigoCeco"]}}",
+      "amount": {{$json["montoSinIgv"]}}
+    }
+  ],
+  "detalle": "{{$json["detalle"]}}",
+  "ultimusIncident": "{{$json["incidente"]}}"
+}
+```
+
+**Body (JSON) - Usando IDs (si ya los tienes):**
 
 ```json
 {
@@ -60,7 +80,7 @@ Recibir una factura escaneada por OCR, validar datos, y crear en el Portal PPTO 
 }
 ```
 
-### Datos de Entrada Esperados
+### Datos de Entrada Esperados (Opción 1 - IDs tradicionales)
 
 ```json
 {
@@ -71,6 +91,25 @@ Recibir una factura escaneada por OCR, validar datos, y crear en el Portal PPTO 
   "allocations": [
     {
       "costCenterId": 5,
+      "amount": 1500.00
+    }
+  ],
+  "detalle": "Servicios de consultoría Q4 2024",
+  "incidente": "INC-2024-12345"
+}
+```
+
+### Datos de Entrada Esperados (Opción 2 - Códigos/Keys, más legible)
+
+```json
+{
+  "ocId": 123,
+  "numeroFactura": "F001-00012345",
+  "montoSinIgv": 1500.00,
+  "periodKeys": ["2024-10"],
+  "allocations": [
+    {
+      "costCenterCode": "CC-001",
       "amount": 1500.00
     }
   ],
@@ -132,7 +171,7 @@ Crear una factura que no tiene OC previa (gasto directo).
 }
 ```
 
-### Datos de Entrada Esperados
+### Datos de Entrada Esperados (usando códigos - recomendado)
 
 ```json
 {
@@ -141,14 +180,14 @@ Crear una factura que no tiene OC previa (gasto directo).
   "moneda": "PEN",
   "razonSocial": "SERVICIOS DIVERSOS SAC",
   "proveedorId": 42,
-  "periodIds": [45],
+  "periodKeys": ["2024-10"],
   "allocations": [
     {
-      "costCenterId": 5,
+      "costCenterCode": "CC-ADM",
       "amount": 425.00
     },
     {
-      "costCenterId": 8,
+      "costCenterCode": "CC-OPE",
       "amount": 425.00
     }
   ],
@@ -161,6 +200,8 @@ Crear una factura que no tiene OC previa (gasto directo).
 - Si `moneda = "USD"`, debe incluirse `exchangeRateOverride` o asegurarse que exista TC anual
 - El campo `proveedor` es el nombre/razón social en texto
 - `proveedorId` debe apuntar a un proveedor existente en la base de datos
+- **Nuevo:** Usa `periodKeys` (formato "YYYY-MM") en lugar de `periodIds` para mayor legibilidad
+- **Nuevo:** Usa `costCenterCode` en lugar de `costCenterId` para identificar CECOs por código
 
 ---
 
@@ -512,7 +553,25 @@ curl -X GET http://localhost:3001/n8n/health \
 
 **Respuesta esperada:** `200 OK` con `{"ok": true, ...}`
 
-### Test 2: Crear Factura (Caso Exitoso)
+### Test 2: Crear Factura (Caso Exitoso - con códigos)
+
+```bash
+curl -X POST http://localhost:3001/n8n/invoices \
+  -H "Authorization: Bearer TU_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ocId": 1,
+    "docType": "FACTURA",
+    "numberNorm": "TEST-F001-001",
+    "montoSinIgv": 100.00,
+    "periodKeys": ["2024-10"],
+    "allocations": [{"costCenterCode": "CC-001", "amount": 100.00}]
+  }'
+```
+
+**Respuesta esperada:** `200 OK` con objeto factura creada.
+
+### Test 2b: Crear Factura (Caso Exitoso - con IDs tradicionales)
 
 ```bash
 curl -X POST http://localhost:3001/n8n/invoices \
@@ -530,7 +589,7 @@ curl -X POST http://localhost:3001/n8n/invoices \
 
 **Respuesta esperada:** `200 OK` con objeto factura creada.
 
-### Test 3: Crear Factura (Caso Error - Saldo Excedido)
+### Test 3: Crear Factura (Caso Error - CECO no encontrado por código)
 
 ```bash
 curl -X POST http://localhost:3001/n8n/invoices \
@@ -540,13 +599,32 @@ curl -X POST http://localhost:3001/n8n/invoices \
     "ocId": 1,
     "docType": "FACTURA",
     "numberNorm": "TEST-F001-002",
-    "montoSinIgv": 999999.00,
-    "periodIds": [1],
-    "allocations": [{"costCenterId": 1, "amount": 999999.00}]
+    "montoSinIgv": 100.00,
+    "periodKeys": ["2024-10"],
+    "allocations": [{"costCenterCode": "CECO-INEXISTENTE", "amount": 100.00}]
   }'
 ```
 
-**Respuesta esperada:** `422 Unprocessable Entity` con mensaje de error.
+**Respuesta esperada:** `422 Unprocessable Entity` con mensaje `"CECO con código CECO-INEXISTENTE no encontrado"`.
+
+### Test 3b: Crear Factura (Caso Error - Periodo no encontrado)
+
+```bash
+curl -X POST http://localhost:3001/n8n/invoices \
+  -H "Authorization: Bearer TU_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "docType": "FACTURA",
+    "numberNorm": "TEST-F001-003",
+    "montoSinIgv": 100.00,
+    "moneda": "PEN",
+    "proveedor": "Test SAC",
+    "periodKeys": ["2099-12"],
+    "allocations": [{"costCenterCode": "CC-001", "amount": 100.00}]
+  }'
+```
+
+**Respuesta esperada:** `422 Unprocessable Entity` con mensaje `"Periodo 2099-12 no encontrado"`.
 
 ### Test 4: Actualizar Estado (Caso Exitoso)
 

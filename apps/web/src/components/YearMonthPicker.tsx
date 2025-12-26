@@ -2,9 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "../lib/ui";
-import { formatPeriodLabel } from "../utils/periodFormat";
-
-const MONTH_ABBREV_ES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+import { formatPeriodLabel, MONTH_ABBREV_ES } from "../utils/periodFormat";
 
 interface Period {
   id: number;
@@ -318,8 +316,9 @@ export default function YearMonthPicker({
             </div>
           ) : (
             <div className="grid grid-cols-4 gap-2">
-              {MONTH_ABBREV_ES.map((monthAbbrev, index) => {
+              {Array.from({ length: 12 }, (_, index) => {
                 const month = index + 1;
+                const monthAbbrev = MONTH_ABBREV_ES[month];
                 const period = yearPeriods.find(p => p.month === month);
                 const isDisabled = !period || isPeriodDisabled(period);
                 const isSelected = period && value === period.id;

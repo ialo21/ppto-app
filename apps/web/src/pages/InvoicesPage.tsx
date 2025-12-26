@@ -10,6 +10,7 @@ import { Table, Th, Td } from "../components/ui/Table";
 import StatusChip from "../components/StatusChip";
 import YearMonthPicker from "../components/YearMonthPicker";
 import { formatNumber } from "../utils/numberFormat";
+import { formatPeriodLabel } from "../utils/periodFormat";
 
 type OC = {
   id: number;
@@ -77,10 +78,6 @@ type Allocation = {
   amount?: number;
   percentage?: number;
 };
-
-function formatPeriodLabel(period: { year: number; month: number }): string {
-  return `${period.year}-${String(period.month).padStart(2, '0')}`;
-}
 
 function formatPeriodsRange(periods: { year: number; month: number }[]): string {
   if (!periods || periods.length === 0) return "-";

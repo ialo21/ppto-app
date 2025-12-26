@@ -29,9 +29,11 @@ const createInvoiceN8nSchema = z.object({
   docType: z.enum(["FACTURA", "NOTA_CREDITO"]).default("FACTURA"),
   numberNorm: z.string().min(1, "Número de factura es requerido"),
   montoSinIgv: z.number().nonnegative({ message: "Monto debe ser mayor o igual a 0" }),
-  periodIds: z.array(z.number().int().positive()).min(1, "Debe especificar al menos un periodo"),
+  periodIds: z.array(z.number().int().positive()).optional(),
+  periodKeys: z.array(z.string().regex(/^\d{4}-\d{2}$/)).optional(),
   allocations: z.array(z.object({
-    costCenterId: z.number().int().positive(),
+    costCenterId: z.number().int().positive().optional(),
+    costCenterCode: z.string().optional(),
     amount: z.number().nonnegative().optional(),
     percentage: z.number().min(0).max(100).optional()
   })).min(1, "Debe especificar al menos un CECO"),
@@ -43,7 +45,13 @@ const createInvoiceN8nSchema = z.object({
   exchangeRateOverride: z.number().positive().optional(),
   mesContable: z.string().regex(/^\d{4}-\d{2}$/).nullish(),
   tcReal: z.number().positive().nullish()
-});
+}).refine(
+  (data) => data.periodIds || data.periodKeys,
+  { message: "Debe proporcionar periodIds o periodKeys" }
+).refine(
+  (data) => data.allocations.every(a => a.costCenterId || a.costCenterCode),
+  { message: "Cada allocation debe tener costCenterId o costCenterCode" }
+);
 
 const updateInvoiceStatusN8nSchema = z.object({
   status: z.enum([
@@ -61,6 +69,68 @@ const updateOcStatusN8nSchema = z.object({
   ]),
   note: z.string().optional()
 });
+
+async function resolvePeriodKeys(periodKeys: string[]): Promise<number[]> {
+  const periodIds: number[] = [];
+  
+  for (const key of periodKeys) {
+    const [yearStr, monthStr] = key.split('-');
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
+    
+    const period = await prisma.period.findFirst({
+      where: { year, month }
+    });
+    
+    if (!period) {
+      throw new Error(`Periodo ${key} no encontrado`);
+    }
+    
+    periodIds.push(period.id);
+  }
+  
+  return periodIds;
+}
+
+async function resolveCostCenterCodes(allocations: any[]): Promise<Array<{
+  costCenterId: number;
+  amount?: number;
+  percentage?: number;
+}>> {
+  const resolvedAllocations: Array<{
+    costCenterId: number;
+    amount?: number;
+    percentage?: number;
+  }> = [];
+  
+  for (const alloc of allocations) {
+    if (alloc.costCenterId) {
+      resolvedAllocations.push({
+        costCenterId: alloc.costCenterId,
+        amount: alloc.amount,
+        percentage: alloc.percentage
+      });
+    } else if (alloc.costCenterCode) {
+      const costCenter = await prisma.costCenter.findUnique({
+        where: { code: alloc.costCenterCode }
+      });
+      
+      if (!costCenter) {
+        throw new Error(`CECO con código ${alloc.costCenterCode} no encontrado`);
+      }
+      
+      resolvedAllocations.push({
+        costCenterId: costCenter.id,
+        amount: alloc.amount,
+        percentage: alloc.percentage
+      });
+    } else {
+      throw new Error("Cada allocation debe tener costCenterId o costCenterCode");
+    }
+  }
+  
+  return resolvedAllocations;
+}
 
 async function calcularConsumoOC(ocId: number, excludeInvoiceId?: number): Promise<number> {
   const facturas = await prisma.invoice.findMany({
@@ -211,6 +281,29 @@ export async function registerN8nRoutes(app: FastifyInstance) {
       });
     }
 
+    let periodIds: number[];
+    let allocations: Array<{ costCenterId: number; amount?: number; percentage?: number }>;
+
+    try {
+      if (parsed.data.periodKeys && parsed.data.periodKeys.length > 0) {
+        periodIds = await resolvePeriodKeys(parsed.data.periodKeys);
+      } else if (parsed.data.periodIds && parsed.data.periodIds.length > 0) {
+        periodIds = parsed.data.periodIds;
+      } else {
+        return reply.code(422).send({
+          error: "VALIDATION_ERROR",
+          issues: [{ path: ["periodIds"], message: "Debe proporcionar periodIds o periodKeys válidos" }]
+        });
+      }
+
+      allocations = await resolveCostCenterCodes(parsed.data.allocations);
+    } catch (error: any) {
+      return reply.code(422).send({
+        error: "VALIDATION_ERROR",
+        issues: [{ path: [], message: error.message || "Error al resolver códigos" }]
+      });
+    }
+
     const data = parsed.data;
 
     let oc: any = null;
@@ -270,7 +363,7 @@ export async function registerN8nRoutes(app: FastifyInstance) {
         const toValue = oc.budgetPeriodTo.year * 100 + oc.budgetPeriodTo.month;
 
         const periods = await prisma.period.findMany({
-          where: { id: { in: data.periodIds } }
+          where: { id: { in: periodIds } }
         });
 
         for (const period of periods) {
@@ -288,7 +381,7 @@ export async function registerN8nRoutes(app: FastifyInstance) {
       }
 
       const ocCecoIds = new Set(oc.costCenters.map((cc: any) => cc.costCenterId));
-      const invalidCecos = data.allocations.filter(a => !ocCecoIds.has(a.costCenterId));
+      const invalidCecos = allocations.filter(a => !ocCecoIds.has(a.costCenterId));
       if (invalidCecos.length > 0) {
         return reply.code(422).send({
           error: "VALIDATION_ERROR",
@@ -313,10 +406,10 @@ export async function registerN8nRoutes(app: FastifyInstance) {
       }
     }
 
-    const rateResult = await calcularEffectiveRate(currency, data.periodIds, data.exchangeRateOverride);
+    const rateResult = await calcularEffectiveRate(currency, periodIds, data.exchangeRateOverride);
     if (rateResult.source === "error") {
       const firstPeriod = await prisma.period.findUnique({
-        where: { id: data.periodIds[0] },
+        where: { id: periodIds[0] },
         select: { year: true }
       });
       return reply.code(422).send({
@@ -328,7 +421,7 @@ export async function registerN8nRoutes(app: FastifyInstance) {
       });
     }
 
-    const totalAllocated = data.allocations.reduce((sum, a) => sum + (a.amount || 0), 0);
+    const totalAllocated = allocations.reduce((sum, a) => sum + (a.amount || 0), 0);
     const tolerance = 0.01;
     if (Math.abs(totalAllocated - data.montoSinIgv) > tolerance) {
       return reply.code(422).send({
@@ -343,7 +436,7 @@ export async function registerN8nRoutes(app: FastifyInstance) {
     const camposContables = await calcularCamposContables(
       currency,
       data.montoSinIgv,
-      data.periodIds,
+      periodIds,
       data.mesContable ?? undefined,
       data.tcReal ?? undefined
     );
@@ -373,14 +466,14 @@ export async function registerN8nRoutes(app: FastifyInstance) {
       });
 
       await tx.invoicePeriod.createMany({
-        data: data.periodIds.map(periodId => ({
+        data: periodIds.map(periodId => ({
           invoiceId: invoice.id,
           periodId
         }))
       });
 
       await tx.invoiceCostCenter.createMany({
-        data: data.allocations.map(alloc => ({
+        data: allocations.map(alloc => ({
           invoiceId: invoice.id,
           costCenterId: alloc.costCenterId,
           amount: alloc.amount ? new Prisma.Decimal(alloc.amount) : null,

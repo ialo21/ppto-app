@@ -118,7 +118,8 @@ curl -X GET http://localhost:3001/n8n/health \
   
   "ultimusIncident": "INC-2024-12345",  // OPCIONAL - Incidente Ultimus
   "detalle": "Servicios de consultoría diciembre 2024",  // OPCIONAL
-  "proveedorId": 42,  // OPCIONAL - ID del proveedor (requerido si no hay OC)
+  "proveedorId": 42,  // OPCIONAL - ID del proveedor
+  "proveedorRuc": "20123456789",  // OPCIONAL - RUC del proveedor (alternativa a proveedorId)
   "proveedor": "ACME Corp SAC",  // OPCIONAL - Nombre proveedor (requerido si no hay OC)
   "moneda": "USD",  // OPCIONAL - "PEN" | "USD" (requerido si no hay OC)
   "exchangeRateOverride": 3.75,  // OPCIONAL - TC manual (sobrescribe el anual)
@@ -144,11 +145,12 @@ curl -X GET http://localhost:3001/n8n/health \
 - **Con OC (`ocId` proporcionado):**
   - Se heredan automáticamente: `moneda`, `proveedor` de la OC
 
-**Nota sobre Períodos y CECOs:**
-- Puedes usar `periodIds` (IDs numéricos) o `periodKeys` (formato "YYYY-MM")
-- Puedes usar `costCenterId` (ID numérico) o `costCenterCode` (código string) en cada allocation
-- Si usas códigos/keys, el sistema los resolverá automáticamente a IDs
-- Error 422 si algún código/key no existe en la base de datos
+**Nota sobre Períodos, CECOs y Proveedores:**
+- **Períodos:** Puedes usar `periodIds` (IDs numéricos) o `periodKeys` (formato "YYYY-MM")
+- **CECOs:** Puedes usar `costCenterId` (ID numérico) o `costCenterCode` (código string) en cada allocation
+- **Proveedores:** Puedes usar `proveedorId` (ID numérico) o `proveedorRuc` (RUC de 11 dígitos)
+- Si usas códigos/keys/RUC, el sistema los resolverá automáticamente a IDs
+- Error 422 si algún código/key/RUC no existe en la base de datos
 
 **Validaciones Aplicadas:**
 
@@ -308,7 +310,7 @@ curl -X POST http://localhost:3001/n8n/invoices \
   }'
 ```
 
-**Ejemplo 4: Mezcla de IDs y códigos (válido):**
+**Ejemplo 4: Con RUC de proveedor (sin OC, usando RUC):**
 
 ```bash
 curl -X POST http://localhost:3001/n8n/invoices \
@@ -320,16 +322,40 @@ curl -X POST http://localhost:3001/n8n/invoices \
     "montoSinIgv": 1200.00,
     "moneda": "USD",
     "proveedor": "Tech Solutions Inc",
+    "proveedorRuc": "20123456789",
     "periodKeys": ["2024-12"],
     "exchangeRateOverride": 3.75,
     "allocations": [
       {
+        "costCenterCode": "CC-IT",
+        "amount": 1200.00
+      }
+    ]
+  }'
+```
+
+**Ejemplo 5: Mezcla de IDs y códigos (válido):**
+
+```bash
+curl -X POST http://localhost:3001/n8n/invoices \
+  -H "Authorization: Bearer tu_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "docType": "FACTURA",
+    "numberNorm": "F001-00067890",
+    "montoSinIgv": 850.00,
+    "moneda": "PEN",
+    "proveedor": "Servicios SAC",
+    "proveedorId": 42,
+    "periodKeys": ["2024-12"],
+    "allocations": [
+      {
         "costCenterId": 5,
-        "amount": 600.00
+        "amount": 425.00
       },
       {
-        "costCenterCode": "CC-IT",
-        "amount": 600.00
+        "costCenterCode": "CC-OPE",
+        "amount": 425.00
       }
     ]
   }'

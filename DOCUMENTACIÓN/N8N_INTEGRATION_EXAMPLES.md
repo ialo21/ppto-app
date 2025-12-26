@@ -171,7 +171,7 @@ Crear una factura que no tiene OC previa (gasto directo).
 }
 ```
 
-### Datos de Entrada Esperados (usando códigos - recomendado)
+### Datos de Entrada Esperados (usando códigos y RUC - recomendado)
 
 ```json
 {
@@ -179,7 +179,7 @@ Crear una factura que no tiene OC previa (gasto directo).
   "montoSinIgv": 850.00,
   "moneda": "PEN",
   "razonSocial": "SERVICIOS DIVERSOS SAC",
-  "proveedorId": 42,
+  "rucProveedor": "20123456789",
   "periodKeys": ["2024-10"],
   "allocations": [
     {
@@ -199,9 +199,10 @@ Crear una factura que no tiene OC previa (gasto directo).
 
 - Si `moneda = "USD"`, debe incluirse `exchangeRateOverride` o asegurarse que exista TC anual
 - El campo `proveedor` es el nombre/razón social en texto
-- `proveedorId` debe apuntar a un proveedor existente en la base de datos
+- **Proveedor:** Puedes usar `proveedorId` (ID numérico), `proveedorRuc` (RUC 11 dígitos), o solo `proveedor` (nombre)
 - **Nuevo:** Usa `periodKeys` (formato "YYYY-MM") en lugar de `periodIds` para mayor legibilidad
 - **Nuevo:** Usa `costCenterCode` en lugar de `costCenterId` para identificar CECOs por código
+- **Nuevo:** Usa `proveedorRuc` (RUC) en lugar de `proveedorId` para mayor claridad
 
 ---
 
@@ -625,6 +626,26 @@ curl -X POST http://localhost:3001/n8n/invoices \
 ```
 
 **Respuesta esperada:** `422 Unprocessable Entity` con mensaje `"Periodo 2099-12 no encontrado"`.
+
+### Test 3c: Crear Factura (Caso Error - RUC no encontrado)
+
+```bash
+curl -X POST http://localhost:3001/n8n/invoices \
+  -H "Authorization: Bearer TU_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "docType": "FACTURA",
+    "numberNorm": "TEST-F001-004",
+    "montoSinIgv": 100.00,
+    "moneda": "PEN",
+    "proveedor": "Test SAC",
+    "proveedorRuc": "99999999999",
+    "periodKeys": ["2024-10"],
+    "allocations": [{"costCenterCode": "CC-001", "amount": 100.00}]
+  }'
+```
+
+**Respuesta esperada:** `422 Unprocessable Entity` con mensaje `"Proveedor con RUC 99999999999 no encontrado"`.
 
 ### Test 4: Actualizar Estado (Caso Exitoso)
 

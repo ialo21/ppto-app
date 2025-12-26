@@ -40,6 +40,7 @@ const createInvoiceN8nSchema = z.object({
   ultimusIncident: z.string().optional(),
   detalle: z.string().optional(),
   proveedorId: z.number().int().positive().optional(),
+  proveedorRuc: z.string().regex(/^\d{11}$/, "RUC debe tener 11 dígitos").optional(),
   proveedor: z.string().optional(),
   moneda: z.enum(["PEN", "USD"]).optional(),
   exchangeRateOverride: z.number().positive().optional(),
@@ -90,6 +91,18 @@ async function resolvePeriodKeys(periodKeys: string[]): Promise<number[]> {
   }
   
   return periodIds;
+}
+
+async function resolveProveedorRuc(ruc: string): Promise<number> {
+  const proveedor = await prisma.proveedor.findUnique({
+    where: { ruc }
+  });
+  
+  if (!proveedor) {
+    throw new Error(`Proveedor con RUC ${ruc} no encontrado`);
+  }
+  
+  return proveedor.id;
 }
 
 async function resolveCostCenterCodes(allocations: any[]): Promise<Array<{
@@ -283,6 +296,7 @@ export async function registerN8nRoutes(app: FastifyInstance) {
 
     let periodIds: number[];
     let allocations: Array<{ costCenterId: number; amount?: number; percentage?: number }>;
+    let proveedorId: number | undefined;
 
     try {
       if (parsed.data.periodKeys && parsed.data.periodKeys.length > 0) {
@@ -297,6 +311,12 @@ export async function registerN8nRoutes(app: FastifyInstance) {
       }
 
       allocations = await resolveCostCenterCodes(parsed.data.allocations);
+
+      if (parsed.data.proveedorRuc) {
+        proveedorId = await resolveProveedorRuc(parsed.data.proveedorRuc);
+      } else if (parsed.data.proveedorId) {
+        proveedorId = parsed.data.proveedorId;
+      }
     } catch (error: any) {
       return reply.code(422).send({
         error: "VALIDATION_ERROR",
@@ -459,7 +479,7 @@ export async function registerN8nRoutes(app: FastifyInstance) {
           montoPEN_tcEstandar: camposContables.montoPEN_tcEstandar !== null ? new Prisma.Decimal(camposContables.montoPEN_tcEstandar) : null,
           montoPEN_tcReal: camposContables.montoPEN_tcReal !== null ? new Prisma.Decimal(camposContables.montoPEN_tcReal) : null,
           diferenciaTC: camposContables.diferenciaTC !== null ? new Prisma.Decimal(camposContables.diferenciaTC) : null,
-          vendorId: data.proveedorId ?? null,
+          vendorId: proveedorId ?? null,
           totalForeign: null,
           totalLocal: null
         }

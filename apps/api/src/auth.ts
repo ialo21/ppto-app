@@ -398,4 +398,24 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       return reply.code(200).send({ success: true });
     }
   });
+
+  // POST /auth/dev-login - Login de desarrollo (solo en dev)
+  if (process.env.NODE_ENV === "development") {
+    app.post("/auth/dev-login", async (request, reply) => {
+      const { email } = request.body as { email: string };
+      
+      if (!email) {
+        return reply.code(400).send({ error: "Email requerido" });
+      }
+
+      const user = await loadUserWithPermissions({ email });
+      
+      if (!user) {
+        return reply.code(404).send({ error: "Usuario no encontrado" });
+      }
+
+      request.session.set("userId", user.id);
+      return user;
+    });
+  }
 }

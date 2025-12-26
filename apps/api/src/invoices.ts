@@ -556,8 +556,9 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
           montoPEN_tcEstandar: camposContables.montoPEN_tcEstandar !== null ? new Prisma.Decimal(camposContables.montoPEN_tcEstandar) : null,
           montoPEN_tcReal: camposContables.montoPEN_tcReal !== null ? new Prisma.Decimal(camposContables.montoPEN_tcReal) : null,
           diferenciaTC: camposContables.diferenciaTC !== null ? new Prisma.Decimal(camposContables.diferenciaTC) : null,
-          // Proveedor (nuevo o legacy)
-          vendorId: data.proveedorId ?? null,
+          // Proveedor: solo para facturas CON OC (se deriva de la OC)
+          // Para facturas SIN OC, el proveedor se maneja a través del Support
+          vendorId: oc?.vendorId ?? null,
           totalForeign: null,
           totalLocal: null
         }

@@ -39,6 +39,8 @@ const createInvoiceN8nSchema = z.object({
   })).min(1, "Debe especificar al menos un CECO"),
   ultimusIncident: z.string().optional(),
   detalle: z.string().optional(),
+  supportId: z.number().int().positive().optional(),
+  supportCode: z.string().optional(),
   proveedorId: z.number().int().positive().optional(),
   proveedorRuc: z.string().regex(/^\d{11}$/, "RUC debe tener 11 dígitos").optional(),
   proveedor: z.string().optional(),
@@ -91,6 +93,18 @@ async function resolvePeriodKeys(periodKeys: string[]): Promise<number[]> {
   }
   
   return periodIds;
+}
+
+async function resolveSupportCode(code: string): Promise<number> {
+  const support = await prisma.support.findFirst({
+    where: { code }
+  });
+  
+  if (!support) {
+    throw new Error(`Sustento con código ${code} no encontrado`);
+  }
+  
+  return support.id;
 }
 
 async function resolveProveedorRuc(ruc: string): Promise<{ id: number; razonSocial: string }> {
@@ -298,6 +312,7 @@ export async function registerN8nRoutes(app: FastifyInstance) {
     let allocations: Array<{ costCenterId: number; amount?: number; percentage?: number }>;
     let proveedorId: number | undefined;
     let proveedorNombre: string | undefined;
+    let supportId: number | undefined;
 
     try {
       if (parsed.data.periodKeys && parsed.data.periodKeys.length > 0) {
@@ -312,6 +327,12 @@ export async function registerN8nRoutes(app: FastifyInstance) {
       }
 
       allocations = await resolveCostCenterCodes(parsed.data.allocations);
+
+      if (parsed.data.supportCode) {
+        supportId = await resolveSupportCode(parsed.data.supportCode);
+      } else if (parsed.data.supportId) {
+        supportId = parsed.data.supportId;
+      }
 
       if (parsed.data.proveedorRuc) {
         const prov = await resolveProveedorRuc(parsed.data.proveedorRuc);
@@ -415,16 +436,52 @@ export async function registerN8nRoutes(app: FastifyInstance) {
         });
       }
     } else {
+      if (!supportId) {
+        return reply.code(422).send({
+          error: "VALIDATION_ERROR",
+          issues: [{ path: ["supportId"], message: "Sustento (supportId o supportCode) es requerido cuando no hay OC" }]
+        });
+      }
       if (!proveedorId && !proveedor) {
         return reply.code(422).send({
           error: "VALIDATION_ERROR",
-          issues: [{ path: ["proveedor"], message: "Proveedor o proveedorRuc es requerido cuando no hay OC" }]
+          issues: [{ path: ["proveedor"], message: "Proveedor (proveedorId o proveedorRuc) es requerido cuando no hay OC" }]
         });
       }
       if (!data.moneda) {
         return reply.code(422).send({
           error: "VALIDATION_ERROR",
           issues: [{ path: ["moneda"], message: "Moneda es requerida cuando no hay OC" }]
+        });
+      }
+
+      // Validar que el sustento existe y obtener sus CECOs
+      const support = await prisma.support.findUnique({
+        where: { id: supportId },
+        include: {
+          costCenters: {
+            include: { costCenter: true }
+          }
+        }
+      });
+
+      if (!support) {
+        return reply.code(422).send({
+          error: "VALIDATION_ERROR",
+          issues: [{ path: ["supportId"], message: "Sustento no encontrado" }]
+        });
+      }
+
+      // Validar CECOs ⊆ CECOs del sustento
+      const supportCecoIds = new Set(support.costCenters.map((cc: any) => cc.costCenterId));
+      const invalidCecos = allocations.filter(a => !supportCecoIds.has(a.costCenterId));
+      if (invalidCecos.length > 0) {
+        return reply.code(422).send({
+          error: "VALIDATION_ERROR",
+          issues: [{
+            path: ["allocations"],
+            message: `Algunos CECOs seleccionados no están asociados al sustento: ${invalidCecos.map(a => a.costCenterId).join(", ")}`
+          }]
         });
       }
     }

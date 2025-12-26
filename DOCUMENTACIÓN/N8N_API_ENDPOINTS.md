@@ -118,6 +118,8 @@ curl -X GET http://localhost:3001/n8n/health \
   
   "ultimusIncident": "INC-2024-12345",  // OPCIONAL - Incidente Ultimus
   "detalle": "Servicios de consultoría diciembre 2024",  // OPCIONAL
+  "supportId": 10,  // OPCIONAL - ID del sustento (requerido si no hay OC)
+  "supportCode": "S-0010",  // OPCIONAL - Código del sustento (alternativa a supportId)
   "proveedorId": 42,  // OPCIONAL - ID del proveedor
   "proveedorRuc": "20123456789",  // OPCIONAL - RUC del proveedor (alternativa a proveedorId)
   "proveedor": "ACME Corp SAC",  // OPCIONAL - Nombre proveedor (requerido si no hay OC)
@@ -140,17 +142,24 @@ curl -X GET http://localhost:3001/n8n/health \
 
 **Campos Condicionales:**
 - **Sin OC (`ocId` no proporcionado):**
-  - `proveedor`: Nombre del proveedor (requerido)
+  - **Sustento** (uno de los dos):
+    - `supportId`: ID del sustento (número), O
+    - `supportCode`: Código del sustento (string, ej. "S-0010")
+  - **Proveedor** (uno de los dos):
+    - `proveedorId`: ID del proveedor (número), O
+    - `proveedorRuc`: RUC del proveedor (11 dígitos)
   - `moneda`: Moneda de la factura (requerido)
 - **Con OC (`ocId` proporcionado):**
-  - Se heredan automáticamente: `moneda`, `proveedor` de la OC
+  - Se heredan automáticamente: `moneda`, `proveedor`, `sustento` de la OC
 
-**Nota sobre Períodos, CECOs y Proveedores:**
+**Nota sobre Períodos, CECOs, Sustentos y Proveedores:**
 - **Períodos:** Puedes usar `periodIds` (IDs numéricos) o `periodKeys` (formato "YYYY-MM")
 - **CECOs:** Puedes usar `costCenterId` (ID numérico) o `costCenterCode` (código string) en cada allocation
+- **Sustentos:** Puedes usar `supportId` (ID numérico) o `supportCode` (código string, ej. "S-0010")
 - **Proveedores:** Puedes usar `proveedorId` (ID numérico) o `proveedorRuc` (RUC de 11 dígitos)
 - Si usas códigos/keys/RUC, el sistema los resolverá automáticamente a IDs
 - Error 422 si algún código/key/RUC no existe en la base de datos
+- **Sin OC:** Los CECOs seleccionados deben pertenecer al sustento especificado
 
 **Validaciones Aplicadas:**
 
@@ -284,7 +293,7 @@ curl -X POST http://localhost:3001/n8n/invoices \
   }'
 ```
 
-**Ejemplo 3: Sin OC con múltiples periodos y CECOs (usando keys/codes):**
+**Ejemplo 3: Sin OC con sustento, múltiples periodos y CECOs (usando codes):**
 
 ```bash
 curl -X POST http://localhost:3001/n8n/invoices \
@@ -295,7 +304,8 @@ curl -X POST http://localhost:3001/n8n/invoices \
     "numberNorm": "F001-00012345",
     "montoSinIgv": 850.00,
     "moneda": "PEN",
-    "proveedor": "Proveedor Sin OC SAC",
+    "supportCode": "S-0010",
+    "proveedorRuc": "20123456789",
     "periodKeys": ["2024-10", "2024-11"],
     "allocations": [
       {
@@ -306,7 +316,8 @@ curl -X POST http://localhost:3001/n8n/invoices \
         "costCenterCode": "CC-002",
         "amount": 425.00
       }
-    ]
+    ],
+    "detalle": "Servicios sin OC"
   }'
 ```
 

@@ -51,6 +51,9 @@ type Invoice = {
     proveedorRef?: { razonSocial?: string | null; ruc?: string | null } | null;
     moneda: string;
   } | null;
+  // Proveedor para facturas sin OC
+  proveedorId?: number | null;
+  proveedor?: { razonSocial?: string | null; ruc?: string | null } | null;
   docType: string;
   numberNorm: string | null;
   currency: string;
@@ -172,7 +175,7 @@ function InvoiceCard({
   onViewDetail: (invoice: Invoice) => void;
   onOpenTimeline: (invoiceId: number) => void;
 }) {
-  const proveedor = invoice.oc?.proveedorRef?.razonSocial || invoice.oc?.proveedor || (invoice as any).proveedor?.razonSocial || "Sin proveedor";
+  const proveedor = invoice.oc?.proveedorRef?.razonSocial || invoice.oc?.proveedor || invoice.proveedor?.razonSocial || "Sin proveedor";
   const numeroOc = invoice.oc?.numeroOc || "-";
   
   return (

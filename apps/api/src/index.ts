@@ -24,6 +24,7 @@ import { ensureYearPeriods } from "./periods";
 import { registerRpaRoutes } from "./rpa";
 import { registerWebSocket } from "./websocket";
 import { registerApprovalRoutes } from "./approvals";
+import { registerN8nRoutes } from "./n8n";
 
 const app = Fastify({ logger: true });
 
@@ -133,6 +134,9 @@ await registerRoleRoutes(app);
 
 // Rutas RPA (protegidas con API Key)
 await registerRpaRoutes(app);
+
+// Rutas n8n (protegidas con API Key)
+await registerN8nRoutes(app);
 
 console.log("[SERVER] WebSocket habilitado en /ws");
 

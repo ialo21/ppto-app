@@ -93,7 +93,7 @@ async function resolvePeriodKeys(periodKeys: string[]): Promise<number[]> {
   return periodIds;
 }
 
-async function resolveProveedorRuc(ruc: string): Promise<number> {
+async function resolveProveedorRuc(ruc: string): Promise<{ id: number; razonSocial: string }> {
   const proveedor = await prisma.proveedor.findUnique({
     where: { ruc }
   });
@@ -102,7 +102,7 @@ async function resolveProveedorRuc(ruc: string): Promise<number> {
     throw new Error(`Proveedor con RUC ${ruc} no encontrado`);
   }
   
-  return proveedor.id;
+  return { id: proveedor.id, razonSocial: proveedor.razonSocial };
 }
 
 async function resolveCostCenterCodes(allocations: any[]): Promise<Array<{
@@ -297,6 +297,7 @@ export async function registerN8nRoutes(app: FastifyInstance) {
     let periodIds: number[];
     let allocations: Array<{ costCenterId: number; amount?: number; percentage?: number }>;
     let proveedorId: number | undefined;
+    let proveedorNombre: string | undefined;
 
     try {
       if (parsed.data.periodKeys && parsed.data.periodKeys.length > 0) {
@@ -313,7 +314,9 @@ export async function registerN8nRoutes(app: FastifyInstance) {
       allocations = await resolveCostCenterCodes(parsed.data.allocations);
 
       if (parsed.data.proveedorRuc) {
-        proveedorId = await resolveProveedorRuc(parsed.data.proveedorRuc);
+        const prov = await resolveProveedorRuc(parsed.data.proveedorRuc);
+        proveedorId = prov.id;
+        proveedorNombre = prov.razonSocial;
       } else if (parsed.data.proveedorId) {
         proveedorId = parsed.data.proveedorId;
       }
@@ -328,7 +331,7 @@ export async function registerN8nRoutes(app: FastifyInstance) {
 
     let oc: any = null;
     let currency = data.moneda || "PEN";
-    let proveedor = data.proveedor || "";
+    let proveedor = data.proveedor || proveedorNombre || "";
 
     if (data.ocId) {
       oc = await prisma.oC.findUnique({
@@ -412,10 +415,10 @@ export async function registerN8nRoutes(app: FastifyInstance) {
         });
       }
     } else {
-      if (!data.proveedor) {
+      if (!proveedorId && !proveedor) {
         return reply.code(422).send({
           error: "VALIDATION_ERROR",
-          issues: [{ path: ["proveedor"], message: "Proveedor es requerido cuando no hay OC" }]
+          issues: [{ path: ["proveedor"], message: "Proveedor o proveedorRuc es requerido cuando no hay OC" }]
         });
       }
       if (!data.moneda) {

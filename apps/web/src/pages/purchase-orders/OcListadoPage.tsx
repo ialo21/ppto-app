@@ -387,13 +387,14 @@ export default function OcListadoPage() {
     // 1. Total de OCs
     const totalOcs = filteredOcs.length;
     
-    // 2. Promedio mensual (dividido por meses transcurridos del año)
-    // Razón: Calcular promedio basado en meses que han pasado, no en todo el año
-    const currentDate = new Date();
-    const currentYear = parseInt(filters.year);
-    const isCurrentYear = currentYear === currentDate.getFullYear();
-    const monthsElapsed = isCurrentYear ? currentDate.getMonth() + 1 : 12;
-    const promedioMensual = monthsElapsed > 0 ? Math.round((totalOcs / monthsElapsed) * 10) / 10 : 0;
+    // 2. Promedio mensual basado solo en meses con actividad
+    const monthsWithActivity = new Set<number>();
+    filteredOcs.forEach((oc: any) => {
+      const month = new Date(oc.fechaRegistro).getMonth(); // 0-11
+      monthsWithActivity.add(month);
+    });
+    const divisor = monthsWithActivity.size || 1; // evitar división por cero
+    const promedioMensual = Math.round((totalOcs / divisor) * 10) / 10;
     
     // 3. Proveedor con más OCs
     const proveedorCounts: Record<string, number> = {};

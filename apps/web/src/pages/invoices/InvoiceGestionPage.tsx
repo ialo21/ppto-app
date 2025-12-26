@@ -30,6 +30,12 @@ type OC = {
 type Invoice = {
   id: number;
   ocId: number | null;
+  // Sustento (facturas sin OC)
+  supportId?: number | null;
+  support?: {
+    id: number;
+    name: string;
+  } | null;
   oc: {
     id: number;
     numeroOc: string | null;
@@ -390,15 +396,15 @@ export default function InvoiceGestionPage() {
     setForm({
       id: String(invoice.id),
       ocId: invoice.ocId ? String(invoice.ocId) : "",
-      supportId: invoice.oc?.support?.id ? String(invoice.oc.support.id) : "",
-      docType: invoice.docType,
+      supportId: invoice.supportId ? String(invoice.supportId) : "",
+      docType: invoice.docType || "FACTURA",
       numberNorm: invoice.numberNorm || "",
       montoSinIgv: invoice.montoSinIgv ? String(invoice.montoSinIgv) : "",
       exchangeRateOverride: invoice.exchangeRateOverride ? String(invoice.exchangeRateOverride) : "",
       ultimusIncident: invoice.ultimusIncident || "",
       detalle: invoice.detalle || "",
-      proveedorId: (invoice as any).vendorId || null,
-      proveedor: invoice.oc?.proveedor || "",
+      proveedorId: (invoice as any).proveedorId || null,
+      proveedor: (invoice as any).proveedor?.razonSocial || invoice.oc?.proveedor || "",
       moneda: invoice.currency || "PEN",
       mesContable: invoice.mesContable || "",
       tcReal: invoice.tcReal ? String(invoice.tcReal) : ""

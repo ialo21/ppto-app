@@ -48,6 +48,7 @@ type Invoice = {
     id: number;
     numeroOc: string | null;
     proveedor: string;
+    proveedorRef?: { razonSocial?: string | null; ruc?: string | null } | null;
     moneda: string;
   } | null;
   docType: string;
@@ -171,7 +172,7 @@ function InvoiceCard({
   onViewDetail: (invoice: Invoice) => void;
   onOpenTimeline: (invoiceId: number) => void;
 }) {
-  const proveedor = invoice.oc?.proveedorRef?.razonSocial || invoice.oc?.proveedor || "Sin proveedor";
+  const proveedor = invoice.oc?.proveedorRef?.razonSocial || invoice.oc?.proveedor || (invoice as any).proveedor?.razonSocial || "Sin proveedor";
   const numeroOc = invoice.oc?.numeroOc || "-";
   
   return (

@@ -256,6 +256,7 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
             }
           }
         },
+        proveedor: true,  // Proveedor para facturas sin OC
         vendor: true,  // Legacy
         periods: {  // Periodos de la factura (M:N)
           include: {
@@ -304,6 +305,7 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
             }
           }
         },
+        proveedor: true,  // Proveedor para facturas sin OC
         vendor: true,
         statusHistory: { orderBy: { changedAt: "asc" } },
         periods: {
@@ -556,8 +558,9 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
           montoPEN_tcEstandar: camposContables.montoPEN_tcEstandar !== null ? new Prisma.Decimal(camposContables.montoPEN_tcEstandar) : null,
           montoPEN_tcReal: camposContables.montoPEN_tcReal !== null ? new Prisma.Decimal(camposContables.montoPEN_tcReal) : null,
           diferenciaTC: camposContables.diferenciaTC !== null ? new Prisma.Decimal(camposContables.diferenciaTC) : null,
-          // Proveedor: solo para facturas CON OC (se deriva de la OC)
-          // Para facturas SIN OC, el proveedor se maneja a través del Support
+          // Proveedor: para facturas SIN OC, usar proveedorId (nueva entidad)
+          proveedorId: data.proveedorId ?? null,
+          // Vendor: solo para facturas CON OC (se deriva de la OC, legacy)
           vendorId: oc?.vendorId ?? null,
           totalForeign: null,
           totalLocal: null
@@ -822,6 +825,7 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
         data: {
           ...(data.ocId !== undefined && { ocId: data.ocId, currency: targetOC?.moneda }),
           ...(data.supportId !== undefined && { supportId: data.supportId }),
+          ...(data.proveedorId !== undefined && { proveedorId: data.proveedorId }),
           ...(data.docType && { docType: data.docType as any }),
           ...(data.numberNorm && { numberNorm: data.numberNorm }),
           ...(data.montoSinIgv !== undefined && { montoSinIgv: new Prisma.Decimal(data.montoSinIgv) }),
@@ -830,7 +834,6 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
           }),
           ...(data.ultimusIncident !== undefined && { ultimusIncident: data.ultimusIncident }),
           ...(data.detalle !== undefined && { detalle: data.detalle }),
-          ...(data.proveedorId !== undefined && { vendorId: data.proveedorId }),
           ...(data.moneda !== undefined && !data.ocId && { currency: data.moneda }),
           // Campos contables (si se recalcularon)
           ...(camposContables && {

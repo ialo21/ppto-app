@@ -36,6 +36,9 @@ type Invoice = {
     id: number;
     name: string;
   } | null;
+  // Proveedor para facturas sin OC
+  proveedorId?: number | null;
+  proveedor?: { id: number; razonSocial: string; ruc: string } | null;
   oc: {
     id: number;
     numeroOc: string | null;
@@ -791,7 +794,7 @@ export default function InvoiceGestionPage() {
                       setForm(f => ({
                         ...f,
                         proveedorId,
-                        proveedor: proveedor?.razonSocial || f.proveedor
+                        proveedor: proveedor?.razonSocial || ""
                       }));
                       if (proveedorId) {
                         setFieldErrors(e => {
@@ -1268,7 +1271,7 @@ export default function InvoiceGestionPage() {
                         </span>
                       </Td>
                       <Td>{inv.oc?.numeroOc || "-"}</Td>
-                      <Td>{inv.oc?.proveedor || "-"}</Td>
+                      <Td>{inv.oc?.proveedorRef?.razonSocial || inv.oc?.proveedor || inv.proveedor?.razonSocial || "-"}</Td>
                       <Td>{inv.currency}</Td>
                       <Td className="text-right">{inv.montoSinIgv ? formatNumber(inv.montoSinIgv) : "-"}</Td>
                       <Td className="text-xs">

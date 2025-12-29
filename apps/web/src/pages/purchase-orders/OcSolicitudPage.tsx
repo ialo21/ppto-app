@@ -206,8 +206,9 @@ export default function OcSolicitudPage() {
         descripcion: form.descripcion.trim(),
         nombreSolicitante: user?.name || user?.email || "Usuario",
         correoSolicitante: user?.email || "",
-        // NUEVO: usar proveedorId para referencia a entidad
         proveedorId: form.proveedorId,
+        proveedor: form.proveedorNombre.trim(),
+        ruc: form.proveedorRuc.trim(),
         moneda: form.moneda,
         importeSinIgv: parseFloat(form.importeSinIgv),
         estado: "PENDIENTE",

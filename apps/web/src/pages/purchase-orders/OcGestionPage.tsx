@@ -420,6 +420,7 @@ export default function OcGestionPage() {
         descripcion: form.descripcion.trim() || undefined,
         nombreSolicitante: form.nombreSolicitante.trim(),
         correoSolicitante: form.correoSolicitante.trim(),
+        proveedorId: form.proveedorId,
         proveedor: form.proveedor.trim(),
         ruc: form.ruc.trim(),
         moneda: form.moneda,
@@ -795,8 +796,8 @@ export default function OcGestionPage() {
                     setForm(f => ({
                       ...f,
                       proveedorId,
-                      proveedor: proveedor?.razonSocial || f.proveedor,
-                      ruc: proveedor?.ruc || f.ruc
+                      proveedor: proveedor?.razonSocial || "",
+                      ruc: proveedor?.ruc || ""
                     }));
                     if (proveedorId) {
                       setFieldErrors(e => ({ ...e, proveedor: "", ruc: "" }));

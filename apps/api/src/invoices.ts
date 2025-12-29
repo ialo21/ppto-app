@@ -227,6 +227,7 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
       include: {
         oc: {
           include: {
+            proveedorRef: { select: { id: true, razonSocial: true, ruc: true } },
             support: {
               include: {
                 expensePackage: true,
@@ -283,6 +284,7 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
       include: {
         oc: {
           include: {
+            proveedorRef: { select: { id: true, razonSocial: true, ruc: true } },
             support: true,
             costCenters: {
               include: {

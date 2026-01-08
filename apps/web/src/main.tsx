@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createBrowserRouter, RouterProvider, NavLink, Outlet, Navigate, useNavigate } from "react-router-dom";
 import "./index.css";
 import { Toaster } from "sonner";
-import { Home, Wallet, FileText, BarChart3, Archive, ShoppingCart, Calendar, Menu, X, Sparkles, Shield, LogOut, User, ClipboardCheck } from "lucide-react";
+import { Home, Wallet, FileText, BarChart3, Archive, ShoppingCart, Calendar, Menu, X, Sparkles, Shield, LogOut, User, ClipboardCheck, FileText as Contratos } from "lucide-react";
 import Button from "./components/ui/Button";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 
@@ -49,6 +49,7 @@ const sidebarItems = [
       { path: "/approvals/ocs/vp", label: "OCs - VP", permission: "aprobaciones:ocs_vp" }
     ]
   },
+  { path: "/contratos/recursos-tercerizados", label: "Contratos", icon: Contratos, permission: "contratos" },
   { path: "/provisions", label: "Provisiones", icon: Calendar, permission: "provisiones" },
   { path: "/ppto", label: "PPTO", icon: Wallet, permission: "ppto" },
   { path: "/settings", label: "Catálogos", icon: Archive, permission: "catalogos" }
@@ -482,6 +483,10 @@ import AprobacionHeadFacturasPage from "./pages/approvals/AprobacionHeadFacturas
 import AprobacionVPFacturasPage from "./pages/approvals/AprobacionVPFacturasPage";
 import AprobacionVPOCsPage from "./pages/approvals/AprobacionVPOCsPage";
 
+// Contratos
+import RecursosTercerizadosPage from "./pages/contratos/RecursosTercerizadosPage";
+import RecursoTercerizadoDetallePage from "./pages/contratos/RecursoTercerizadoDetallePage";
+
 const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
   { element: <AppLayout />, children: [
@@ -502,6 +507,9 @@ const router = createBrowserRouter([
     { path: "/approvals/invoices/head", element: <AprobacionHeadFacturasPage /> },
     { path: "/approvals/invoices/vp", element: <AprobacionVPFacturasPage /> },
     { path: "/approvals/ocs/vp", element: <AprobacionVPOCsPage /> },
+    // Contratos
+    { path: "/contratos/recursos-tercerizados", element: <RecursosTercerizadosPage /> },
+    { path: "/contratos/recursos-tercerizados/:id", element: <RecursoTercerizadoDetallePage /> },
     { path: "/provisions", element: <ProvisionsPage /> },
     { path: "/ppto", element: <BudgetPage /> },
     { path: "/settings", element: <CatalogsPage /> },

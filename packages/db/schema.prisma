@@ -143,6 +143,7 @@ model Support {
   invoices          Invoice[]            // Facturas sin OC asociadas
   costCenters       SupportCostCenter[]  // M:N con CostCenter
   provisions        Provision[]          // Provisiones asociadas
+  recursosTercerizados RecursoTercerizado[]  // Recursos tercerizados asociados
 }
 
 model CostCenter {
@@ -171,6 +172,7 @@ model Management {
   active   Boolean   @default(true)
   supports Support[]
   areas    Area[]
+  recursosTercerizados RecursoTercerizado[]
 }
 
 model Area {
@@ -249,6 +251,7 @@ model Proveedor {
   // Relaciones
   ocs         OC[]      @relation("OC_PROVEEDOR")
   invoices    Invoice[] // Facturas sin OC asociadas
+  recursosTercerizados RecursoTercerizado[]
   
   @@index([ruc], name: "ix_proveedor_ruc")
   @@index([razonSocial], name: "ix_proveedor_razon_social")
@@ -453,6 +456,7 @@ model OC {
   costCenters            OCCostCenter[]  // M:N con CostCenter
   statusHistory          OCStatusHistory[]  // Historial de cambios de estado
   documents              OCDocument[]  // M:N con Document
+  recursosTercerizados   RecursoTercOC[]  // M:N con RecursoTercerizado
   
   @@index([supportId], name: "ix_oc_support")
   @@index([estado], name: "ix_oc_estado")
@@ -554,6 +558,94 @@ model Provision {
   @@index([sustentoId], name: "ix_provision_sustento")
   @@index([periodoPpto], name: "ix_provision_periodo_ppto")
   @@index([periodoContable], name: "ix_provision_periodo_contable")
+}
+
+// ============ CONTRATOS - RECURSOS TERCERIZADOS ============
+
+enum RecursoStatus {
+  ACTIVO
+  CESADO
+}
+
+model RecursoTercerizado {
+  id                 Int              @id @default(autoincrement())
+  
+  // Datos de la persona
+  nombreCompleto     String           // Nombre completo de la persona tercerizada
+  cargo              String           // Cargo que desempeña
+  
+  // Relación con Gerencia TI (requerido)
+  managementId       Int
+  management         Management       @relation(fields: [managementId], references: [id], onDelete: Restrict)
+  
+  // Relación con Proveedor (requerido)
+  proveedorId        Int
+  proveedor          Proveedor        @relation(fields: [proveedorId], references: [id], onDelete: Restrict)
+  
+  // Relación con Sustento (opcional, para tracking presupuestario)
+  supportId          Int?
+  support            Support?         @relation(fields: [supportId], references: [id], onDelete: SetNull)
+  
+  // Datos del contrato vigente
+  fechaInicio        DateTime         // Fecha de inicio del contrato vigente
+  fechaFin           DateTime         // Fecha de fin del contrato vigente (también es la fecha de cese)
+  montoMensual       Decimal          // Monto mensual en soles (PEN)
+  
+  // Link al contrato/cotización vigente (editable)
+  linkContrato       String?          @db.Text
+  
+  // Estado (calculado en lógica: CESADO si fechaFin < hoy, ACTIVO en caso contrario)
+  status             RecursoStatus    @default(ACTIVO)
+  
+  // Observaciones/notas
+  observaciones      String?          @db.Text
+  
+  // Auditoría
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  createdBy          Int?
+  
+  // Relaciones many-to-many
+  ocs                RecursoTercOC[]  // Múltiples OCs asociadas
+  historico          HistoricoContrato[]
+  
+  @@index([managementId], name: "ix_recurso_management")
+  @@index([proveedorId], name: "ix_recurso_proveedor")
+  @@index([supportId], name: "ix_recurso_support")
+  @@index([status], name: "ix_recurso_status")
+  @@index([fechaFin], name: "ix_recurso_fecha_fin")
+}
+
+// Tabla de unión para relación many-to-many entre RecursoTercerizado y OC
+model RecursoTercOC {
+  id              Int                @id @default(autoincrement())
+  recursoTercId   Int
+  recursoTerc     RecursoTercerizado @relation(fields: [recursoTercId], references: [id], onDelete: Cascade)
+  ocId            Int
+  oc              OC                 @relation(fields: [ocId], references: [id], onDelete: Cascade)
+  createdAt       DateTime           @default(now())
+  
+  @@unique([recursoTercId, ocId])
+  @@index([recursoTercId], name: "ix_recurso_terc_oc_recurso")
+  @@index([ocId], name: "ix_recurso_terc_oc_oc")
+}
+
+model HistoricoContrato {
+  id                  Int                @id @default(autoincrement())
+  recursoTercId       Int
+  recursoTerc         RecursoTercerizado @relation(fields: [recursoTercId], references: [id], onDelete: Cascade)
+  
+  // Datos del contrato histórico (snapshot de fechas y monto en ese período)
+  fechaInicio         DateTime
+  fechaFin            DateTime  // Fecha de fin = fecha de cese del contrato
+  montoMensual        Decimal
+  linkContrato        String?            @db.Text
+  
+  // Auditoría
+  createdAt           DateTime           @default(now())
+  
+  @@index([recursoTercId], name: "ix_historico_recurso")
+  @@index([fechaInicio, fechaFin], name: "ix_historico_periodo")
 }
 
 // ============ AUTENTICACIÓN Y ROLES ============

@@ -25,6 +25,7 @@ import { registerRpaRoutes } from "./rpa";
 import { registerWebSocket } from "./websocket";
 import { registerApprovalRoutes } from "./approvals";
 import { registerN8nRoutes } from "./n8n";
+import { registerRecursosTercerizadosRoutes } from "./recursos-tercerizados";
 
 const app = Fastify({ logger: true });
 
@@ -155,6 +156,7 @@ await registerBulkRoutes(app);
 await registerExchangeRateRoutes(app);
 await registerApprovalRoutes(app);
 await registerAssistantRoutes(app);
+await registerRecursosTercerizadosRoutes(app);
 
 const port = Number(process.env.API_PORT || 3001);
 app.listen({ port, host: "0.0.0.0" });

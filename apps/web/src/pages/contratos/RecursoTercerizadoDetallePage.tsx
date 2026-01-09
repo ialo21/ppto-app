@@ -103,45 +103,12 @@ export default function RecursoTercerizadoDetallePage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  // Query base: info principal del recurso (carga rápida)
-  const { data: recurso, isLoading: isLoadingBase } = useQuery({
-    queryKey: ["recurso-tercerizado-base", id],
+  // Query única: info completa del recurso (cache 5 min)
+  const { data: recurso, isLoading: isLoadingBase, isFetching } = useQuery<RecursoDetalle>({
+    queryKey: ["recurso-tercerizado", id],
     queryFn: async () => (await api.get(`/recursos-tercerizados/${id}`)).data,
     enabled: !!id,
     staleTime: 1000 * 60 * 5 // 5 minutos de cache
-  });
-
-  // Query histórico: se carga independiente
-  const { data: historico, isLoading: isLoadingHistorico } = useQuery({
-    queryKey: ["recurso-tercerizado-historico", id],
-    queryFn: async () => {
-      const response = await api.get(`/recursos-tercerizados/${id}`);
-      return response.data.historico || [];
-    },
-    enabled: !!id && !!recurso,
-    staleTime: 1000 * 60 * 5
-  });
-
-  // Query OCs: se carga independiente
-  const { data: ocs, isLoading: isLoadingOCs } = useQuery({
-    queryKey: ["recurso-tercerizado-ocs", id],
-    queryFn: async () => {
-      const response = await api.get(`/recursos-tercerizados/${id}`);
-      return response.data.ocs || [];
-    },
-    enabled: !!id && !!recurso,
-    staleTime: 1000 * 60 * 5
-  });
-
-  // Query facturas: se carga independiente
-  const { data: facturas, isLoading: isLoadingFacturas } = useQuery({
-    queryKey: ["recurso-tercerizado-facturas", id],
-    queryFn: async () => {
-      const response = await api.get(`/recursos-tercerizados/${id}`);
-      return response.data.facturasRelacionadas || [];
-    },
-    enabled: !!id && !!recurso,
-    staleTime: 1000 * 60 * 5
   });
 
   const [showAddHistorico, setShowAddHistorico] = useState(false);
@@ -163,6 +130,14 @@ export default function RecursoTercerizadoDetallePage() {
   const [showAsociarOC, setShowAsociarOC] = useState(false);
   const [selectedOcId, setSelectedOcId] = useState<string>("");
 
+  // Derivados para secciones
+  const historico = recurso?.historico ?? [];
+  const ocs = recurso?.ocs ?? [];
+  const facturas = recurso?.facturasRelacionadas ?? [];
+  const isLoadingHistorico = isFetching;
+  const isLoadingOCs = isFetching;
+  const isLoadingFacturas = isFetching;
+
   const { data: ocsDisponibles } = useQuery({
     queryKey: ["ocs"],
     queryFn: async () => (await api.get("/ocs")).data
@@ -180,8 +155,7 @@ export default function RecursoTercerizadoDetallePage() {
     },
     onSuccess: () => {
       toast.success("Histórico agregado");
-      queryClient.invalidateQueries({ queryKey: ["recurso-tercerizado-historico", id] });
-      queryClient.invalidateQueries({ queryKey: ["recurso-tercerizado-base", id] });
+      queryClient.invalidateQueries({ queryKey: ["recurso-tercerizado", id] });
       setShowAddHistorico(false);
       setHistoricoForm({ fechaInicio: "", fechaFin: "", montoMensual: "", linkContrato: "" });
     },
@@ -200,8 +174,7 @@ export default function RecursoTercerizadoDetallePage() {
     },
     onSuccess: () => {
       toast.success("Nuevo contrato creado, el anterior se movió al histórico");
-      queryClient.invalidateQueries({ queryKey: ["recurso-tercerizado-base", id] });
-      queryClient.invalidateQueries({ queryKey: ["recurso-tercerizado-historico", id] });
+      queryClient.invalidateQueries({ queryKey: ["recurso-tercerizado", id] });
       queryClient.invalidateQueries({ queryKey: ["recursos-tercerizados"] });
       setShowNuevoContrato(false);
       setNuevoContratoForm({ fechaInicio: "", fechaFin: "", montoMensual: "", linkContrato: "" });
@@ -217,7 +190,7 @@ export default function RecursoTercerizadoDetallePage() {
     },
     onSuccess: () => {
       toast.success("OC asociada correctamente");
-      queryClient.invalidateQueries({ queryKey: ["recurso-tercerizado-ocs", id] });
+      queryClient.invalidateQueries({ queryKey: ["recurso-tercerizado", id] });
       setShowAsociarOC(false);
       setSelectedOcId("");
     },
@@ -232,7 +205,7 @@ export default function RecursoTercerizadoDetallePage() {
     },
     onSuccess: () => {
       toast.success("OC desasociada correctamente");
-      queryClient.invalidateQueries({ queryKey: ["recurso-tercerizado-ocs", id] });
+      queryClient.invalidateQueries({ queryKey: ["recurso-tercerizado", id] });
     },
     onError: () => toast.error("Error al desasociar OC")
   });

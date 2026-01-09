@@ -169,27 +169,32 @@ export default function RecursosTercerizadosPage() {
 
   const { data: recursos = [], isLoading } = useQuery<RecursoTercerizado[]>({
     queryKey: ["recursos-tercerizados"],
-    queryFn: async () => (await api.get("/recursos-tercerizados")).data
+    queryFn: async () => (await api.get("/recursos-tercerizados")).data,
+    staleTime: 1000 * 60 * 2 // 2 minutos de cache
   });
 
   const { data: estadisticas } = useQuery<Estadisticas>({
     queryKey: ["recursos-tercerizados-estadisticas"],
-    queryFn: async () => (await api.get("/recursos-tercerizados/estadisticas")).data
+    queryFn: async () => (await api.get("/recursos-tercerizados/estadisticas")).data,
+    staleTime: 1000 * 60 * 2 // 2 minutos de cache
   });
 
   const { data: managements } = useQuery({
     queryKey: ["managements"],
-    queryFn: async () => (await api.get("/managements")).data
+    queryFn: async () => (await api.get("/managements")).data,
+    staleTime: 1000 * 60 * 10 // 10 minutos de cache (catálogo)
   });
 
   const { data: supports } = useQuery({
     queryKey: ["supports"],
-    queryFn: async () => (await api.get("/supports")).data
+    queryFn: async () => (await api.get("/supports")).data,
+    staleTime: 1000 * 60 * 10 // 10 minutos de cache (catálogo)
   });
 
   const { data: ocs } = useQuery({
     queryKey: ["ocs"],
-    queryFn: async () => (await api.get("/ocs")).data
+    queryFn: async () => (await api.get("/ocs")).data,
+    staleTime: 1000 * 60 * 5 // 5 minutos de cache
   });
 
   const [viewMode, setViewMode] = useState<ViewMode>("gerencia");

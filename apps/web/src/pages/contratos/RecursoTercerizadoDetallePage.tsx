@@ -140,7 +140,9 @@ export default function RecursoTercerizadoDetallePage() {
 
   const { data: ocsDisponibles } = useQuery({
     queryKey: ["ocs"],
-    queryFn: async () => (await api.get("/ocs")).data
+    queryFn: async () => (await api.get("/ocs")).data,
+    enabled: showAsociarOC, // Solo cargar si el usuario abre el formulario de asociar
+    staleTime: 1000 * 60 * 5 // 5 minutos de cache
   });
 
   const addHistoricoMutation = useMutation({

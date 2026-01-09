@@ -8,7 +8,15 @@ import { Home, Wallet, FileText, BarChart3, Archive, ShoppingCart, Calendar, Men
 import Button from "./components/ui/Button";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 
-const qc = new QueryClient();
+const qc = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnMount: false, // No refetch automático al montar componente
+      refetchOnWindowFocus: false, // No refetch al volver a la ventana
+      staleTime: 1000 * 60 * 5, // 5 minutos de cache por defecto
+    },
+  },
+});
 
 // Mapeo de permisos a rutas del sidebar
 // Nota: Los items con `children` son grupos desplegables

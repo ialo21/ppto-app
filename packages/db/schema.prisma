@@ -578,6 +578,10 @@ model RecursoTercerizado {
   managementId       Int
   management         Management       @relation(fields: [managementId], references: [id], onDelete: Restrict)
   
+  // Relación con Persona Responsable (requerido)
+  responsableId      Int
+  responsable        User             @relation(fields: [responsableId], references: [id], onDelete: Restrict)
+  
   // Relación con Proveedor (requerido)
   proveedorId        Int
   proveedor          Proveedor        @relation(fields: [proveedorId], references: [id], onDelete: Restrict)
@@ -610,6 +614,7 @@ model RecursoTercerizado {
   historico          HistoricoContrato[]
   
   @@index([managementId], name: "ix_recurso_management")
+  @@index([responsableId], name: "ix_recurso_responsable")
   @@index([proveedorId], name: "ix_recurso_proveedor")
   @@index([supportId], name: "ix_recurso_support")
   @@index([status], name: "ix_recurso_status")
@@ -660,6 +665,7 @@ model User {
   updatedAt     DateTime  @updatedAt
   
   userRoles     UserRole[]
+  recursosTercerizados RecursoTercerizado[]
   
   @@index([email], name: "ix_user_email")
 }

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useRef } from "react";
 import ReactDatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import "../../styles/react-datepicker-overrides.css";
@@ -12,6 +12,7 @@ import Button from "../../components/ui/Button";
 import { Table, Th, Td } from "../../components/ui/Table";
 import { formatNumber } from "../../utils/numberFormat";
 import ProveedorSelector from "../../components/ProveedorSelector";
+import ResponsableSelector from "../../components/ResponsableSelector";
 import { Users, DollarSign, Building2, Package, ExternalLink, Calendar, TrendingUp } from "lucide-react";
 
 /**
@@ -32,6 +33,8 @@ type RecursoTercerizado = {
   cargo: string;
   managementId: number;
   management: { id: number; name: string };
+  responsableId: number;
+  responsable: { id: number; name: string; email: string };
   proveedorId: number;
   proveedor: { id: number; razonSocial: string; ruc: string };
   supportId: number | null;
@@ -55,7 +58,7 @@ type Estadisticas = {
   porGerencia: Array<{ managementId: number; managementName: string; cantidad: number }>;
 };
 
-type ViewMode = "gerencia" | "proveedor";
+type ViewMode = "gerencia" | "responsable" | "proveedor";
 
 const getStatusColor = (status: string): string => {
   return status === "ACTIVO" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800";
@@ -166,6 +169,7 @@ const FilterSelectWithError = ({ error, ...props }: any) => (
 
 export default function RecursosTercerizadosPage() {
   const queryClient = useQueryClient();
+  const formRef = useRef<HTMLDivElement>(null);
 
   const { data: recursos = [], isLoading } = useQuery<RecursoTercerizado[]>({
     queryKey: ["recursos-tercerizados"],
@@ -182,6 +186,12 @@ export default function RecursosTercerizadosPage() {
   const { data: managements } = useQuery({
     queryKey: ["managements"],
     queryFn: async () => (await api.get("/managements")).data,
+    staleTime: 1000 * 60 * 10 // 10 minutos de cache (catálogo)
+  });
+
+  const { data: users } = useQuery({
+    queryKey: ["users"],
+    queryFn: async () => (await api.get("/users")).data,
     staleTime: 1000 * 60 * 10 // 10 minutos de cache (catálogo)
   });
 
@@ -206,6 +216,7 @@ export default function RecursosTercerizadosPage() {
     nombreCompleto: "",
     cargo: "",
     managementId: "",
+    responsableId: "",
     proveedorId: null as number | null,
     supportId: "",
     fechaInicio: "",
@@ -218,9 +229,12 @@ export default function RecursosTercerizadosPage() {
   const [filters, setFilters] = useState({
     search: "",
     managementId: "",
+    responsableId: "",
     proveedorId: "",
     status: ""
   });
+
+  const [showOnlyActive, setShowOnlyActive] = useState(true);
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -229,6 +243,7 @@ export default function RecursosTercerizadosPage() {
       nombreCompleto: "",
       cargo: "",
       managementId: "",
+      responsableId: "",
       proveedorId: null,
       supportId: "",
       fechaInicio: "",
@@ -247,6 +262,7 @@ export default function RecursosTercerizadosPage() {
     if (!form.nombreCompleto.trim()) errors.nombreCompleto = "Nombre completo es requerido";
     if (!form.cargo.trim()) errors.cargo = "Cargo es requerido";
     if (!form.managementId) errors.managementId = "Gerencia TI es requerida";
+    if (!form.responsableId) errors.responsableId = "Persona Responsable es requerida";
     if (!form.proveedorId) errors.proveedorId = "Proveedor es requerido";
     if (!form.fechaInicio) errors.fechaInicio = "Fecha de inicio es requerida";
     if (!form.fechaFin) errors.fechaFin = "Fecha de fin es requerida";
@@ -270,6 +286,7 @@ export default function RecursosTercerizadosPage() {
         nombreCompleto: form.nombreCompleto.trim(),
         cargo: form.cargo.trim(),
         managementId: Number(form.managementId),
+        responsableId: Number(form.responsableId),
         proveedorId: Number(form.proveedorId),
         supportId: form.supportId ? Number(form.supportId) : null,
         fechaInicio: form.fechaInicio,
@@ -327,6 +344,7 @@ export default function RecursosTercerizadosPage() {
       nombreCompleto: recurso.nombreCompleto,
       cargo: recurso.cargo,
       managementId: recurso.managementId.toString(),
+      responsableId: recurso.responsableId.toString(),
       proveedorId: recurso.proveedorId,
       supportId: recurso.supportId?.toString() || "",
       fechaInicio: recurso.fechaInicio.split("T")[0],
@@ -337,30 +355,43 @@ export default function RecursosTercerizadosPage() {
     });
     setEditingId(recurso.id);
     setShowForm(true);
+    // Scroll al formulario después de un breve delay para que el DOM se actualice
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
   };
 
   const filteredRecursos = useMemo(() => {
     let result = [...recursos];
+    if (showOnlyActive) {
+      result = result.filter(r => r.status === "ACTIVO");
+    }
     if (filters.search.trim()) {
       const searchLower = filters.search.toLowerCase();
       result = result.filter((r: RecursoTercerizado) =>
         r.nombreCompleto?.toLowerCase().includes(searchLower) ||
         r.cargo?.toLowerCase().includes(searchLower) ||
         r.proveedor?.razonSocial?.toLowerCase().includes(searchLower) ||
-        r.management?.name?.toLowerCase().includes(searchLower)
+        r.management?.name?.toLowerCase().includes(searchLower) ||
+        r.responsable?.name?.toLowerCase().includes(searchLower)
       );
     }
     if (filters.managementId) result = result.filter(r => r.managementId === Number(filters.managementId));
+    if (filters.responsableId) result = result.filter(r => r.responsableId === Number(filters.responsableId));
     if (filters.proveedorId) result = result.filter(r => r.proveedorId === Number(filters.proveedorId));
     if (filters.status) result = result.filter(r => r.status === filters.status);
     return result;
-  }, [recursos, filters]);
+  }, [recursos, filters, showOnlyActive]);
 
   const groupedRecursos = useMemo(() => {
     if (!filteredRecursos || filteredRecursos.length === 0) return [];
     const groups = new Map<string, RecursoTercerizado[]>();
     filteredRecursos.forEach(recurso => {
-      const key = viewMode === "gerencia" ? recurso.management.name : recurso.proveedor.razonSocial;
+      const key = viewMode === "gerencia" 
+        ? recurso.management.name 
+        : viewMode === "responsable"
+        ? recurso.responsable.name
+        : recurso.proveedor.razonSocial;
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(recurso);
     });
@@ -415,11 +446,12 @@ export default function RecursosTercerizadosPage() {
       )}
 
       {showForm && (
-        <Card>
-          <CardHeader>
-            <h2 className="text-lg font-medium">{editingId ? "Editar Recurso" : "Nuevo Recurso Tercerizado"}</h2>
-          </CardHeader>
-          <CardContent>
+        <div ref={formRef}>
+          <Card>
+            <CardHeader>
+              <h2 className="text-lg font-medium">{editingId ? "Editar Recurso" : "Nuevo Recurso Tercerizado"}</h2>
+            </CardHeader>
+            <CardContent>
             <div className="grid md:grid-cols-3 gap-3">
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium mb-1">Nombre Completo *</label>
@@ -431,6 +463,19 @@ export default function RecursosTercerizadosPage() {
               </div>
               <div className="md:col-span-3">
                 <FilterSelectWithError label="Gerencia TI *" placeholder="Seleccionar gerencia" value={form.managementId} onChange={(value: string) => setForm(f => ({ ...f, managementId: value }))} options={managements?.map((m: any) => ({ value: String(m.id), label: m.name })) || []} error={fieldErrors.managementId} />
+              </div>
+              <div className="md:col-span-3">
+                <ResponsableSelector 
+                  label="Persona Responsable *" 
+                  placeholder="Buscar o crear responsable..." 
+                  value={form.responsableId ? Number(form.responsableId) : null} 
+                  onChange={(userId) => { 
+                    setForm(f => ({ ...f, responsableId: userId ? String(userId) : "" })); 
+                    if (userId) setFieldErrors(e => ({ ...e, responsableId: "" })); 
+                  }} 
+                  error={fieldErrors.responsableId} 
+                  allowCreate={true} 
+                />
               </div>
               <div className="md:col-span-3">
                 <ProveedorSelector label="Proveedor *" placeholder="Buscar o crear proveedor..." value={form.proveedorId} onChange={(proveedorId) => { setForm(f => ({ ...f, proveedorId })); if (proveedorId) setFieldErrors(e => ({ ...e, proveedorId: "" })); }} error={fieldErrors.proveedorId} allowCreate={true} />
@@ -505,6 +550,7 @@ export default function RecursosTercerizadosPage() {
             </div>
           </CardContent>
         </Card>
+        </div>
       )}
 
       <Card>
@@ -517,9 +563,24 @@ export default function RecursosTercerizadosPage() {
               <Button size="sm" variant={viewMode === "gerencia" ? "primary" : "secondary"} onClick={() => setViewMode("gerencia")}>
                 Por Gerencia TI
               </Button>
+              <Button size="sm" variant={viewMode === "responsable" ? "primary" : "secondary"} onClick={() => setViewMode("responsable")}>
+                Por Responsable
+              </Button>
               <Button size="sm" variant={viewMode === "proveedor" ? "primary" : "secondary"} onClick={() => setViewMode("proveedor")}>
                 Por Proveedor
               </Button>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="showOnlyActive"
+                checked={showOnlyActive}
+                onChange={(e) => setShowOnlyActive(e.target.checked)}
+                className="w-4 h-4 text-brand-primary bg-white border-brand-border rounded focus:ring-brand-primary focus:ring-2"
+              />
+              <label htmlFor="showOnlyActive" className="text-sm text-brand-text-secondary cursor-pointer">
+                Solo mostrar activos
+              </label>
             </div>
           </div>
 
@@ -572,10 +633,20 @@ export default function RecursosTercerizadosPage() {
                             <p className="text-xs text-brand-text-secondary mb-1">Monto Mensual</p>
                             <p className="text-xl font-bold text-brand-primary">PEN {formatNumber(recurso.montoMensual)}</p>
                           </div>
+                          <div className="mb-2">
+                            <p className="text-xs text-brand-text-secondary">Responsable</p>
+                            <p className="text-sm text-brand-text-primary">{recurso.responsable.name}</p>
+                          </div>
                           {viewMode === "gerencia" && (
                             <div className="mb-2">
                               <p className="text-xs text-brand-text-secondary">Proveedor</p>
                               <p className="text-sm text-brand-text-primary">{recurso.proveedor.razonSocial}</p>
+                            </div>
+                          )}
+                          {viewMode === "responsable" && (
+                            <div className="mb-2">
+                              <p className="text-xs text-brand-text-secondary">Gerencia TI</p>
+                              <p className="text-sm text-brand-text-primary">{recurso.management.name}</p>
                             </div>
                           )}
                           {viewMode === "proveedor" && (
@@ -591,8 +662,11 @@ export default function RecursosTercerizadosPage() {
                             </p>
                           </div>
                           <div className="grid grid-cols-3 gap-2">
-                            <Button size="sm" variant="primary" onClick={() => window.location.href = `/contratos/recursos-tercerizados/${recurso.id}`} className="col-span-2">
+                            <Button size="sm" variant="primary" onClick={() => window.location.href = `/contratos/recursos-tercerizados/${recurso.id}`} title="Ver Detalle">
                               Ver Detalle
+                            </Button>
+                            <Button size="sm" variant="secondary" onClick={() => recurso.linkContrato && window.open(recurso.linkContrato, '_blank')} disabled={!recurso.linkContrato} title="Ver Contrato">
+                              <ExternalLink size={14} />
                             </Button>
                             <Button size="sm" variant="secondary" onClick={() => handleEdit(recurso)} title="Editar">
                               <Package size={14} />
@@ -619,7 +693,7 @@ export default function RecursosTercerizadosPage() {
           </div>
         </CardHeader>
         {showTable && <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4">
             <div>
               <label className="block text-sm font-medium mb-1 text-brand-text-secondary">Buscar</label>
               <Input
@@ -630,6 +704,7 @@ export default function RecursosTercerizadosPage() {
               />
             </div>
             <FilterSelect label="Gerencia TI" placeholder="Todas" value={filters.managementId} onChange={(value) => setFilters(f => ({ ...f, managementId: value }))} options={managements?.map((m: any) => ({ value: String(m.id), label: m.name })) || []} />
+            <FilterSelect label="Responsable" placeholder="Todos" value={filters.responsableId} onChange={(value) => setFilters(f => ({ ...f, responsableId: value }))} options={recursos.map(r => ({ value: String(r.responsableId), label: r.responsable.name })).filter((v, i, a) => a.findIndex(t => t.value === v.value) === i) || []} />
             <FilterSelect label="Proveedor" placeholder="Todos" value={filters.proveedorId} onChange={(value) => setFilters(f => ({ ...f, proveedorId: value }))} options={recursos.map(r => ({ value: String(r.proveedorId), label: r.proveedor.razonSocial })).filter((v, i, a) => a.findIndex(t => t.value === v.value) === i) || []} />
             <FilterSelect label="Estado" placeholder="Todos" value={filters.status} onChange={(value) => setFilters(f => ({ ...f, status: value }))} options={[{ value: "ACTIVO", label: "Activo" }, { value: "CESADO", label: "Cesado" }]} searchable={false} />
           </div>
@@ -646,6 +721,7 @@ export default function RecursosTercerizadosPage() {
                     <Th>Nombre</Th>
                     <Th>Cargo</Th>
                     <Th>Gerencia TI</Th>
+                    <Th>Responsable</Th>
                     <Th>Proveedor</Th>
                     <Th>Contrato Vigente</Th>
                     <Th>Monto Mensual</Th>
@@ -659,6 +735,7 @@ export default function RecursosTercerizadosPage() {
                       <Td>{recurso.nombreCompleto}</Td>
                       <Td>{recurso.cargo}</Td>
                       <Td>{recurso.management.name}</Td>
+                      <Td>{recurso.responsable.name}</Td>
                       <Td>{recurso.proveedor.razonSocial}</Td>
                       <Td>{formatDate(recurso.fechaInicio)} → {formatDate(recurso.fechaFin)}</Td>
                       <Td>PEN {formatNumber(recurso.montoMensual)}</Td>

@@ -486,31 +486,43 @@ export default function Dashboard() {
   const { data: periods = [] } = useQuery<Period[]>({
     queryKey: ["periods"],
     queryFn: async () => (await api.get("/periods")).data,
+    refetchOnMount: false,
+    staleTime: 1000 * 60 * 10,
   });
 
   const { data: supports = [] } = useQuery({
     queryKey: ["supports"],
     queryFn: async () => (await api.get("/supports")).data,
+    refetchOnMount: false,
+    staleTime: 1000 * 60 * 10,
   });
 
   const { data: costCenters = [] } = useQuery({
     queryKey: ["cost-centers"],
     queryFn: async () => (await api.get("/cost-centers")).data,
+    refetchOnMount: false,
+    staleTime: 1000 * 60 * 10,
   });
 
   const { data: managements = [] } = useQuery({
     queryKey: ["managements"],
     queryFn: async () => (await api.get("/managements")).data,
+    refetchOnMount: false,
+    staleTime: 1000 * 60 * 10,
   });
 
   const { data: areas = [] } = useQuery({
     queryKey: ["areas"],
     queryFn: async () => (await api.get("/areas")).data,
+    refetchOnMount: false,
+    staleTime: 1000 * 60 * 10,
   });
 
   const { data: packages = [] } = useQuery({
     queryKey: ["expense-packages"],
     queryFn: async () => (await api.get("/expense-packages")).data,
+    refetchOnMount: false,
+    staleTime: 1000 * 60 * 10,
   });
 
   // Áreas filtradas por gerencia(s) seleccionada(s)
@@ -544,6 +556,8 @@ export default function Dashboard() {
       
       return (await api.get("/reports/dashboard", { params })).data;
     },
+    refetchOnMount: false,
+    staleTime: 1000 * 60 * 5,
   });
 
   // ══════════════════════════════════════════════════════════════
@@ -564,6 +578,8 @@ export default function Dashboard() {
       return (await api.get("/reports/dashboard/detail", { params })).data;
     },
     enabled: !!data, // Solo cargar detalles si ya tenemos datos principales
+    refetchOnMount: false,
+    staleTime: 1000 * 60 * 5,
   });
 
   // ══════════════════════════════════════════════════════════════

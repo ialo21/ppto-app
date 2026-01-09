@@ -304,7 +304,7 @@ export async function registerRoleRoutes(app: FastifyInstance) {
   });
 
   // GET /users - Listar todos los usuarios
-  app.get("/users", { preHandler: [requireAuth, requirePermission("manage_roles")] }, async () => {
+  app.get("/users", { preHandler: [requireAuth] }, async () => {
     const users = await prisma.user.findMany({
       include: {
         userRoles: {
@@ -327,6 +327,45 @@ export async function registerRoleRoutes(app: FastifyInstance) {
       })),
       createdAt: user.createdAt
     }));
+  });
+
+  // POST /users - Crear nuevo usuario (sin autenticación Google, para uso como responsable)
+  app.post("/users", { preHandler: [requireAuth, requirePermission("contratos")] }, async (request, reply) => {
+    const { email, name, active = true } = request.body as { email: string; name?: string; active?: boolean };
+    
+    if (!email || !email.trim()) {
+      return reply.code(400).send({ error: "Email es requerido" });
+    }
+    
+    const emailLower = email.trim().toLowerCase();
+    
+    // Validar formato de email
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailLower)) {
+      return reply.code(400).send({ error: "Email inválido" });
+    }
+    
+    // Verificar si el usuario ya existe
+    const existing = await prisma.user.findUnique({ where: { email: emailLower } });
+    if (existing) {
+      return reply.code(409).send({ error: "Ya existe un usuario con ese email" });
+    }
+    
+    // Crear usuario
+    const user = await prisma.user.create({
+      data: {
+        email: emailLower,
+        name: name?.trim() || null,
+        active: active !== false
+      }
+    });
+    
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      active: user.active,
+      createdAt: user.createdAt
+    };
   });
 
   // POST /users/:userId/roles - Asignar rol a un usuario

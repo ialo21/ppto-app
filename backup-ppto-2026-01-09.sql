@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict Z7vhFxR8JZBbjbdqv0Gf9RCDlo2o5HvaqzAlI2MEFdfYRtn4fIIHxiZZFB5BbH2
+\restrict Wl6SgexsmYWbmvpZ2OOvpgPrfGLjVszoEAVmhr22s1ixiwi2hxn49gMGtfe7KFv
 
 -- Dumped from database version 16.11 (Debian 16.11-1.pgdg13+1)
 -- Dumped by pg_dump version 16.11 (Debian 16.11-1.pgdg13+1)
@@ -29,6 +29,11 @@ ALTER TABLE IF EXISTS ONLY public."SupportCostCenter" DROP CONSTRAINT IF EXISTS 
 ALTER TABLE IF EXISTS ONLY public."SupportCostCenter" DROP CONSTRAINT IF EXISTS "SupportCostCenter_costCenterId_fkey";
 ALTER TABLE IF EXISTS ONLY public."RolePermission" DROP CONSTRAINT IF EXISTS "RolePermission_roleId_fkey";
 ALTER TABLE IF EXISTS ONLY public."RolePermission" DROP CONSTRAINT IF EXISTS "RolePermission_permissionId_fkey";
+ALTER TABLE IF EXISTS ONLY public."RecursoTercerizado" DROP CONSTRAINT IF EXISTS "RecursoTercerizado_supportId_fkey";
+ALTER TABLE IF EXISTS ONLY public."RecursoTercerizado" DROP CONSTRAINT IF EXISTS "RecursoTercerizado_proveedorId_fkey";
+ALTER TABLE IF EXISTS ONLY public."RecursoTercerizado" DROP CONSTRAINT IF EXISTS "RecursoTercerizado_managementId_fkey";
+ALTER TABLE IF EXISTS ONLY public."RecursoTercOC" DROP CONSTRAINT IF EXISTS "RecursoTercOC_recursoTercId_fkey";
+ALTER TABLE IF EXISTS ONLY public."RecursoTercOC" DROP CONSTRAINT IF EXISTS "RecursoTercOC_ocId_fkey";
 ALTER TABLE IF EXISTS ONLY public."PurchaseOrder" DROP CONSTRAINT IF EXISTS "PurchaseOrder_vendorId_fkey";
 ALTER TABLE IF EXISTS ONLY public."Provision" DROP CONSTRAINT IF EXISTS "Provision_sustentoId_fkey";
 ALTER TABLE IF EXISTS ONLY public."OC" DROP CONSTRAINT IF EXISTS "OC_supportId_fkey";
@@ -51,6 +56,7 @@ ALTER TABLE IF EXISTS ONLY public."InvoicePeriod" DROP CONSTRAINT IF EXISTS "Inv
 ALTER TABLE IF EXISTS ONLY public."InvoicePeriod" DROP CONSTRAINT IF EXISTS "InvoicePeriod_invoiceId_fkey";
 ALTER TABLE IF EXISTS ONLY public."InvoiceCostCenter" DROP CONSTRAINT IF EXISTS "InvoiceCostCenter_invoiceId_fkey";
 ALTER TABLE IF EXISTS ONLY public."InvoiceCostCenter" DROP CONSTRAINT IF EXISTS "InvoiceCostCenter_costCenterId_fkey";
+ALTER TABLE IF EXISTS ONLY public."HistoricoContrato" DROP CONSTRAINT IF EXISTS "HistoricoContrato_recursoTercId_fkey";
 ALTER TABLE IF EXISTS ONLY public."ExpenseConcept" DROP CONSTRAINT IF EXISTS "ExpenseConcept_packageId_fkey";
 ALTER TABLE IF EXISTS ONLY public."ControlLine" DROP CONSTRAINT IF EXISTS "ControlLine_supportId_fkey";
 ALTER TABLE IF EXISTS ONLY public."ControlLine" DROP CONSTRAINT IF EXISTS "ControlLine_poId_fkey";
@@ -71,6 +77,13 @@ DROP INDEX IF EXISTS public.ix_supportcostcenter_costcenter;
 DROP INDEX IF EXISTS public.ix_rolepermission_role;
 DROP INDEX IF EXISTS public.ix_rolepermission_permission;
 DROP INDEX IF EXISTS public.ix_role_name;
+DROP INDEX IF EXISTS public.ix_recurso_terc_oc_recurso;
+DROP INDEX IF EXISTS public.ix_recurso_terc_oc_oc;
+DROP INDEX IF EXISTS public.ix_recurso_support;
+DROP INDEX IF EXISTS public.ix_recurso_status;
+DROP INDEX IF EXISTS public.ix_recurso_proveedor;
+DROP INDEX IF EXISTS public.ix_recurso_management;
+DROP INDEX IF EXISTS public.ix_recurso_fecha_fin;
 DROP INDEX IF EXISTS public.ix_provision_sustento;
 DROP INDEX IF EXISTS public.ix_provision_periodo_ppto;
 DROP INDEX IF EXISTS public.ix_provision_periodo_contable;
@@ -94,6 +107,8 @@ DROP INDEX IF EXISTS public.ix_invoiceperiod_invoice;
 DROP INDEX IF EXISTS public.ix_invoicecostcenter_invoice;
 DROP INDEX IF EXISTS public.ix_invoicecostcenter_costcenter;
 DROP INDEX IF EXISTS public.ix_invoice_oc;
+DROP INDEX IF EXISTS public.ix_historico_recurso;
+DROP INDEX IF EXISTS public.ix_historico_periodo;
 DROP INDEX IF EXISTS public.ix_document_drive_file;
 DROP INDEX IF EXISTS public.ix_document_category;
 DROP INDEX IF EXISTS public.ix_cl_type_state;
@@ -111,6 +126,7 @@ DROP INDEX IF EXISTS public."Support_code_key";
 DROP INDEX IF EXISTS public."SupportCostCenter_supportId_costCenterId_key";
 DROP INDEX IF EXISTS public."Role_name_key";
 DROP INDEX IF EXISTS public."RolePermission_roleId_permissionId_key";
+DROP INDEX IF EXISTS public."RecursoTercOC_recursoTercId_ocId_key";
 DROP INDEX IF EXISTS public."PurchaseOrder_number_key";
 DROP INDEX IF EXISTS public."Proveedor_ruc_key";
 DROP INDEX IF EXISTS public."Permission_key_key";
@@ -141,6 +157,8 @@ ALTER TABLE IF EXISTS ONLY public."Support" DROP CONSTRAINT IF EXISTS "Support_n
 ALTER TABLE IF EXISTS ONLY public."SupportCostCenter" DROP CONSTRAINT IF EXISTS "SupportCostCenter_pkey";
 ALTER TABLE IF EXISTS ONLY public."Role" DROP CONSTRAINT IF EXISTS "Role_pkey";
 ALTER TABLE IF EXISTS ONLY public."RolePermission" DROP CONSTRAINT IF EXISTS "RolePermission_pkey";
+ALTER TABLE IF EXISTS ONLY public."RecursoTercerizado" DROP CONSTRAINT IF EXISTS "RecursoTercerizado_pkey";
+ALTER TABLE IF EXISTS ONLY public."RecursoTercOC" DROP CONSTRAINT IF EXISTS "RecursoTercOC_pkey";
 ALTER TABLE IF EXISTS ONLY public."PurchaseOrder" DROP CONSTRAINT IF EXISTS "PurchaseOrder_pkey";
 ALTER TABLE IF EXISTS ONLY public."Provision" DROP CONSTRAINT IF EXISTS "Provision_pkey";
 ALTER TABLE IF EXISTS ONLY public."Proveedor" DROP CONSTRAINT IF EXISTS "Proveedor_pkey";
@@ -155,6 +173,7 @@ ALTER TABLE IF EXISTS ONLY public."Invoice" DROP CONSTRAINT IF EXISTS "Invoice_p
 ALTER TABLE IF EXISTS ONLY public."InvoiceStatusHistory" DROP CONSTRAINT IF EXISTS "InvoiceStatusHistory_pkey";
 ALTER TABLE IF EXISTS ONLY public."InvoicePeriod" DROP CONSTRAINT IF EXISTS "InvoicePeriod_pkey";
 ALTER TABLE IF EXISTS ONLY public."InvoiceCostCenter" DROP CONSTRAINT IF EXISTS "InvoiceCostCenter_pkey";
+ALTER TABLE IF EXISTS ONLY public."HistoricoContrato" DROP CONSTRAINT IF EXISTS "HistoricoContrato_pkey";
 ALTER TABLE IF EXISTS ONLY public."FxReference" DROP CONSTRAINT IF EXISTS "FxReference_pkey";
 ALTER TABLE IF EXISTS ONLY public."ExpensePackage" DROP CONSTRAINT IF EXISTS "ExpensePackage_pkey";
 ALTER TABLE IF EXISTS ONLY public."ExpenseConcept" DROP CONSTRAINT IF EXISTS "ExpenseConcept_pkey";
@@ -175,6 +194,8 @@ ALTER TABLE IF EXISTS public."SupportCostCenter" ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public."Support" ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public."RolePermission" ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public."Role" ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public."RecursoTercerizado" ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public."RecursoTercOC" ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public."PurchaseOrder" ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public."Provision" ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public."Proveedor" ALTER COLUMN id DROP DEFAULT;
@@ -189,6 +210,7 @@ ALTER TABLE IF EXISTS public."InvoiceStatusHistory" ALTER COLUMN id DROP DEFAULT
 ALTER TABLE IF EXISTS public."InvoicePeriod" ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public."InvoiceCostCenter" ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public."Invoice" ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public."HistoricoContrato" ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public."FxReference" ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public."ExpensePackage" ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public."ExpenseConcept" ALTER COLUMN id DROP DEFAULT;
@@ -217,6 +239,10 @@ DROP SEQUENCE IF EXISTS public."Role_id_seq";
 DROP SEQUENCE IF EXISTS public."RolePermission_id_seq";
 DROP TABLE IF EXISTS public."RolePermission";
 DROP TABLE IF EXISTS public."Role";
+DROP SEQUENCE IF EXISTS public."RecursoTercerizado_id_seq";
+DROP TABLE IF EXISTS public."RecursoTercerizado";
+DROP SEQUENCE IF EXISTS public."RecursoTercOC_id_seq";
+DROP TABLE IF EXISTS public."RecursoTercOC";
 DROP SEQUENCE IF EXISTS public."PurchaseOrder_id_seq";
 DROP TABLE IF EXISTS public."PurchaseOrder";
 DROP SEQUENCE IF EXISTS public."Provision_id_seq";
@@ -245,6 +271,8 @@ DROP TABLE IF EXISTS public."InvoicePeriod";
 DROP SEQUENCE IF EXISTS public."InvoiceCostCenter_id_seq";
 DROP TABLE IF EXISTS public."InvoiceCostCenter";
 DROP TABLE IF EXISTS public."Invoice";
+DROP SEQUENCE IF EXISTS public."HistoricoContrato_id_seq";
+DROP TABLE IF EXISTS public."HistoricoContrato";
 DROP SEQUENCE IF EXISTS public."FxReference_id_seq";
 DROP TABLE IF EXISTS public."FxReference";
 DROP SEQUENCE IF EXISTS public."ExpensePackage_id_seq";
@@ -272,6 +300,7 @@ DROP TABLE IF EXISTS public."ApprovalThreshold";
 DROP SEQUENCE IF EXISTS public."AccountingClosure_id_seq";
 DROP TABLE IF EXISTS public."AccountingClosure";
 DROP FUNCTION IF EXISTS public.fix_utf8(text_input text);
+DROP TYPE IF EXISTS public."RecursoStatus";
 DROP TYPE IF EXISTS public."OcStatus";
 DROP TYPE IF EXISTS public."InvStatus";
 DROP TYPE IF EXISTS public."InvDocType";
@@ -381,6 +410,16 @@ CREATE TYPE public."OcStatus" AS ENUM (
     'ATENDER_COMPRAS',
     'ATENDIDO',
     'EN_PROCESO'
+);
+
+
+--
+-- Name: RecursoStatus; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public."RecursoStatus" AS ENUM (
+    'ACTIVO',
+    'CESADO'
 );
 
 
@@ -860,6 +899,41 @@ CREATE SEQUENCE public."FxReference_id_seq"
 --
 
 ALTER SEQUENCE public."FxReference_id_seq" OWNED BY public."FxReference".id;
+
+
+--
+-- Name: HistoricoContrato; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."HistoricoContrato" (
+    id integer NOT NULL,
+    "recursoTercId" integer NOT NULL,
+    "fechaInicio" timestamp(3) without time zone NOT NULL,
+    "fechaFin" timestamp(3) without time zone NOT NULL,
+    "montoMensual" numeric(65,30) NOT NULL,
+    "linkContrato" text,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: HistoricoContrato_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public."HistoricoContrato_id_seq"
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: HistoricoContrato_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public."HistoricoContrato_id_seq" OWNED BY public."HistoricoContrato".id;
 
 
 --
@@ -1366,6 +1440,81 @@ ALTER SEQUENCE public."PurchaseOrder_id_seq" OWNED BY public."PurchaseOrder".id;
 
 
 --
+-- Name: RecursoTercOC; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."RecursoTercOC" (
+    id integer NOT NULL,
+    "recursoTercId" integer NOT NULL,
+    "ocId" integer NOT NULL,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: RecursoTercOC_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public."RecursoTercOC_id_seq"
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: RecursoTercOC_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public."RecursoTercOC_id_seq" OWNED BY public."RecursoTercOC".id;
+
+
+--
+-- Name: RecursoTercerizado; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public."RecursoTercerizado" (
+    id integer NOT NULL,
+    "nombreCompleto" text NOT NULL,
+    cargo text NOT NULL,
+    "managementId" integer NOT NULL,
+    "proveedorId" integer NOT NULL,
+    "supportId" integer,
+    "fechaInicio" timestamp(3) without time zone NOT NULL,
+    "fechaFin" timestamp(3) without time zone NOT NULL,
+    "montoMensual" numeric(65,30) NOT NULL,
+    "linkContrato" text,
+    status public."RecursoStatus" DEFAULT 'ACTIVO'::public."RecursoStatus" NOT NULL,
+    observaciones text,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    "updatedAt" timestamp(3) without time zone NOT NULL,
+    "createdBy" integer
+);
+
+
+--
+-- Name: RecursoTercerizado_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public."RecursoTercerizado_id_seq"
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: RecursoTercerizado_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public."RecursoTercerizado_id_seq" OWNED BY public."RecursoTercerizado".id;
+
+
+--
 -- Name: Role; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1710,6 +1859,13 @@ ALTER TABLE ONLY public."FxReference" ALTER COLUMN id SET DEFAULT nextval('publi
 
 
 --
+-- Name: HistoricoContrato id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."HistoricoContrato" ALTER COLUMN id SET DEFAULT nextval('public."HistoricoContrato_id_seq"'::regclass);
+
+
+--
 -- Name: Invoice id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -1805,6 +1961,20 @@ ALTER TABLE ONLY public."Provision" ALTER COLUMN id SET DEFAULT nextval('public.
 --
 
 ALTER TABLE ONLY public."PurchaseOrder" ALTER COLUMN id SET DEFAULT nextval('public."PurchaseOrder_id_seq"'::regclass);
+
+
+--
+-- Name: RecursoTercOC id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."RecursoTercOC" ALTER COLUMN id SET DEFAULT nextval('public."RecursoTercOC_id_seq"'::regclass);
+
+
+--
+-- Name: RecursoTercerizado id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."RecursoTercerizado" ALTER COLUMN id SET DEFAULT nextval('public."RecursoTercerizado_id_seq"'::regclass);
 
 
 --
@@ -4775,6 +4945,15 @@ COPY public."FxReference" (id, currency, rate, "effectiveFrom", "effectiveTo") F
 
 
 --
+-- Data for Name: HistoricoContrato; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public."HistoricoContrato" (id, "recursoTercId", "fechaInicio", "fechaFin", "montoMensual", "linkContrato", "createdAt") FROM stdin;
+1	1	2026-01-04 00:00:00	2026-01-16 00:00:00	123.000000000000000000000000000000	\N	2026-01-08 22:22:10.124
+\.
+
+
+--
 -- Data for Name: Invoice; Type: TABLE DATA; Schema: public; Owner: -
 --
 
@@ -5095,6 +5274,7 @@ COPY public."Period" (id, year, month, label) FROM stdin;
 --
 
 COPY public."Permission" (id, key, name, description, module, "parentKey", "sortOrder") FROM stdin;
+90	contratos	Contratos	Acceso al módulo de contratos (recursos tercerizados)	contratos	\N	70
 1	dashboard	Dashboard	Vista principal con métricas y estadísticas	\N	\N	1
 2	assistant	Asistente	Asistente IA para consultas	\N	\N	2
 3	reports	Reportes	Reportes y análisis de datos	\N	\N	3
@@ -5142,12 +5322,31 @@ COPY public."PurchaseOrder" (id, number, "vendorId", "incCode") FROM stdin;
 
 
 --
+-- Data for Name: RecursoTercOC; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public."RecursoTercOC" (id, "recursoTercId", "ocId", "createdAt") FROM stdin;
+\.
+
+
+--
+-- Data for Name: RecursoTercerizado; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public."RecursoTercerizado" (id, "nombreCompleto", cargo, "managementId", "proveedorId", "supportId", "fechaInicio", "fechaFin", "montoMensual", "linkContrato", status, observaciones, "createdAt", "updatedAt", "createdBy") FROM stdin;
+2	Juancito Perez	Desarrollador	8	1	21	2026-01-07 00:00:00	2026-01-23 00:00:00	1232.000000000000000000000000000000	https://chatgpt.com/	ACTIVO	\N	2026-01-08 22:04:42.936	2026-01-08 22:04:42.936	1
+1	asdas	asdasd	4	1	20	2026-01-15 00:00:00	2026-01-31 00:00:00	12000.000000000000000000000000000000	https://chatgpt.com/	ACTIVO	\N	2026-01-08 21:22:44.698	2026-01-08 22:29:58.466	1
+3	Iago Lopez	Practi	4	1	26	2026-01-02 00:00:00	2026-01-14 00:00:00	1234.000000000000000000000000000000	\N	ACTIVO	\N	2026-01-08 22:05:31.267	2026-01-08 22:35:29.452	1
+\.
+
+
+--
 -- Data for Name: Role; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public."Role" (id, name, description, "isSystem", "createdAt", "updatedAt") FROM stdin;
 2	viewer	Usuario con acceso de solo lectura a m?dulos b?sicos	t	2025-12-03 17:52:36.99	2025-12-16 04:41:22.404
-1	super_admin	Administrador con acceso total al sistema	t	2025-12-03 16:40:03.391	2025-12-23 20:40:38.967
+1	super_admin	Administrador con acceso total al sistema	t	2025-12-03 16:40:03.391	2026-01-08 20:55:51.942
 \.
 
 
@@ -5162,24 +5361,25 @@ COPY public."RolePermission" (id, "roleId", "permissionId", "createdAt") FROM st
 58	2	22	2025-12-16 04:41:22.42
 59	2	15	2025-12-16 04:41:22.42
 60	2	17	2025-12-16 04:41:22.42
-67	1	1	2025-12-23 20:40:38.988
-68	1	2	2025-12-23 20:40:38.988
-69	1	9	2025-12-23 20:40:38.988
-70	1	15	2025-12-23 20:40:38.988
-71	1	17	2025-12-23 20:40:38.988
-72	1	22	2025-12-23 20:40:38.988
-73	1	3	2025-12-26 16:08:32.319
-74	1	4	2025-12-26 16:08:32.329
-75	1	5	2025-12-26 16:08:32.333
-76	1	16	2025-12-26 16:08:32.342
-77	1	23	2025-12-26 16:08:32.353
-78	1	46	2025-12-26 16:08:32.357
-79	1	47	2025-12-26 16:08:32.362
-80	1	48	2025-12-26 16:08:32.366
-81	1	49	2025-12-26 16:08:32.371
-82	1	6	2025-12-26 16:08:32.376
-83	1	7	2025-12-26 16:08:32.38
-84	1	8	2025-12-26 16:08:32.385
+85	1	1	2026-01-08 20:55:51.949
+86	1	2	2026-01-08 20:55:51.949
+87	1	9	2026-01-08 20:55:51.949
+88	1	15	2026-01-08 20:55:51.949
+89	1	17	2026-01-08 20:55:51.949
+90	1	22	2026-01-08 20:55:51.949
+91	1	3	2026-01-08 20:55:51.949
+92	1	4	2026-01-08 20:55:51.949
+93	1	5	2026-01-08 20:55:51.949
+94	1	16	2026-01-08 20:55:51.949
+95	1	23	2026-01-08 20:55:51.949
+96	1	46	2026-01-08 20:55:51.949
+97	1	47	2026-01-08 20:55:51.949
+98	1	48	2026-01-08 20:55:51.949
+99	1	49	2026-01-08 20:55:51.949
+100	1	6	2026-01-08 20:55:51.949
+101	1	7	2026-01-08 20:55:51.949
+102	1	8	2026-01-08 20:55:51.949
+103	1	90	2026-01-08 20:55:51.949
 \.
 
 
@@ -5467,6 +5667,8 @@ ee22886d-9093-405d-a8dc-da706d54bb01	9b7a357f5da0baaa141efcfc0e64b409610e7a6b540
 02fa614f-a94f-445a-8511-019e65fd82f8	16d0df8ce9b64e23fd3273883303a3b1042b2331289e6424918d378f6487080b	2025-12-19 17:17:47.429945+00	20251219150646_add_proveedor_entity	\N	\N	2025-12-19 17:17:47.37777+00	1
 9e4b3085-1d98-4365-a36c-99df4e349b49	6caa526cfb8d8a4408a142b56ec01491f1ef104f18db3b57e7704e54f9430e11	2025-12-26 17:43:45.461395+00	20251226170313_add_support_to_invoice	\N	\N	2025-12-26 17:43:45.448302+00	1
 b223fbe1-d912-4da0-b8a4-0f660b3c3edb	bf1505964cbedf03815719f2c40067c08e6f6ca6c9f92b5f331c7a3478e86f45	2025-12-26 17:43:45.471885+00	20251226174330_add_proveedor_to_invoice	\N	\N	2025-12-26 17:43:45.463761+00	1
+c0c7cd3c-6726-4212-b9df-bac08c9bd12c	99564ee19eaa78c292737bfc0ff191bde48ef9d75d20ca0b0f8c997a0e33127f	2026-01-08 20:53:01.319597+00	20260108000000_add_contratos_module	\N	\N	2026-01-08 20:53:01.271507+00	1
+68a41edb-1fc7-447b-a36b-aad2bba7b798	a0908723feacc3dde694e08447926bcf31b3bfde9700047bb48717edb304976f	2026-01-08 20:53:01.342881+00	20260108010000_update_contratos_model	\N	\N	2026-01-08 20:53:01.322+00	1
 \.
 
 
@@ -5488,7 +5690,7 @@ SELECT pg_catalog.setval('public."ApprovalThreshold_id_seq"', 1, true);
 -- Name: Area_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public."Area_id_seq"', 57, true);
+SELECT pg_catalog.setval('public."Area_id_seq"', 59, true);
 
 
 --
@@ -5562,6 +5764,13 @@ SELECT pg_catalog.setval('public."FxReference_id_seq"', 2, true);
 
 
 --
+-- Name: HistoricoContrato_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public."HistoricoContrato_id_seq"', 1, true);
+
+
+--
 -- Name: InvoiceCostCenter_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
@@ -5593,7 +5802,7 @@ SELECT pg_catalog.setval('public."Invoice_id_seq"', 8, true);
 -- Name: Management_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public."Management_id_seq"', 27, true);
+SELECT pg_catalog.setval('public."Management_id_seq"', 28, true);
 
 
 --
@@ -5635,7 +5844,7 @@ SELECT pg_catalog.setval('public."Period_id_seq"', 168, true);
 -- Name: Permission_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public."Permission_id_seq"', 89, true);
+SELECT pg_catalog.setval('public."Permission_id_seq"', 108, true);
 
 
 --
@@ -5660,10 +5869,24 @@ SELECT pg_catalog.setval('public."PurchaseOrder_id_seq"', 1, false);
 
 
 --
+-- Name: RecursoTercOC_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public."RecursoTercOC_id_seq"', 1, false);
+
+
+--
+-- Name: RecursoTercerizado_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public."RecursoTercerizado_id_seq"', 3, true);
+
+
+--
 -- Name: RolePermission_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public."RolePermission_id_seq"', 84, true);
+SELECT pg_catalog.setval('public."RolePermission_id_seq"', 103, true);
 
 
 --
@@ -5813,6 +6036,14 @@ ALTER TABLE ONLY public."FxReference"
 
 
 --
+-- Name: HistoricoContrato HistoricoContrato_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."HistoricoContrato"
+    ADD CONSTRAINT "HistoricoContrato_pkey" PRIMARY KEY (id);
+
+
+--
 -- Name: InvoiceCostCenter InvoiceCostCenter_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5922,6 +6153,22 @@ ALTER TABLE ONLY public."Provision"
 
 ALTER TABLE ONLY public."PurchaseOrder"
     ADD CONSTRAINT "PurchaseOrder_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: RecursoTercOC RecursoTercOC_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."RecursoTercOC"
+    ADD CONSTRAINT "RecursoTercOC_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: RecursoTercerizado RecursoTercerizado_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."RecursoTercerizado"
+    ADD CONSTRAINT "RecursoTercerizado_pkey" PRIMARY KEY (id);
 
 
 --
@@ -6144,6 +6391,13 @@ CREATE UNIQUE INDEX "PurchaseOrder_number_key" ON public."PurchaseOrder" USING b
 
 
 --
+-- Name: RecursoTercOC_recursoTercId_ocId_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX "RecursoTercOC_recursoTercId_ocId_key" ON public."RecursoTercOC" USING btree ("recursoTercId", "ocId");
+
+
+--
 -- Name: RolePermission_roleId_permissionId_key; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6260,6 +6514,20 @@ CREATE INDEX ix_document_category ON public."Document" USING btree (category);
 --
 
 CREATE INDEX ix_document_drive_file ON public."Document" USING btree ("driveFileId");
+
+
+--
+-- Name: ix_historico_periodo; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_historico_periodo ON public."HistoricoContrato" USING btree ("fechaInicio", "fechaFin");
+
+
+--
+-- Name: ix_historico_recurso; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_historico_recurso ON public."HistoricoContrato" USING btree ("recursoTercId");
 
 
 --
@@ -6424,6 +6692,55 @@ CREATE INDEX ix_provision_sustento ON public."Provision" USING btree ("sustentoI
 
 
 --
+-- Name: ix_recurso_fecha_fin; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_recurso_fecha_fin ON public."RecursoTercerizado" USING btree ("fechaFin");
+
+
+--
+-- Name: ix_recurso_management; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_recurso_management ON public."RecursoTercerizado" USING btree ("managementId");
+
+
+--
+-- Name: ix_recurso_proveedor; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_recurso_proveedor ON public."RecursoTercerizado" USING btree ("proveedorId");
+
+
+--
+-- Name: ix_recurso_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_recurso_status ON public."RecursoTercerizado" USING btree (status);
+
+
+--
+-- Name: ix_recurso_support; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_recurso_support ON public."RecursoTercerizado" USING btree ("supportId");
+
+
+--
+-- Name: ix_recurso_terc_oc_oc; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_recurso_terc_oc_oc ON public."RecursoTercOC" USING btree ("ocId");
+
+
+--
+-- Name: ix_recurso_terc_oc_recurso; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_recurso_terc_oc_recurso ON public."RecursoTercOC" USING btree ("recursoTercId");
+
+
+--
 -- Name: ix_role_name; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6573,6 +6890,14 @@ ALTER TABLE ONLY public."ControlLine"
 
 ALTER TABLE ONLY public."ExpenseConcept"
     ADD CONSTRAINT "ExpenseConcept_packageId_fkey" FOREIGN KEY ("packageId") REFERENCES public."ExpensePackage"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: HistoricoContrato HistoricoContrato_recursoTercId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."HistoricoContrato"
+    ADD CONSTRAINT "HistoricoContrato_recursoTercId_fkey" FOREIGN KEY ("recursoTercId") REFERENCES public."RecursoTercerizado"(id) ON UPDATE CASCADE ON DELETE CASCADE;
 
 
 --
@@ -6752,6 +7077,46 @@ ALTER TABLE ONLY public."PurchaseOrder"
 
 
 --
+-- Name: RecursoTercOC RecursoTercOC_ocId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."RecursoTercOC"
+    ADD CONSTRAINT "RecursoTercOC_ocId_fkey" FOREIGN KEY ("ocId") REFERENCES public."OC"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: RecursoTercOC RecursoTercOC_recursoTercId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."RecursoTercOC"
+    ADD CONSTRAINT "RecursoTercOC_recursoTercId_fkey" FOREIGN KEY ("recursoTercId") REFERENCES public."RecursoTercerizado"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: RecursoTercerizado RecursoTercerizado_managementId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."RecursoTercerizado"
+    ADD CONSTRAINT "RecursoTercerizado_managementId_fkey" FOREIGN KEY ("managementId") REFERENCES public."Management"(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: RecursoTercerizado RecursoTercerizado_proveedorId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."RecursoTercerizado"
+    ADD CONSTRAINT "RecursoTercerizado_proveedorId_fkey" FOREIGN KEY ("proveedorId") REFERENCES public."Proveedor"(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: RecursoTercerizado RecursoTercerizado_supportId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."RecursoTercerizado"
+    ADD CONSTRAINT "RecursoTercerizado_supportId_fkey" FOREIGN KEY ("supportId") REFERENCES public."Support"(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
 -- Name: RolePermission RolePermission_permissionId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -6843,5 +7208,5 @@ ALTER TABLE ONLY public."UserRole"
 -- PostgreSQL database dump complete
 --
 
-\unrestrict Z7vhFxR8JZBbjbdqv0Gf9RCDlo2o5HvaqzAlI2MEFdfYRtn4fIIHxiZZFB5BbH2
+\unrestrict Wl6SgexsmYWbmvpZ2OOvpgPrfGLjVszoEAVmhr22s1ixiwi2hxn49gMGtfe7KFv
 

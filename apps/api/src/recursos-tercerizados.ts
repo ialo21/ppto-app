@@ -33,6 +33,7 @@ const createRecursoSchema = z.object({
   nombreCompleto: z.string().min(1, "Nombre completo es requerido").trim(),
   cargo: z.string().min(1, "Cargo es requerido").trim(),
   managementId: z.number().int().positive("Gerencia TI es requerida"),
+  responsableId: z.number().int().positive("Persona Responsable es requerida"),
   proveedorId: z.number().int().positive("Proveedor es requerido"),
   supportId: z.number().int().positive().nullable().optional(),
   fechaInicio: z.string().refine((val) => {
@@ -97,6 +98,7 @@ export async function registerRecursosTercerizadosRoutes(app: FastifyInstance) {
     try {
       const {
         managementId,
+        responsableId,
         proveedorId,
         status,
         search
@@ -105,6 +107,7 @@ export async function registerRecursosTercerizadosRoutes(app: FastifyInstance) {
       const where: any = {};
 
       if (managementId) where.managementId = Number(managementId);
+      if (responsableId) where.responsableId = Number(responsableId);
       if (proveedorId) where.proveedorId = Number(proveedorId);
       if (status) where.status = status;
 
@@ -114,7 +117,9 @@ export async function registerRecursosTercerizadosRoutes(app: FastifyInstance) {
           { nombreCompleto: { contains: search, mode: "insensitive" } },
           { cargo: { contains: search, mode: "insensitive" } },
           { proveedor: { razonSocial: { contains: search, mode: "insensitive" } } },
-          { management: { name: { contains: search, mode: "insensitive" } } }
+          { management: { name: { contains: search, mode: "insensitive" } } },
+          { responsable: { name: { contains: search, mode: "insensitive" } } },
+          { responsable: { email: { contains: search, mode: "insensitive" } } }
         ];
       }
 
@@ -126,6 +131,7 @@ export async function registerRecursosTercerizadosRoutes(app: FastifyInstance) {
         ],
         include: {
           management: { select: { id: true, name: true } },
+          responsable: { select: { id: true, name: true, email: true } },
           proveedor: { select: { id: true, razonSocial: true, ruc: true } },
           support: { select: { id: true, code: true, name: true } },
           ocs: {
@@ -181,6 +187,7 @@ export async function registerRecursosTercerizadosRoutes(app: FastifyInstance) {
         where: { id },
         include: {
           management: { select: { id: true, name: true } },
+          responsable: { select: { id: true, name: true, email: true } },
           proveedor: { select: { id: true, razonSocial: true, ruc: true } },
           support: { select: { id: true, code: true, name: true } },
           ocs: {
@@ -304,6 +311,15 @@ export async function registerRecursosTercerizadosRoutes(app: FastifyInstance) {
       });
     }
 
+    // Validar que el responsable exista
+    const responsable = await prisma.user.findUnique({ where: { id: data.responsableId } });
+    if (!responsable) {
+      return reply.code(422).send({
+        error: "VALIDATION_ERROR",
+        issues: [{ path: ["responsableId"], message: "Persona Responsable no encontrada" }]
+      });
+    }
+
     // Validar que el proveedor exista
     const proveedor = await prisma.proveedor.findUnique({ where: { id: data.proveedorId } });
     if (!proveedor) {
@@ -322,6 +338,7 @@ export async function registerRecursosTercerizadosRoutes(app: FastifyInstance) {
           nombreCompleto: data.nombreCompleto,
           cargo: data.cargo,
           managementId: data.managementId,
+          responsableId: data.responsableId,
           proveedorId: data.proveedorId,
           supportId: data.supportId || null,
           fechaInicio,
@@ -334,6 +351,7 @@ export async function registerRecursosTercerizadosRoutes(app: FastifyInstance) {
         },
         include: {
           management: true,
+          responsable: true,
           proveedor: true,
           support: true,
           ocs: {
@@ -394,6 +412,7 @@ export async function registerRecursosTercerizadosRoutes(app: FastifyInstance) {
     if (data.nombreCompleto !== undefined) updateData.nombreCompleto = data.nombreCompleto;
     if (data.cargo !== undefined) updateData.cargo = data.cargo;
     if (data.managementId !== undefined) updateData.managementId = data.managementId;
+    if (data.responsableId !== undefined) updateData.responsableId = data.responsableId;
     if (data.proveedorId !== undefined) updateData.proveedorId = data.proveedorId;
     if (data.supportId !== undefined) updateData.supportId = data.supportId || null;
     if (data.montoMensual !== undefined) updateData.montoMensual = data.montoMensual;
@@ -432,6 +451,7 @@ export async function registerRecursosTercerizadosRoutes(app: FastifyInstance) {
         data: updateData,
         include: {
           management: true,
+          responsable: true,
           proveedor: true,
           support: true,
           ocs: {
@@ -591,6 +611,7 @@ export async function registerRecursosTercerizadosRoutes(app: FastifyInstance) {
         },
         include: {
           management: true,
+          responsable: true,
           proveedor: true,
           support: true,
           historico: {

@@ -350,10 +350,19 @@ export async function registerAuthRoutes(app: FastifyInstance) {
         });
         isNewUser = true;
       } else {
-        // Actualizar googleId y nombre si cambió
+        // Sincronizar datos de Google en cada login
+        // Esto permite que usuarios creados manualmente se actualicen con el nombre real de Google
         const updates: any = {};
-        if (!user.googleId) updates.googleId = googleId;
-        if (name && user.name !== name) updates.name = name;
+        
+        // Siempre actualizar googleId si no existe
+        if (!user.googleId) {
+          updates.googleId = googleId;
+        }
+        
+        // Siempre actualizar nombre con el de Google si viene uno (incluso si ya tiene nombre)
+        if (name) {
+          updates.name = name;
+        }
         
         if (Object.keys(updates).length > 0) {
           user = await prisma.user.update({

@@ -103,10 +103,45 @@ export default function RecursoTercerizadoDetallePage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const { data: recurso, isLoading } = useQuery<RecursoDetalle>({
-    queryKey: ["recurso-tercerizado", id],
+  // Query base: info principal del recurso (carga rápida)
+  const { data: recurso, isLoading: isLoadingBase } = useQuery({
+    queryKey: ["recurso-tercerizado-base", id],
     queryFn: async () => (await api.get(`/recursos-tercerizados/${id}`)).data,
-    enabled: !!id
+    enabled: !!id,
+    staleTime: 1000 * 60 * 5 // 5 minutos de cache
+  });
+
+  // Query histórico: se carga independiente
+  const { data: historico, isLoading: isLoadingHistorico } = useQuery({
+    queryKey: ["recurso-tercerizado-historico", id],
+    queryFn: async () => {
+      const response = await api.get(`/recursos-tercerizados/${id}`);
+      return response.data.historico || [];
+    },
+    enabled: !!id && !!recurso,
+    staleTime: 1000 * 60 * 5
+  });
+
+  // Query OCs: se carga independiente
+  const { data: ocs, isLoading: isLoadingOCs } = useQuery({
+    queryKey: ["recurso-tercerizado-ocs", id],
+    queryFn: async () => {
+      const response = await api.get(`/recursos-tercerizados/${id}`);
+      return response.data.ocs || [];
+    },
+    enabled: !!id && !!recurso,
+    staleTime: 1000 * 60 * 5
+  });
+
+  // Query facturas: se carga independiente
+  const { data: facturas, isLoading: isLoadingFacturas } = useQuery({
+    queryKey: ["recurso-tercerizado-facturas", id],
+    queryFn: async () => {
+      const response = await api.get(`/recursos-tercerizados/${id}`);
+      return response.data.facturasRelacionadas || [];
+    },
+    enabled: !!id && !!recurso,
+    staleTime: 1000 * 60 * 5
   });
 
   const [showAddHistorico, setShowAddHistorico] = useState(false);
@@ -145,7 +180,8 @@ export default function RecursoTercerizadoDetallePage() {
     },
     onSuccess: () => {
       toast.success("Histórico agregado");
-      queryClient.invalidateQueries({ queryKey: ["recurso-tercerizado", id] });
+      queryClient.invalidateQueries({ queryKey: ["recurso-tercerizado-historico", id] });
+      queryClient.invalidateQueries({ queryKey: ["recurso-tercerizado-base", id] });
       setShowAddHistorico(false);
       setHistoricoForm({ fechaInicio: "", fechaFin: "", montoMensual: "", linkContrato: "" });
     },
@@ -164,7 +200,8 @@ export default function RecursoTercerizadoDetallePage() {
     },
     onSuccess: () => {
       toast.success("Nuevo contrato creado, el anterior se movió al histórico");
-      queryClient.invalidateQueries({ queryKey: ["recurso-tercerizado", id] });
+      queryClient.invalidateQueries({ queryKey: ["recurso-tercerizado-base", id] });
+      queryClient.invalidateQueries({ queryKey: ["recurso-tercerizado-historico", id] });
       queryClient.invalidateQueries({ queryKey: ["recursos-tercerizados"] });
       setShowNuevoContrato(false);
       setNuevoContratoForm({ fechaInicio: "", fechaFin: "", montoMensual: "", linkContrato: "" });
@@ -180,7 +217,7 @@ export default function RecursoTercerizadoDetallePage() {
     },
     onSuccess: () => {
       toast.success("OC asociada correctamente");
-      queryClient.invalidateQueries({ queryKey: ["recurso-tercerizado", id] });
+      queryClient.invalidateQueries({ queryKey: ["recurso-tercerizado-ocs", id] });
       setShowAsociarOC(false);
       setSelectedOcId("");
     },
@@ -195,24 +232,43 @@ export default function RecursoTercerizadoDetallePage() {
     },
     onSuccess: () => {
       toast.success("OC desasociada correctamente");
-      queryClient.invalidateQueries({ queryKey: ["recurso-tercerizado", id] });
+      queryClient.invalidateQueries({ queryKey: ["recurso-tercerizado-ocs", id] });
     },
     onError: () => toast.error("Error al desasociar OC")
   });
 
-  if (isLoading) {
+  // Solo bloquear si no existe el ID
+  if (!id) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-brand-text-secondary">Cargando detalle...</p>
+      <div className="flex flex-col items-center justify-center h-64">
+        <p className="text-brand-text-secondary mb-4">ID inválido</p>
+        <Button onClick={() => navigate("/contratos/recursos-tercerizados")}>Volver al listado</Button>
       </div>
     );
   }
 
-  if (!recurso) {
+  // Si no hay recurso base aún pero está cargando, mostrar skeleton base
+  if (isLoadingBase || !recurso) {
     return (
-      <div className="flex flex-col items-center justify-center h-64">
-        <p className="text-brand-text-secondary mb-4">Recurso no encontrado</p>
-        <Button onClick={() => navigate("/contratos/recursos-tercerizados")}>Volver al listado</Button>
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <Button variant="secondary" size="sm" onClick={() => navigate("/contratos/recursos-tercerizados")}>
+            <ArrowLeft size={16} />
+          </Button>
+          <div className="flex-1">
+            <div className="h-8 w-64 bg-gray-200 rounded animate-pulse mb-2"></div>
+            <div className="h-4 w-40 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map(i => (
+            <Card key={i}>
+              <CardContent className="p-4">
+                <div className="h-16 bg-gray-200 rounded animate-pulse"></div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
     );
   }
@@ -484,7 +540,13 @@ export default function RecursoTercerizadoDetallePage() {
             </div>
           )}
 
-          {recurso.historico.length === 0 ? (
+          {isLoadingHistorico ? (
+            <div className="py-8">
+              <div className="h-4 w-full bg-gray-200 rounded animate-pulse mb-2"></div>
+              <div className="h-4 w-3/4 bg-gray-200 rounded animate-pulse mb-2"></div>
+              <div className="h-4 w-5/6 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+          ) : !historico || historico.length === 0 ? (
             <p className="text-sm text-brand-text-secondary text-center py-8">No hay histórico de contratos registrado</p>
           ) : (
             <div className="overflow-x-auto">
@@ -499,9 +561,9 @@ export default function RecursoTercerizadoDetallePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {recurso.historico.map((h, idx) => (
+                  {historico.map((h: any, idx: number) => (
                     <tr key={h.id}>
-                      <Td>Período {recurso.historico.length - idx}</Td>
+                      <Td>Período {historico.length - idx}</Td>
                       <Td>{formatDate(h.fechaInicio)}</Td>
                       <Td>{formatDate(h.fechaFin)}</Td>
                       <Td>PEN {formatNumber(h.montoMensual)}</Td>
@@ -561,7 +623,13 @@ export default function RecursoTercerizadoDetallePage() {
             </div>
           )}
 
-          {!recurso.ocs || recurso.ocs.length === 0 ? (
+          {isLoadingOCs ? (
+            <div className="py-8">
+              <div className="h-4 w-full bg-gray-200 rounded animate-pulse mb-2"></div>
+              <div className="h-4 w-3/4 bg-gray-200 rounded animate-pulse mb-2"></div>
+              <div className="h-4 w-5/6 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+          ) : !ocs || ocs.length === 0 ? (
             <p className="text-sm text-brand-text-secondary text-center py-8">No hay OCs asociadas</p>
           ) : (
             <div className="overflow-x-auto">
@@ -577,7 +645,7 @@ export default function RecursoTercerizadoDetallePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {recurso.ocs.map((item) => (
+                  {ocs.map((item: any) => (
                     <tr key={item.id}>
                       <Td>{item.oc.numeroOc || `OC #${item.oc.id}`}</Td>
                       <Td>{formatDate(item.oc.fechaRegistro)}</Td>
@@ -611,12 +679,20 @@ export default function RecursoTercerizadoDetallePage() {
         </CardContent>
       </Card>
 
-      {recurso.facturasRelacionadas && recurso.facturasRelacionadas.length > 0 && (
-        <Card>
-          <CardHeader>
-            <h2 className="text-lg font-medium">Facturas Relacionadas</h2>
-          </CardHeader>
-          <CardContent>
+      <Card>
+        <CardHeader>
+          <h2 className="text-lg font-medium">Facturas Relacionadas</h2>
+        </CardHeader>
+        <CardContent>
+          {isLoadingFacturas ? (
+            <div className="py-8">
+              <div className="h-4 w-full bg-gray-200 rounded animate-pulse mb-2"></div>
+              <div className="h-4 w-3/4 bg-gray-200 rounded animate-pulse mb-2"></div>
+              <div className="h-4 w-5/6 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+          ) : !facturas || facturas.length === 0 ? (
+            <p className="text-sm text-brand-text-secondary text-center py-8">No hay facturas relacionadas</p>
+          ) : (
             <div className="overflow-x-auto">
               <Table>
                 <thead>
@@ -630,7 +706,7 @@ export default function RecursoTercerizadoDetallePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {recurso.facturasRelacionadas.map((f) => (
+                  {facturas.map((f: any) => (
                     <tr key={f.id}>
                       <Td>{f.numeroFactura}</Td>
                       <Td>{formatDate(f.fechaEmision)}</Td>
@@ -647,9 +723,9 @@ export default function RecursoTercerizadoDetallePage() {
                 </tbody>
               </Table>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

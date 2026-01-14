@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
+import { useAuth } from "../../contexts/AuthContext";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
@@ -8,6 +9,8 @@ import FilterSelect from "../../components/ui/FilterSelect";
 import Button from "../../components/ui/Button";
 import Modal from "../../components/ui/Modal";
 import OcStatusTimeline from "../../components/OcStatusTimeline";
+import UserMultiSelect, { UserOption } from "../../components/ui/UserMultiSelect";
+import StatusMultiSelect from "../../components/ui/StatusMultiSelect";
 import { formatNumber } from "../../utils/numberFormat";
 import { formatPeriodLabel } from "../../utils/periodFormat";
 import { ExternalLink, TrendingUp, Package, Users, DollarSign, Clock } from "lucide-react";
@@ -279,12 +282,23 @@ export default function OcListadoPage() {
     }
   });
 
+  // Obtener usuario actual para filtro por defecto
+  const { user: currentUser } = useAuth();
+
   const [filters, setFilters] = useState({
     search: "",          // Búsqueda global
     moneda: "",
-    estado: "",
-    year: new Date().getFullYear().toString()
+    selectedEstados: ESTADOS_OC.filter(e => e !== "ATENDIDO"),  // Por defecto: todo menos ATENDIDO
+    year: "",  // Sin filtro por año por defecto
+    selectedUsers: [] as string[]
   });
+
+  // Actualizar filtro de usuario cuando el usuario cargue
+  React.useEffect(() => {
+    if (currentUser?.email && filters.selectedUsers.length === 0) {
+      setFilters(f => ({ ...f, selectedUsers: [currentUser.email] }));
+    }
+  }, [currentUser?.email]);
 
   const [selectedOcId, setSelectedOcId] = useState<number | null>(null);
   const [isTimelineOpen, setIsTimelineOpen] = useState(false);
@@ -306,6 +320,25 @@ export default function OcListadoPage() {
   };
 
   const selectedOc = ocs?.find((oc: any) => oc.id === selectedOcId);
+
+  // Calcular usuarios únicos disponibles desde las OCs (con nombres)
+  const availableUsers: UserOption[] = useMemo(() => {
+    if (!ocs) return [];
+    const userMap = new Map<string, UserOption>();
+    ocs.forEach((oc: any) => {
+      if (oc.correoSolicitante && !userMap.has(oc.correoSolicitante)) {
+        userMap.set(oc.correoSolicitante, {
+          email: oc.correoSolicitante,
+          name: oc.nombreSolicitante || null
+        });
+      }
+    });
+    return Array.from(userMap.values()).sort((a, b) => {
+      const nameA = a.name || a.email;
+      const nameB = b.name || b.email;
+      return nameA.localeCompare(nameB);
+    });
+  }, [ocs]);
 
   // Función de búsqueda y filtrado
   const filteredOcs = useMemo(() => {
@@ -356,8 +389,18 @@ export default function OcListadoPage() {
       result = result.filter((oc: any) => oc.moneda === filters.moneda);
     }
     
-    if (filters.estado) {
-      result = result.filter((oc: any) => oc.estado === filters.estado);
+    // Filtro por estados seleccionados (multi-select)
+    if (filters.selectedEstados.length > 0) {
+      result = result.filter((oc: any) => 
+        filters.selectedEstados.includes(oc.estado)
+      );
+    }
+    
+    // Filtro por usuarios seleccionados (multi-select)
+    if (filters.selectedUsers.length > 0) {
+      result = result.filter((oc: any) => 
+        filters.selectedUsers.includes(oc.correoSolicitante)
+      );
     }
     
     return result;
@@ -439,7 +482,7 @@ export default function OcListadoPage() {
   const handleExportCSV = () => {
     const params = new URLSearchParams();
     if (filters.moneda) params.set("moneda", filters.moneda);
-    if (filters.estado) params.set("estado", filters.estado);
+    if (filters.selectedEstados.length > 0) params.set("estado", filters.selectedEstados.join(","));
     if (filters.search) params.set("search", filters.search);
     window.open(`http://localhost:3001/ocs/export/csv?${params.toString()}`, "_blank");
   };
@@ -490,8 +533,17 @@ export default function OcListadoPage() {
               searchable={false}
             />
             
+            {/* Filtro de Usuarios con multi-select */}
+            <UserMultiSelect
+              users={availableUsers}
+              selectedUsers={filters.selectedUsers}
+              onChange={(selected) => setFilters(f => ({ ...f, selectedUsers: selected }))}
+              label="Usuarios"
+              placeholder="Todos los usuarios"
+            />
+            
             {/* Búsqueda global - más ancho */}
-            <div className="md:col-span-2">
+            <div className="md:col-span-1">
               <label className="block text-xs text-brand-text-secondary font-medium mb-1">
                 Buscar
               </label>
@@ -515,20 +567,26 @@ export default function OcListadoPage() {
               searchable={false}
             />
             
-            {/* Filtro de Estado */}
-            <FilterSelect
+            {/* Filtro de Estado - Multi-select */}
+            <StatusMultiSelect
               label="Estado"
-              placeholder="Todos"
-              value={filters.estado}
-              onChange={(value) => setFilters(f => ({ ...f, estado: value }))}
-              options={ESTADOS_OC.map(estado => ({
-                value: estado,
-                label: estado.replace(/_/g, " ")
-              }))}
+              placeholder="Todos los estados"
+              statuses={ESTADOS_OC}
+              selectedStatuses={filters.selectedEstados}
+              onChange={(selected) => setFilters(f => ({ ...f, selectedEstados: selected }))}
+              excludeStatus="ATENDIDO"
+              excludeLabel="Todo menos ATENDIDO"
             />
           </div>
           
-          <div className="mt-3 flex justify-end">
+          <div className="mt-3 flex justify-between items-center">
+            <div className="flex gap-2">
+              {filters.selectedUsers.length > 0 && (
+                <div className="text-sm text-brand-text-secondary">
+                  Filtrando por {filters.selectedUsers.length} usuario{filters.selectedUsers.length > 1 ? 's' : ''}
+                </div>
+              )}
+            </div>
             <Button variant="secondary" onClick={handleExportCSV} size="sm">
               Exportar CSV
             </Button>
@@ -592,7 +650,7 @@ export default function OcListadoPage() {
             <div className="text-center">
               <Package size={48} className="mx-auto mb-4 text-brand-text-disabled" />
               <p className="text-brand-text-secondary">
-                {filters.search || filters.moneda || filters.estado
+                {filters.search || filters.moneda || filters.selectedEstados.length > 0
                   ? "No se encontraron órdenes que coincidan con los filtros"
                   : "No hay órdenes de compra registradas"}
               </p>

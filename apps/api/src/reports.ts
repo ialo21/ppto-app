@@ -383,13 +383,15 @@ export async function registerReportRoutes(app: FastifyInstance) {
             periods: true,
             oc: {
               include: { support: true }
-            }
+            },
+            support: true  // Support directo para facturas sin OC
           }
         });
 
-        // Filtrar por support (ahora con arrays)
+        // Filtrar por support (ahora con arrays) - CORREGIDO para incluir facturas sin OC
         invoices = invoices.filter(inv => {
-          const support = inv.oc?.support;
+          // Prioridad: support de OC, si no existe usar support directo de factura
+          const support = inv.oc?.support || inv.support;
           if (!support) return false;
           if (supportIds.length > 0 && !supportIds.includes(support.id)) return false;
           if (managementIds.length > 0 && support.managementId && !managementIds.includes(support.managementId)) return false;
@@ -400,8 +402,12 @@ export async function registerReportRoutes(app: FastifyInstance) {
 
         // Calcular ejecutado distribuyendo el monto de cada factura entre sus períodos
         executed = invoices.reduce((sum, inv) => {
-          // Monto en PEN (usar montoPEN_tcReal si existe, sino montoPEN_tcEstandar)
-          const montoPEN = Number(inv.montoPEN_tcReal ?? inv.montoPEN_tcEstandar ?? 0);
+          // Monto en PEN (usar montoPEN_tcReal si existe, sino montoPEN_tcEstandar, sino montoSinIgv si es PEN)
+          let montoPEN = Number(inv.montoPEN_tcReal ?? inv.montoPEN_tcEstandar ?? 0);
+          // Si es factura en PEN y no tiene campos contables calculados, usar montoSinIgv directamente
+          if (montoPEN === 0 && inv.currency === "PEN" && inv.montoSinIgv) {
+            montoPEN = Number(inv.montoSinIgv);
+          }
           
           // Número de períodos en los que se distribuye esta factura
           const numPeriods = inv.periods.length || 1;
@@ -427,13 +433,14 @@ export async function registerReportRoutes(app: FastifyInstance) {
           include: { 
             oc: { 
               include: { support: true } 
-            } 
+            },
+            support: true  // Support directo para facturas sin OC
           }
         });
 
-        // Filtros de sustento/área/gerencia/paquete (ahora con arrays)
+        // Filtros de sustento/área/gerencia/paquete (ahora con arrays) - CORREGIDO
         invoices = invoices.filter(inv => {
-          const support = inv.oc?.support;
+          const support = inv.oc?.support || inv.support;  // Prioridad OC, sino directo
           if (!support) return false;
           if (supportIds.length > 0 && !supportIds.includes(support.id)) return false;
           if (managementIds.length > 0 && support.managementId && !managementIds.includes(support.managementId)) return false;
@@ -442,9 +449,14 @@ export async function registerReportRoutes(app: FastifyInstance) {
           return true;
         });
 
-        executed = invoices.reduce((sum, inv) => 
-          sum + Number(inv.montoPEN_tcReal ?? inv.montoPEN_tcEstandar ?? 0), 0
-        );
+        executed = invoices.reduce((sum, inv) => {
+          let montoPEN = Number(inv.montoPEN_tcReal ?? inv.montoPEN_tcEstandar ?? 0);
+          // Si es PEN sin campos contables, usar montoSinIgv
+          if (montoPEN === 0 && inv.currency === "PEN" && inv.montoSinIgv) {
+            montoPEN = Number(inv.montoSinIgv);
+          }
+          return sum + montoPEN;
+        }, 0);
 
         // Provisiones desde tabla provisions
         const provisionsWhere: any = { periodoContable: mesContable };
@@ -678,13 +690,19 @@ export async function registerReportRoutes(app: FastifyInstance) {
                 }
               } 
             }
+          },
+          support: {  // Support directo para facturas sin OC
+            include: {
+              managementRef: true,
+              areaRef: true
+            }
           }
         }
       });
 
-      // Filtrar por support (ahora con arrays)
+      // Filtrar por support (ahora con arrays) - CORREGIDO
       invoices = invoices.filter(inv => {
-        const support = inv.oc?.support;
+        const support = inv.oc?.support || inv.support;
         if (!support) return false;
         if (supportIds.length > 0 && !supportIds.includes(support.id)) return false;
         if (managementIds.length > 0 && support.managementId && !managementIds.includes(support.managementId)) return false;
@@ -695,11 +713,15 @@ export async function registerReportRoutes(app: FastifyInstance) {
 
       // Acumular ejecutado por sustento
       invoices.forEach(inv => {
-        const support = inv.oc?.support;
+        const support = inv.oc?.support || inv.support;
         if (!support) return;
 
         const sid = support.id;
-        const montoPEN = Number(inv.montoPEN_tcReal ?? inv.montoPEN_tcEstandar ?? 0);
+        let montoPEN = Number(inv.montoPEN_tcReal ?? inv.montoPEN_tcEstandar ?? 0);
+        // Si es PEN sin campos contables, usar montoSinIgv
+        if (montoPEN === 0 && inv.currency === "PEN" && inv.montoSinIgv) {
+          montoPEN = Number(inv.montoSinIgv);
+        }
         
         // Contar cuántos períodos de esta factura están en el rango filtrado
         const relevantPeriods = inv.periods.filter(p => periodIds.includes(p.periodId));
@@ -746,13 +768,19 @@ export async function registerReportRoutes(app: FastifyInstance) {
                 }
               } 
             } 
-          } 
+          },
+          support: {  // Support directo para facturas sin OC
+            include: {
+              managementRef: true,
+              areaRef: true
+            }
+          }
         }
       });
 
-      // Filtros de sustento/área/gerencia/paquete (ahora con arrays)
+      // Filtros de sustento/área/gerencia/paquete (ahora con arrays) - CORREGIDO
       invoices = invoices.filter(inv => {
-        const support = inv.oc?.support;
+        const support = inv.oc?.support || inv.support;
         if (!support) return false;
         if (supportIds.length > 0 && !supportIds.includes(support.id)) return false;
         if (managementIds.length > 0 && support.managementId && !managementIds.includes(support.managementId)) return false;
@@ -763,11 +791,15 @@ export async function registerReportRoutes(app: FastifyInstance) {
 
       // Acumular ejecutado contable por sustento
       invoices.forEach(inv => {
-        const support = inv.oc?.support;
+        const support = inv.oc?.support || inv.support;
         if (!support) return;
 
         const sid = support.id;
-        const montoPEN = Number(inv.montoPEN_tcReal ?? inv.montoPEN_tcEstandar ?? 0);
+        let montoPEN = Number(inv.montoPEN_tcReal ?? inv.montoPEN_tcEstandar ?? 0);
+        // Si es PEN sin campos contables, usar montoSinIgv
+        if (montoPEN === 0 && inv.currency === "PEN" && inv.montoSinIgv) {
+          montoPEN = Number(inv.montoSinIgv);
+        }
 
         if (!supportDataMap.has(sid)) {
           supportDataMap.set(sid, {

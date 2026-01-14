@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict Wl6SgexsmYWbmvpZ2OOvpgPrfGLjVszoEAVmhr22s1ixiwi2hxn49gMGtfe7KFv
+\restrict 1IYgO8amzNljNmbKvjSjUMWn3vM6Ec6UEAX3l2brJIctIQd2WO7G4GmQHXcFIhe
 
 -- Dumped from database version 16.11 (Debian 16.11-1.pgdg13+1)
 -- Dumped by pg_dump version 16.11 (Debian 16.11-1.pgdg13+1)
@@ -30,6 +30,7 @@ ALTER TABLE IF EXISTS ONLY public."SupportCostCenter" DROP CONSTRAINT IF EXISTS 
 ALTER TABLE IF EXISTS ONLY public."RolePermission" DROP CONSTRAINT IF EXISTS "RolePermission_roleId_fkey";
 ALTER TABLE IF EXISTS ONLY public."RolePermission" DROP CONSTRAINT IF EXISTS "RolePermission_permissionId_fkey";
 ALTER TABLE IF EXISTS ONLY public."RecursoTercerizado" DROP CONSTRAINT IF EXISTS "RecursoTercerizado_supportId_fkey";
+ALTER TABLE IF EXISTS ONLY public."RecursoTercerizado" DROP CONSTRAINT IF EXISTS "RecursoTercerizado_responsableId_fkey";
 ALTER TABLE IF EXISTS ONLY public."RecursoTercerizado" DROP CONSTRAINT IF EXISTS "RecursoTercerizado_proveedorId_fkey";
 ALTER TABLE IF EXISTS ONLY public."RecursoTercerizado" DROP CONSTRAINT IF EXISTS "RecursoTercerizado_managementId_fkey";
 ALTER TABLE IF EXISTS ONLY public."RecursoTercOC" DROP CONSTRAINT IF EXISTS "RecursoTercOC_recursoTercId_fkey";
@@ -81,6 +82,7 @@ DROP INDEX IF EXISTS public.ix_recurso_terc_oc_recurso;
 DROP INDEX IF EXISTS public.ix_recurso_terc_oc_oc;
 DROP INDEX IF EXISTS public.ix_recurso_support;
 DROP INDEX IF EXISTS public.ix_recurso_status;
+DROP INDEX IF EXISTS public.ix_recurso_responsable;
 DROP INDEX IF EXISTS public.ix_recurso_proveedor;
 DROP INDEX IF EXISTS public.ix_recurso_management;
 DROP INDEX IF EXISTS public.ix_recurso_fecha_fin;
@@ -1490,7 +1492,8 @@ CREATE TABLE public."RecursoTercerizado" (
     observaciones text,
     "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     "updatedAt" timestamp(3) without time zone NOT NULL,
-    "createdBy" integer
+    "createdBy" integer,
+    "responsableId" integer NOT NULL
 );
 
 
@@ -5274,7 +5277,7 @@ COPY public."Period" (id, year, month, label) FROM stdin;
 --
 
 COPY public."Permission" (id, key, name, description, module, "parentKey", "sortOrder") FROM stdin;
-90	contratos	Contratos	Acceso al módulo de contratos (recursos tercerizados)	contratos	\N	70
+90	contratos	Contratos	Acceso al m?dulo de contratos (recursos tercerizados)	contratos	\N	70
 1	dashboard	Dashboard	Vista principal con métricas y estadísticas	\N	\N	1
 2	assistant	Asistente	Asistente IA para consultas	\N	\N	2
 3	reports	Reportes	Reportes y análisis de datos	\N	\N	3
@@ -5333,10 +5336,10 @@ COPY public."RecursoTercOC" (id, "recursoTercId", "ocId", "createdAt") FROM stdi
 -- Data for Name: RecursoTercerizado; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-COPY public."RecursoTercerizado" (id, "nombreCompleto", cargo, "managementId", "proveedorId", "supportId", "fechaInicio", "fechaFin", "montoMensual", "linkContrato", status, observaciones, "createdAt", "updatedAt", "createdBy") FROM stdin;
-2	Juancito Perez	Desarrollador	8	1	21	2026-01-07 00:00:00	2026-01-23 00:00:00	1232.000000000000000000000000000000	https://chatgpt.com/	ACTIVO	\N	2026-01-08 22:04:42.936	2026-01-08 22:04:42.936	1
-1	asdas	asdasd	4	1	20	2026-01-15 00:00:00	2026-01-31 00:00:00	12000.000000000000000000000000000000	https://chatgpt.com/	ACTIVO	\N	2026-01-08 21:22:44.698	2026-01-08 22:29:58.466	1
-3	Iago Lopez	Practi	4	1	26	2026-01-02 00:00:00	2026-01-14 00:00:00	1234.000000000000000000000000000000	\N	ACTIVO	\N	2026-01-08 22:05:31.267	2026-01-08 22:35:29.452	1
+COPY public."RecursoTercerizado" (id, "nombreCompleto", cargo, "managementId", "proveedorId", "supportId", "fechaInicio", "fechaFin", "montoMensual", "linkContrato", status, observaciones, "createdAt", "updatedAt", "createdBy", "responsableId") FROM stdin;
+2	Juancito Perez	Desarrollador	8	1	21	2026-01-07 00:00:00	2026-01-23 00:00:00	1232.000000000000000000000000000000	https://chatgpt.com/	ACTIVO	\N	2026-01-08 22:04:42.936	2026-01-08 22:04:42.936	1	1
+3	Iago Lopez	Practi	4	1	26	2026-01-02 00:00:00	2026-01-08 00:00:00	1234.000000000000000000000000000000	\N	CESADO	\N	2026-01-08 22:05:31.267	2026-01-09 18:07:12.07	1	1
+1	asdas	asdasd	4	1	20	2026-01-15 00:00:00	2026-02-28 00:00:00	12000.000000000000000000000000000000	https://chatgpt.com/	ACTIVO	\N	2026-01-08 21:22:44.698	2026-01-09 18:07:49.596	1	3
 \.
 
 
@@ -5605,8 +5608,9 @@ COPY public."SupportCostCenter" (id, "supportId", "costCenterId", "createdAt") F
 --
 
 COPY public."User" (id, email, name, "googleId", active, "createdAt", "updatedAt") FROM stdin;
-1	iago.lopez@interseguro.com.pe	Iago Lopez Chapiama	105108911489206185953	t	2025-12-03 16:40:03.466	2025-12-03 17:38:10.921
 2	isautomation.center@interseguro.com.pe	IS Automation Center	109006581726863708267	t	2025-12-05 18:46:40.751	2025-12-05 18:46:40.751
+3	sergio.torres@interseguro.com.pe	Sergio Torres	\N	t	2026-01-09 18:01:53.661	2026-01-09 18:01:53.661
+1	iago.lopez@interseguro.com.pe	Iago Lopez Chapiama	105108911489206185953	t	2025-12-03 16:40:03.466	2026-01-09 18:06:50.258
 \.
 
 
@@ -5669,6 +5673,7 @@ ee22886d-9093-405d-a8dc-da706d54bb01	9b7a357f5da0baaa141efcfc0e64b409610e7a6b540
 b223fbe1-d912-4da0-b8a4-0f660b3c3edb	bf1505964cbedf03815719f2c40067c08e6f6ca6c9f92b5f331c7a3478e86f45	2025-12-26 17:43:45.471885+00	20251226174330_add_proveedor_to_invoice	\N	\N	2025-12-26 17:43:45.463761+00	1
 c0c7cd3c-6726-4212-b9df-bac08c9bd12c	99564ee19eaa78c292737bfc0ff191bde48ef9d75d20ca0b0f8c997a0e33127f	2026-01-08 20:53:01.319597+00	20260108000000_add_contratos_module	\N	\N	2026-01-08 20:53:01.271507+00	1
 68a41edb-1fc7-447b-a36b-aad2bba7b798	a0908723feacc3dde694e08447926bcf31b3bfde9700047bb48717edb304976f	2026-01-08 20:53:01.342881+00	20260108010000_update_contratos_model	\N	\N	2026-01-08 20:53:01.322+00	1
+84f7c222-52c8-45b2-99d1-6d5263e77a7f	5fe14ec531da676c71d883fb6a75df6ebea70c069acf75054d832477d8b52a43	2026-01-09 17:39:03.408781+00	20260109000000_add_responsable_to_recursos	\N	\N	2026-01-09 17:39:03.392268+00	1
 \.
 
 
@@ -5690,7 +5695,7 @@ SELECT pg_catalog.setval('public."ApprovalThreshold_id_seq"', 1, true);
 -- Name: Area_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public."Area_id_seq"', 59, true);
+SELECT pg_catalog.setval('public."Area_id_seq"', 61, true);
 
 
 --
@@ -5802,7 +5807,7 @@ SELECT pg_catalog.setval('public."Invoice_id_seq"', 8, true);
 -- Name: Management_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public."Management_id_seq"', 28, true);
+SELECT pg_catalog.setval('public."Management_id_seq"', 29, true);
 
 
 --
@@ -5844,7 +5849,7 @@ SELECT pg_catalog.setval('public."Period_id_seq"', 168, true);
 -- Name: Permission_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public."Permission_id_seq"', 108, true);
+SELECT pg_catalog.setval('public."Permission_id_seq"', 126, true);
 
 
 --
@@ -5921,7 +5926,7 @@ SELECT pg_catalog.setval('public."UserRole_id_seq"', 2, true);
 -- Name: User_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public."User_id_seq"', 2, true);
+SELECT pg_catalog.setval('public."User_id_seq"', 3, true);
 
 
 --
@@ -6713,6 +6718,13 @@ CREATE INDEX ix_recurso_proveedor ON public."RecursoTercerizado" USING btree ("p
 
 
 --
+-- Name: ix_recurso_responsable; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_recurso_responsable ON public."RecursoTercerizado" USING btree ("responsableId");
+
+
+--
 -- Name: ix_recurso_status; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -7109,6 +7121,14 @@ ALTER TABLE ONLY public."RecursoTercerizado"
 
 
 --
+-- Name: RecursoTercerizado RecursoTercerizado_responsableId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public."RecursoTercerizado"
+    ADD CONSTRAINT "RecursoTercerizado_responsableId_fkey" FOREIGN KEY ("responsableId") REFERENCES public."User"(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
 -- Name: RecursoTercerizado RecursoTercerizado_supportId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7208,5 +7228,5 @@ ALTER TABLE ONLY public."UserRole"
 -- PostgreSQL database dump complete
 --
 
-\unrestrict Wl6SgexsmYWbmvpZ2OOvpgPrfGLjVszoEAVmhr22s1ixiwi2hxn49gMGtfe7KFv
+\unrestrict 1IYgO8amzNljNmbKvjSjUMWn3vM6Ec6UEAX3l2brJIctIQd2WO7G4GmQHXcFIhe
 

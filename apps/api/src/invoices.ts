@@ -259,6 +259,8 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
         },
         proveedor: true,  // Proveedor para facturas sin OC
         vendor: true,  // Legacy
+        createdByUser: { select: { id: true, name: true, email: true } },  // Usuario creador
+        approvedByUser: { select: { id: true, name: true, email: true } },  // Usuario aprobador
         periods: {  // Periodos de la factura (M:N)
           include: {
             period: { select: { id: true, year: true, month: true, label: true } }
@@ -540,6 +542,7 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
     );
 
     // 4. Crear factura + periodos + distribución en una transacción
+    const userId = (req as any).user?.id;
     const created = await prisma.$transaction(async (tx) => {
       const invoice = await tx.invoice.create({
         data: {
@@ -553,6 +556,8 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
           ultimusIncident: data.ultimusIncident ?? null,
           detalle: data.detalle ?? null,
           statusCurrent: "INGRESADO",
+          // Auditoría: capturar usuario que crea la factura
+          createdBy: userId ?? null,
           // Campos contables
           mesContable: camposContables.mesContable,
           tcEstandar: camposContables.tcEstandar !== null ? new Prisma.Decimal(camposContables.tcEstandar) : null,

@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
+import { useAuth } from "../../contexts/AuthContext";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
@@ -8,6 +9,8 @@ import FilterSelect from "../../components/ui/FilterSelect";
 import Button from "../../components/ui/Button";
 import Modal from "../../components/ui/Modal";
 import InvoiceStatusTimeline from "../../components/InvoiceStatusTimeline";
+import UserMultiSelect, { UserOption } from "../../components/ui/UserMultiSelect";
+import StatusMultiSelect from "../../components/ui/StatusMultiSelect";
 import { formatNumber } from "../../utils/numberFormat";
 import { ExternalLink, FileText, Users, DollarSign, TrendingUp, Clock } from "lucide-react";
 
@@ -54,6 +57,8 @@ type Invoice = {
   // Proveedor para facturas sin OC
   proveedorId?: number | null;
   proveedor?: { razonSocial?: string | null; ruc?: string | null } | null;
+  createdByUser?: { id: number; name: string | null; email: string } | null;
+  approvedByUser?: { id: number; name: string | null; email: string } | null;
   docType: string;
   numberNorm: string | null;
   currency: string;
@@ -311,12 +316,23 @@ export default function InvoiceListadoPage() {
     }
   });
 
+  // Obtener usuario actual para filtro por defecto
+  const { user: currentUser } = useAuth();
+
   const [filters, setFilters] = useState({
     search: "",
     docType: "",
-    status: "",
-    year: new Date().getFullYear().toString()
+    selectedEstados: ESTADOS_FACTURA.filter(e => e !== "PAGADO"),  // Por defecto: todo menos PAGADO
+    year: "",  // Sin filtro por año por defecto
+    selectedUsers: [] as string[]
   });
+
+  // Actualizar filtro de usuario cuando el usuario cargue
+  React.useEffect(() => {
+    if (currentUser?.email && filters.selectedUsers.length === 0) {
+      setFilters(f => ({ ...f, selectedUsers: [currentUser.email] }));
+    }
+  }, [currentUser?.email]);
 
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -350,6 +366,25 @@ export default function InvoiceListadoPage() {
     setTimeout(() => setSelectedInvoiceId(null), 300);
   };
 
+  // Calcular usuarios únicos disponibles desde las facturas (con nombres)
+  const availableUsers: UserOption[] = useMemo(() => {
+    if (!invoices) return [];
+    const userMap = new Map<string, UserOption>();
+    invoices.forEach((inv) => {
+      if (inv.createdByUser?.email && !userMap.has(inv.createdByUser.email)) {
+        userMap.set(inv.createdByUser.email, {
+          email: inv.createdByUser.email,
+          name: inv.createdByUser.name || null
+        });
+      }
+    });
+    return Array.from(userMap.values()).sort((a, b) => {
+      const nameA = a.name || a.email;
+      const nameB = b.name || b.email;
+      return nameA.localeCompare(nameB);
+    });
+  }, [invoices]);
+
   // Función de búsqueda y filtrado
   const filteredInvoices = useMemo(() => {
     if (!invoices) return [];
@@ -363,6 +398,13 @@ export default function InvoiceListadoPage() {
         const invYear = new Date(inv.createdAt).getFullYear();
         return invYear === year;
       });
+    }
+    
+    // Filtro por usuarios seleccionados
+    if (filters.selectedUsers.length > 0) {
+      result = result.filter((inv) => 
+        filters.selectedUsers.includes(inv.createdByUser?.email || '')
+      );
     }
     
     // Búsqueda global por texto libre
@@ -393,8 +435,11 @@ export default function InvoiceListadoPage() {
       result = result.filter((inv) => inv.docType === filters.docType);
     }
     
-    if (filters.status) {
-      result = result.filter((inv) => inv.statusCurrent === filters.status);
+    // Filtro por estados seleccionados (multi-select)
+    if (filters.selectedEstados.length > 0) {
+      result = result.filter((inv) => 
+        filters.selectedEstados.includes(inv.statusCurrent)
+      );
     }
     
     return result;
@@ -458,8 +503,8 @@ export default function InvoiceListadoPage() {
 
   const handleExportCSV = () => {
     const params = new URLSearchParams();
+    if (filters.selectedEstados.length > 0) params.set("status", filters.selectedEstados.join(","));
     if (filters.docType) params.set("docType", filters.docType);
-    if (filters.status) params.set("status", filters.status);
     window.open(`http://localhost:3001/invoices/export/csv?${params.toString()}`, "_blank");
   };
 
@@ -504,8 +549,17 @@ export default function InvoiceListadoPage() {
               searchable={false}
             />
             
+            {/* Filtro de Usuarios */}
+            <UserMultiSelect
+              users={availableUsers}
+              selectedUsers={filters.selectedUsers}
+              onChange={(selected) => setFilters(f => ({ ...f, selectedUsers: selected }))}
+              label="Usuarios"
+              placeholder="Todos los usuarios"
+            />
+            
             {/* Búsqueda global */}
-            <div className="md:col-span-2">
+            <div>
               <label className="block text-xs text-brand-text-secondary font-medium mb-1">
                 Buscar
               </label>
@@ -529,20 +583,26 @@ export default function InvoiceListadoPage() {
               searchable={false}
             />
             
-            {/* Filtro de Estado */}
-            <FilterSelect
+            {/* Filtro de Estado - Multi-select */}
+            <StatusMultiSelect
               label="Estado"
-              placeholder="Todos"
-              value={filters.status}
-              onChange={(value) => setFilters(f => ({ ...f, status: value }))}
-              options={ESTADOS_FACTURA.map(estado => ({
-                value: estado,
-                label: estado.replace(/_/g, " ")
-              }))}
+              placeholder="Todos los estados"
+              statuses={ESTADOS_FACTURA}
+              selectedStatuses={filters.selectedEstados}
+              onChange={(selected) => setFilters(f => ({ ...f, selectedEstados: selected }))}
+              excludeStatus="PAGADO"
+              excludeLabel="Todo menos PAGADO"
             />
           </div>
           
-          <div className="mt-3 flex justify-end">
+          <div className="mt-3 flex justify-between items-center">
+            <div className="flex gap-2">
+              {filters.selectedUsers.length > 0 && (
+                <div className="text-sm text-brand-text-secondary">
+                  Filtrando por {filters.selectedUsers.length} usuario{filters.selectedUsers.length > 1 ? 's' : ''}
+                </div>
+              )}
+            </div>
             <Button variant="secondary" onClick={handleExportCSV} size="sm">
               Exportar CSV
             </Button>
@@ -601,7 +661,7 @@ export default function InvoiceListadoPage() {
             <div className="text-center">
               <FileText size={48} className="mx-auto mb-4 text-brand-text-disabled" />
               <p className="text-brand-text-secondary">
-                {filters.search || filters.docType || filters.status
+                {filters.search || filters.docType || filters.selectedEstados.length > 0
                   ? "No se encontraron facturas que coincidan con los filtros"
                   : "No hay facturas registradas"}
               </p>

@@ -10,6 +10,8 @@ import Button from "../../components/ui/Button";
 import { Table, Th, Td } from "../../components/ui/Table";
 import StatusChip from "../../components/StatusChip";
 import YearMonthPicker from "../../components/YearMonthPicker";
+import ResponsableSelector from "../../components/ResponsableSelector";
+import StatusMultiSelect from "../../components/ui/StatusMultiSelect";
 import { formatNumber } from "../../utils/numberFormat";
 import { formatPeriodLabel } from "../../utils/periodFormat";
 import ProveedorSelector from "../../components/ProveedorSelector";
@@ -59,6 +61,8 @@ type Invoice = {
     budgetPeriodTo?: { id: number; year: number; month: number };
   } | null;
   vendorId?: number | null;
+  createdByUser?: { id: number; name: string | null; email: string } | null;
+  approvedByUser?: { id: number; name: string | null; email: string } | null;
   docType: string;
   numberNorm: string | null;
   currency: string;
@@ -144,7 +148,11 @@ export default function InvoiceGestionPage() {
   });
 
   // Estados
-  const [filters, setFilters] = useState({ status: "", docType: "", numeroOc: "" });
+  const [filters, setFilters] = useState({ 
+    selectedEstados: [] as string[],  // Multi-select de estados
+    docType: "", 
+    numeroOc: ""
+  });
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" | null }>({
     key: "createdAt",
     direction: "desc"
@@ -157,6 +165,7 @@ export default function InvoiceGestionPage() {
     id: "",
     ocId: "",
     supportId: "",  // Para modo sin OC
+    responsableUserId: null as number | null,  // Responsable para facturas sin OC
     docType: "FACTURA",
     numberNorm: "",
     montoSinIgv: "",
@@ -285,7 +294,7 @@ export default function InvoiceGestionPage() {
     if (!invoices) return [];
 
     let filtered = invoices.filter(inv => {
-      if (filters.status && inv.statusCurrent !== filters.status) return false;
+      if (filters.selectedEstados.length > 0 && !filters.selectedEstados.includes(inv.statusCurrent)) return false;
       if (filters.docType && inv.docType !== filters.docType) return false;
       if (filters.numeroOc && inv.oc?.numeroOc?.toLowerCase().includes(filters.numeroOc.toLowerCase()) === false) return false;
       return true;
@@ -364,6 +373,7 @@ export default function InvoiceGestionPage() {
       id: "",
       ocId: "",
       supportId: "",
+      responsableUserId: null,
       docType: "FACTURA",
       numberNorm: "",
       montoSinIgv: "",
@@ -400,7 +410,8 @@ export default function InvoiceGestionPage() {
       id: String(invoice.id),
       ocId: invoice.ocId ? String(invoice.ocId) : "",
       supportId: invoice.supportId ? String(invoice.supportId) : "",
-      docType: invoice.docType || "FACTURA",
+      responsableUserId: invoice.createdByUser?.id || null,  // Cargar responsable actual
+      docType: invoice.docType,
       numberNorm: invoice.numberNorm || "",
       montoSinIgv: invoice.montoSinIgv ? String(invoice.montoSinIgv) : "",
       exchangeRateOverride: invoice.exchangeRateOverride ? String(invoice.exchangeRateOverride) : "",
@@ -408,8 +419,8 @@ export default function InvoiceGestionPage() {
       detalle: invoice.detalle || "",
       proveedorId: (invoice as any).proveedorId || null,
       proveedor: (invoice as any).proveedor?.razonSocial || invoice.oc?.proveedor || "",
-      moneda: invoice.currency || "PEN",
-      mesContable: invoice.mesContable || "",
+      moneda: invoice.oc?.moneda || invoice.currency || "PEN",
+      mesContable: "",
       tcReal: invoice.tcReal ? String(invoice.tcReal) : ""
     });
     setHasOC(!!invoice.ocId);
@@ -480,6 +491,7 @@ export default function InvoiceGestionPage() {
       if (hasOC && !form.ocId) errors.ocId = "OC es requerida";
       if (!hasOC && !form.supportId) errors.supportId = "Sustento es requerido";
       if (!hasOC && !form.proveedorId) errors.proveedorId = "Proveedor es requerido";
+      if (!hasOC && !form.responsableUserId) errors.responsableUserId = "Responsable es requerido";
       if (!form.numberNorm.trim()) errors.numberNorm = "Número es requerido";
       if (!form.montoSinIgv || Number(form.montoSinIgv) < 0) errors.montoSinIgv = "Monto inválido";
       if (!periodFromId || !periodToId) errors.periodIds = "Debe seleccionar rango de periodos (desde → hasta)";
@@ -537,6 +549,7 @@ export default function InvoiceGestionPage() {
         payload.supportId = form.supportId ? Number(form.supportId) : undefined;
         payload.proveedorId = form.proveedorId;
         payload.moneda = form.moneda;
+        payload.createdBy = form.responsableUserId;  // Asignar responsable para facturas sin OC
       }
 
       if (import.meta.env.DEV) {
@@ -822,6 +835,27 @@ export default function InvoiceGestionPage() {
                     className={fieldErrors.moneda ? "border-red-500" : ""}
                   />
                   {fieldErrors.moneda && <p className="text-xs text-red-600 mt-1">{fieldErrors.moneda}</p>}
+                </div>
+                
+                {/* Responsable (solo para facturas sin OC) */}
+                <div>
+                  <ResponsableSelector
+                    label="Responsable *"
+                    placeholder="Seleccionar responsable..."
+                    value={form.responsableUserId}
+                    onChange={(userId) => {
+                      setForm(f => ({ ...f, responsableUserId: userId }));
+                      if (userId) {
+                        setFieldErrors(e => {
+                          const newErrors = { ...e };
+                          delete newErrors.responsableUserId;
+                          return newErrors;
+                        });
+                      }
+                    }}
+                    error={fieldErrors.responsableUserId}
+                    allowCreate={true}
+                  />
                 </div>
               </>
             )}
@@ -1178,25 +1212,24 @@ export default function InvoiceGestionPage() {
               className="w-auto min-w-[160px]"
             />
 
-            <FilterSelect
+            <StatusMultiSelect
               placeholder="Todos los estados"
-              value={filters.status}
-              onChange={(value) => {
-                setFilters(f => ({ ...f, status: value }));
+              statuses={[
+                "INGRESADO",
+                "EN_APROBACION",
+                "APROBACION_HEAD",
+                "APROBACION_VP",
+                "EN_CONTABILIDAD",
+                "EN_TESORERIA",
+                "EN_ESPERA_DE_PAGO",
+                "PAGADO",
+                "RECHAZADO"
+              ]}
+              selectedStatuses={filters.selectedEstados}
+              onChange={(selected) => {
+                setFilters(f => ({ ...f, selectedEstados: selected }));
                 setSortConfig(DEFAULT_SORT);
               }}
-              options={[
-                { value: "INGRESADO", label: "INGRESADO" },
-                { value: "APROBACION_HEAD", label: "APROBACIÓN HEAD" },
-                { value: "APROBACION_VP", label: "APROBACIÓN VP" },
-                { value: "EN_APROBACION", label: "EN APROBACIÓN (legacy)" },
-                { value: "EN_CONTABILIDAD", label: "EN CONTABILIDAD" },
-                { value: "EN_TESORERIA", label: "EN TESORERÍA" },
-                { value: "EN_ESPERA_DE_PAGO", label: "EN ESPERA DE PAGO" },
-                { value: "PAGADO", label: "PAGADO" },
-                { value: "RECHAZADO", label: "RECHAZADO" }
-              ]}
-              className="w-auto min-w-[180px]"
             />
 
             <Input
@@ -1212,7 +1245,7 @@ export default function InvoiceGestionPage() {
             <Button
               onClick={() => {
                 const p = new URLSearchParams();
-                if (filters.status) p.set("status", filters.status);
+                if (filters.selectedEstados.length > 0) p.set("status", filters.selectedEstados.join(","));
                 if (filters.docType) p.set("docType", filters.docType);
                 window.open(`http://localhost:3001/invoices/export/csv?${p.toString()}`, "_blank");
               }}

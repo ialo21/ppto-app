@@ -470,7 +470,6 @@ function AppLayout(){
 import Dashboard from "./pages/Dashboard";
 import AssistantPage from "./pages/AssistantPage";
 import BudgetPage from "./pages/BudgetPage";
-import PurchaseOrdersPage from "./pages/PurchaseOrdersPage";
 import ProvisionsPage from "./pages/ProvisionsPage";
 import ReportsPage from "./pages/ReportsPage";
 import CatalogsPage from "./pages/SettingsPage";

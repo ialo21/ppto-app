@@ -6,6 +6,7 @@ import { useWebSocket } from "../../hooks/useWebSocket";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import FilterSelect from "../../components/ui/FilterSelect";
 import Input from "../../components/ui/Input";
+import StatusMultiSelect from "../../components/ui/StatusMultiSelect";
 import Button from "../../components/ui/Button";
 import { Table, Th, Td } from "../../components/ui/Table";
 import OcStatusChip from "../../components/OcStatusChip";
@@ -242,7 +243,7 @@ export default function OcGestionPage() {
     proveedor: "",
     numeroOc: "",
     moneda: "",
-    estado: "",
+    selectedEstados: [] as string[],  // Multi-select de estados
     search: ""
   });
 
@@ -583,7 +584,8 @@ export default function OcGestionPage() {
     if (filters.proveedor && !oc.proveedor?.toLowerCase().includes(filters.proveedor.toLowerCase())) return false;
     if (filters.numeroOc && !oc.numeroOc?.toLowerCase().includes(filters.numeroOc.toLowerCase())) return false;
     if (filters.moneda && oc.moneda !== filters.moneda) return false;
-    if (filters.estado && oc.estado !== filters.estado) return false;
+    // Filtro por estados seleccionados (multi-select)
+    if (filters.selectedEstados.length > 0 && !filters.selectedEstados.includes(oc.estado)) return false;
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
       return (
@@ -599,7 +601,7 @@ export default function OcGestionPage() {
   const handleExportCSV = () => {
     const params = new URLSearchParams();
     if (filters.moneda) params.set("moneda", filters.moneda);
-    if (filters.estado) params.set("estado", filters.estado);
+    if (filters.selectedEstados.length > 0) params.set("estado", filters.selectedEstados.join(","));
     if (filters.proveedor) params.set("proveedor", filters.proveedor);
     if (filters.search) params.set("search", filters.search);
     window.open(`http://localhost:3001/ocs/export/csv?${params.toString()}`, "_blank");
@@ -996,16 +998,16 @@ export default function OcGestionPage() {
               searchable={false}
               className="w-auto min-w-[120px]"
             />
-            <FilterSelect
-              placeholder="(Estado)"
-              value={filters.estado}
-              onChange={(value) => setFilters(f => ({ ...f, estado: value }))}
-              options={ESTADOS_OC.map(estado => ({
-                value: estado,
-                label: estado.replace(/_/g, " ")
-              }))}
-              className="w-auto min-w-[160px]"
-            />
+            <div className="w-auto min-w-[200px]">
+              <StatusMultiSelect
+                placeholder="Todos los estados"
+                statuses={ESTADOS_OC}
+                selectedStatuses={filters.selectedEstados}
+                onChange={(selected) => setFilters(f => ({ ...f, selectedEstados: selected }))}
+                excludeStatus="ATENDIDO"
+                excludeLabel="Todo menos ATENDIDO"
+              />
+            </div>
             <Button variant="secondary" onClick={handleExportCSV}>
               Exportar CSV
             </Button>

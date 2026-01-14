@@ -315,6 +315,12 @@ model Invoice {
   detalle         String?    @db.Text
   approvedAt      DateTime?
   
+  // Auditoría de usuarios
+  createdBy       Int?       // Usuario que creó la factura
+  createdByUser   User?      @relation("InvoiceCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  approvedBy      Int?       // Usuario que aprobó la factura
+  approvedByUser  User?      @relation("InvoiceApprovedBy", fields: [approvedBy], references: [id], onDelete: SetNull)
+  
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
   
@@ -666,6 +672,8 @@ model User {
   
   userRoles     UserRole[]
   recursosTercerizados RecursoTercerizado[]
+  invoicesCreated   Invoice[] @relation("InvoiceCreatedBy")
+  invoicesApproved  Invoice[] @relation("InvoiceApprovedBy")
   
   @@index([email], name: "ix_user_email")
 }

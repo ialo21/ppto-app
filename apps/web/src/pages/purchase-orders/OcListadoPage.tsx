@@ -302,12 +302,6 @@ export default function OcListadoPage() {
     selectedProviders: [] as string[]
   });
 
-  // Actualizar filtro de usuario cuando el usuario cargue
-  React.useEffect(() => {
-    if (currentUser?.email && filters.selectedUsers.length === 0) {
-      setFilters(f => ({ ...f, selectedUsers: [currentUser.email] }));
-    }
-  }, [currentUser?.email]);
 
   const [selectedOcId, setSelectedOcId] = useState<number | null>(null);
   const [isTimelineOpen, setIsTimelineOpen] = useState(false);
@@ -330,11 +324,75 @@ export default function OcListadoPage() {
 
   const selectedOc = ocs?.find((oc: any) => oc.id === selectedOcId);
 
-  // Calcular usuarios únicos disponibles desde las OCs (con nombres)
-  const availableUsers: UserOption[] = useMemo(() => {
+  // Filtrado parcial para opciones de filtros interconectados
+  const getPartiallyFilteredOcs = (excludeFilter: string) => {
     if (!ocs) return [];
+    let result = [...ocs];
+
+    // Aplicar filtros excepto el que estamos calculando
+    if (excludeFilter !== 'years' && filters.years.length > 0) {
+      const selectedYearsSet = new Set(filters.years.map(y => Number(y)));
+      result = result.filter((oc: any) => {
+        const ocYear = new Date(oc.fechaRegistro).getFullYear();
+        return selectedYearsSet.has(ocYear);
+      });
+    }
+
+    if (excludeFilter !== 'users' && filters.selectedUsers.length > 0) {
+      result = result.filter((oc: any) => {
+        const email = oc.solicitanteUser?.email || oc.correoSolicitante;
+        return filters.selectedUsers.includes(email);
+      });
+    }
+
+    if (excludeFilter !== 'providers' && filters.selectedProviders.length > 0) {
+      result = result.filter((oc: any) => {
+        const proveedor = oc.proveedorRef?.razonSocial || oc.proveedor || "Sin proveedor";
+        return filters.selectedProviders.includes(proveedor);
+      });
+    }
+
+    if (excludeFilter !== 'estados' && filters.selectedEstados.length > 0) {
+      result = result.filter((oc: any) => 
+        filters.selectedEstados.includes(oc.estado)
+      );
+    }
+
+    if (excludeFilter !== 'moneda' && filters.moneda) {
+      result = result.filter((oc: any) => oc.moneda === filters.moneda);
+    }
+
+    if (excludeFilter !== 'search' && filters.search.trim()) {
+      const searchLower = filters.search.toLowerCase();
+      result = result.filter((oc: any) => {
+        if (oc.numeroOc?.toLowerCase().includes(searchLower)) return true;
+        if (oc.proveedorRef?.razonSocial?.toLowerCase().includes(searchLower)) return true;
+        if (oc.proveedorRef?.ruc?.includes(searchLower)) return true;
+        if (oc.proveedor?.toLowerCase().includes(searchLower)) return true;
+        if (oc.ruc?.includes(searchLower)) return true;
+        if (oc.support?.name?.toLowerCase().includes(searchLower)) return true;
+        if (oc.support?.code?.toLowerCase().includes(searchLower)) return true;
+        if (oc.descripcion?.toLowerCase().includes(searchLower)) return true;
+        if (oc.comentario?.toLowerCase().includes(searchLower)) return true;
+        if (oc.costCenters && oc.costCenters.length > 0) {
+          const cecoMatch = oc.costCenters.some((cc: any) => 
+            cc.costCenter?.code?.toLowerCase().includes(searchLower) ||
+            cc.costCenter?.name?.toLowerCase().includes(searchLower)
+          );
+          if (cecoMatch) return true;
+        }
+        return false;
+      });
+    }
+
+    return result;
+  };
+
+  // Calcular usuarios únicos disponibles desde las OCs filtradas (con nombres)
+  const availableUsers: UserOption[] = useMemo(() => {
+    const partialData = getPartiallyFilteredOcs('users');
     const userMap = new Map<string, UserOption>();
-    ocs.forEach((oc: any) => {
+    partialData.forEach((oc: any) => {
       // Preferir solicitanteUser, fallback a campos legacy
       const email = oc.solicitanteUser?.email || oc.correoSolicitante;
       const name = oc.solicitanteUser?.name || oc.nombreSolicitante || null;
@@ -348,12 +406,31 @@ export default function OcListadoPage() {
       const nameB = b.name || b.email;
       return nameA.localeCompare(nameB);
     });
-  }, [ocs]);
+  }, [ocs, filters.years, filters.selectedProviders, filters.selectedEstados, filters.moneda, filters.search]);
+
+  // Actualizar filtro de usuario cuando el usuario cargue - solo si tiene OCs
+  React.useEffect(() => {
+    if (currentUser?.email && filters.selectedUsers.length === 0 && availableUsers.length > 0) {
+      const userHasOcs = availableUsers.some(u => u.email === currentUser.email);
+      if (userHasOcs) {
+        setFilters(f => ({ ...f, selectedUsers: [currentUser.email] }));
+      }
+    }
+  }, [currentUser?.email, availableUsers]);
+
+  // Si el usuario seleccionado deja de existir en las opciones (no hay datos), limpiar selección
+  React.useEffect(() => {
+    if (filters.selectedUsers.length === 0) return;
+    const stillValid = filters.selectedUsers.some(u => availableUsers.some(opt => opt.email === u));
+    if (!stillValid) {
+      setFilters(f => ({ ...f, selectedUsers: [] }));
+    }
+  }, [availableUsers, filters.selectedUsers]);
 
   const availableProviders: ProviderOption[] = useMemo(() => {
-    if (!ocs) return [];
+    const partialData = getPartiallyFilteredOcs('providers');
     const map = new Map<string, ProviderOption>();
-    ocs.forEach((oc: any) => {
+    partialData.forEach((oc: any) => {
       const label = oc.proveedorRef?.razonSocial || oc.proveedor || "Sin proveedor";
       const secondary = oc.proveedorRef?.ruc || oc.ruc || null;
       if (!map.has(label)) {
@@ -361,7 +438,7 @@ export default function OcListadoPage() {
       }
     });
     return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
-  }, [ocs]);
+  }, [ocs, filters.years, filters.selectedUsers, filters.selectedEstados, filters.moneda, filters.search]);
 
   // Función de búsqueda y filtrado
   const filteredOcs = useMemo(() => {

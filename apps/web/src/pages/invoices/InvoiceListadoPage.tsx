@@ -340,12 +340,6 @@ export default function InvoiceListadoPage() {
     selectedProviders: [] as string[]
   });
 
-  // Actualizar filtro de usuario cuando el usuario cargue
-  React.useEffect(() => {
-    if (currentUser?.email && filters.selectedUsers.length === 0) {
-      setFilters(f => ({ ...f, selectedUsers: [currentUser.email] }));
-    }
-  }, [currentUser?.email]);
 
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -379,11 +373,81 @@ export default function InvoiceListadoPage() {
     setTimeout(() => setSelectedInvoiceId(null), 300);
   };
 
-  // Calcular usuarios únicos disponibles desde las facturas (con nombres)
-  const availableUsers: UserOption[] = useMemo(() => {
+  // Filtrado parcial para opciones de filtros interconectados
+  const getPartiallyFilteredInvoices = (excludeFilter: string) => {
     if (!invoices) return [];
+    let result = [...invoices];
+
+    // Aplicar filtros excepto el que estamos calculando
+    if (excludeFilter !== 'years' && filters.years.length > 0) {
+      const selectedYearsSet = new Set(filters.years.map(y => Number(y)));
+      result = result.filter((inv) => {
+        const invYear = new Date(inv.createdAt).getFullYear();
+        return selectedYearsSet.has(invYear);
+      });
+    }
+
+    if (excludeFilter !== 'users' && filters.selectedUsers.length > 0) {
+      result = result.filter((inv) => {
+        const createdByEmail = inv.createdByUser?.email;
+        const solicitanteEmail = inv.oc?.solicitanteUser?.email;
+        return (
+          (createdByEmail && filters.selectedUsers.includes(createdByEmail)) ||
+          (solicitanteEmail && filters.selectedUsers.includes(solicitanteEmail))
+        );
+      });
+    }
+
+    if (excludeFilter !== 'providers' && filters.selectedProviders.length > 0) {
+      result = result.filter((inv) => {
+        const proveedor =
+          inv.oc?.proveedorRef?.razonSocial ||
+          inv.oc?.proveedor ||
+          inv.proveedor?.razonSocial ||
+          "Sin proveedor";
+        return filters.selectedProviders.includes(proveedor);
+      });
+    }
+
+    if (excludeFilter !== 'estados' && filters.selectedEstados.length > 0) {
+      result = result.filter((inv) => 
+        filters.selectedEstados.includes(inv.statusCurrent)
+      );
+    }
+
+    if (excludeFilter !== 'docType' && filters.docType) {
+      result = result.filter((inv) => inv.docType === filters.docType);
+    }
+
+    if (excludeFilter !== 'search' && filters.search.trim()) {
+      const searchLower = filters.search.toLowerCase();
+      result = result.filter((inv) => {
+        if (inv.numberNorm?.toLowerCase().includes(searchLower)) return true;
+        if (inv.oc?.proveedorRef?.razonSocial?.toLowerCase().includes(searchLower)) return true;
+        if (inv.oc?.proveedor?.toLowerCase().includes(searchLower)) return true;
+        if (inv.proveedor?.razonSocial?.toLowerCase().includes(searchLower)) return true;
+        if (inv.oc?.numeroOc?.toLowerCase().includes(searchLower)) return true;
+        if (inv.ultimusIncident?.toLowerCase().includes(searchLower)) return true;
+        if (inv.detalle?.toLowerCase().includes(searchLower)) return true;
+        if (inv.costCenters && inv.costCenters.length > 0) {
+          const cecoMatch = inv.costCenters.some((cc) => 
+            cc.costCenter?.code?.toLowerCase().includes(searchLower) ||
+            cc.costCenter?.name?.toLowerCase().includes(searchLower)
+          );
+          if (cecoMatch) return true;
+        }
+        return false;
+      });
+    }
+
+    return result;
+  };
+
+  // Calcular usuarios únicos disponibles desde las facturas filtradas (con nombres)
+  const availableUsers: UserOption[] = useMemo(() => {
+    const partialData = getPartiallyFilteredInvoices('users');
     const userMap = new Map<string, UserOption>();
-    invoices.forEach((inv) => {
+    partialData.forEach((inv) => {
       // Incluir createdByUser (facturas sin OC o usuario explícito)
       if (inv.createdByUser?.email && !userMap.has(inv.createdByUser.email)) {
         userMap.set(inv.createdByUser.email, {
@@ -405,13 +469,23 @@ export default function InvoiceListadoPage() {
       const nameB = b.name || b.email;
       return nameA.localeCompare(nameB);
     });
-  }, [invoices]);
+  }, [invoices, filters.years, filters.selectedProviders, filters.selectedEstados, filters.docType, filters.search]);
 
-  // Proveedores únicos para filtro
+  // Actualizar filtro de usuario cuando el usuario cargue - solo si tiene facturas
+  React.useEffect(() => {
+    if (currentUser?.email && filters.selectedUsers.length === 0 && availableUsers.length > 0) {
+      const userHasInvoices = availableUsers.some(u => u.email === currentUser.email);
+      if (userHasInvoices) {
+        setFilters(f => ({ ...f, selectedUsers: [currentUser.email] }));
+      }
+    }
+  }, [currentUser?.email, availableUsers]);
+
+  // Proveedores únicos para filtro (basado en datos filtrados)
   const availableProviders: ProviderOption[] = useMemo(() => {
-    if (!invoices) return [];
+    const partialData = getPartiallyFilteredInvoices('providers');
     const map = new Map<string, ProviderOption>();
-    invoices.forEach((inv) => {
+    partialData.forEach((inv) => {
       const label = inv.oc?.proveedorRef?.razonSocial || inv.oc?.proveedor || inv.proveedor?.razonSocial || "Sin proveedor";
       const secondary = inv.oc?.proveedorRef?.ruc || inv.proveedor?.ruc || null;
       if (!map.has(label)) {
@@ -419,7 +493,7 @@ export default function InvoiceListadoPage() {
       }
     });
     return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
-  }, [invoices]);
+  }, [invoices, filters.years, filters.selectedUsers, filters.selectedEstados, filters.docType, filters.search]);
 
   // Función de búsqueda y filtrado
   const filteredInvoices = useMemo(() => {

@@ -83,18 +83,10 @@ export default function UserMultiSelect({
       return user ? getDisplayName(user) : selectedUsers[0];
     }
 
-    const names = selectedUsers
-      .map(email => {
-        const user = users.find(u => u.email === email);
-        return user ? getDisplayName(user) : email;
-      })
-      .filter(Boolean);
-
-    if (names.length <= 2) {
-      return names.join(", ");
-    }
-
-    return `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
+    const firstUser = users.find(u => u.email === selectedUsers[0]);
+    const firstName = firstUser ? getDisplayName(firstUser) : selectedUsers[0];
+    
+    return `${firstName} +${selectedUsers.length - 1}`;
   };
 
   return (

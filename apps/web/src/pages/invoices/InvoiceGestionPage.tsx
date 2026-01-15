@@ -146,10 +146,61 @@ export default function InvoiceGestionPage() {
     queryFn: async () => (await api.get("/cost-centers")).data
   });
 
-  const availableProviders: ProviderOption[] = useMemo(() => {
+  // Estados de filtros
+  const [filters, setFilters] = useState({ 
+    selectedEstados: [] as string[],  // Multi-select de estados
+    docType: "", 
+    numeroOc: "",
+    selectedProviders: [] as string[],
+    selectedUsers: [] as string[]
+  });
+
+  // Filtrado parcial para opciones de filtros interconectados
+  const getPartiallyFilteredInvoices = (excludeFilter: string) => {
     if (!invoices) return [];
+    let result = [...invoices];
+
+    if (excludeFilter !== 'estados' && filters.selectedEstados.length > 0) {
+      result = result.filter(inv => filters.selectedEstados.includes(inv.statusCurrent));
+    }
+
+    if (excludeFilter !== 'docType' && filters.docType) {
+      result = result.filter(inv => inv.docType === filters.docType);
+    }
+
+    if (excludeFilter !== 'numeroOc' && filters.numeroOc) {
+      result = result.filter(inv => inv.oc?.numeroOc?.toLowerCase().includes(filters.numeroOc.toLowerCase()));
+    }
+
+    if (excludeFilter !== 'users' && filters.selectedUsers.length > 0) {
+      result = result.filter(inv => {
+        const createdByEmail = inv.createdByUser?.email;
+        const solicitanteEmail = inv.oc?.solicitanteUser?.email;
+        return (
+          (createdByEmail && filters.selectedUsers.includes(createdByEmail)) ||
+          (solicitanteEmail && filters.selectedUsers.includes(solicitanteEmail))
+        );
+      });
+    }
+
+    if (excludeFilter !== 'providers' && filters.selectedProviders.length > 0) {
+      result = result.filter(inv => {
+        const proveedor =
+          inv.oc?.proveedorRef?.razonSocial ||
+          inv.oc?.proveedor ||
+          inv.proveedor?.razonSocial ||
+          "Sin proveedor";
+        return filters.selectedProviders.includes(proveedor);
+      });
+    }
+
+    return result;
+  };
+
+  const availableProviders: ProviderOption[] = useMemo(() => {
+    const partialData = getPartiallyFilteredInvoices('providers');
     const map = new Map<string, ProviderOption>();
-    invoices.forEach((inv: any) => {
+    partialData.forEach((inv: any) => {
       const label = inv.oc?.proveedorRef?.razonSocial || inv.oc?.proveedor || inv.proveedor?.razonSocial || "Sin proveedor";
       const secondary = inv.oc?.proveedorRef?.ruc || inv.proveedor?.ruc || null;
       if (!map.has(label)) {
@@ -157,12 +208,12 @@ export default function InvoiceGestionPage() {
       }
     });
     return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
-  }, [invoices]);
+  }, [invoices, filters.selectedEstados, filters.docType, filters.numeroOc, filters.selectedUsers]);
 
   const availableUsers: UserOption[] = useMemo(() => {
-    if (!invoices) return [];
+    const partialData = getPartiallyFilteredInvoices('users');
     const map = new Map<string, UserOption>();
-    invoices.forEach((inv: any) => {
+    partialData.forEach((inv: any) => {
       // Incluir createdByUser (facturas sin OC o usuario explícito)
       const email = inv.createdByUser?.email;
       const name = inv.createdByUser?.name || null;
@@ -182,20 +233,11 @@ export default function InvoiceGestionPage() {
       const nameB = b.name || b.email;
       return nameA.localeCompare(nameB);
     });
-  }, [invoices]);
+  }, [invoices, filters.selectedEstados, filters.docType, filters.numeroOc, filters.selectedProviders]);
 
   const { data: supports } = useQuery({
     queryKey: ["supports"],
     queryFn: async () => (await api.get("/supports")).data
-  });
-
-  // Estados
-  const [filters, setFilters] = useState({ 
-    selectedEstados: [] as string[],  // Multi-select de estados
-    docType: "", 
-    numeroOc: "",
-    selectedProviders: [] as string[],
-    selectedUsers: [] as string[]
   });
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" | null }>({
     key: "createdAt",

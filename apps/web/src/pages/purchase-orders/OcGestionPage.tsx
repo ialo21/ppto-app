@@ -209,10 +209,64 @@ export default function OcGestionPage() {
     queryFn: async () => (await api.get("/cost-centers")).data
   });
 
-  const availableProviders: ProviderOption[] = useMemo(() => {
+  const [filters, setFilters] = useState({
+    proveedor: "",
+    numeroOc: "",
+    moneda: "",
+    selectedEstados: ESTADOS_OC.filter(e => e !== "ATENDIDO"),
+    search: "",
+    selectedProviders: [] as string[],
+    selectedUsers: [] as string[]
+  });
+
+  // Filtrado parcial para opciones de filtros interconectados
+  const getPartiallyFilteredOcs = (excludeFilter: string) => {
     if (!ocs) return [];
+    let result = [...ocs];
+
+    if (excludeFilter !== 'providers' && filters.selectedProviders.length > 0) {
+      result = result.filter((oc: any) => {
+        const proveedor = oc.proveedorRef?.razonSocial || oc.proveedor || "Sin proveedor";
+        return filters.selectedProviders.includes(proveedor);
+      });
+    }
+
+    if (excludeFilter !== 'users' && filters.selectedUsers.length > 0) {
+      result = result.filter((oc: any) => {
+        const email = oc.solicitanteUser?.email || oc.correoSolicitante;
+        return email && filters.selectedUsers.includes(email);
+      });
+    }
+
+    if (excludeFilter !== 'numeroOc' && filters.numeroOc) {
+      result = result.filter((oc: any) => oc.numeroOc?.toLowerCase().includes(filters.numeroOc.toLowerCase()));
+    }
+
+    if (excludeFilter !== 'moneda' && filters.moneda) {
+      result = result.filter((oc: any) => oc.moneda === filters.moneda);
+    }
+
+    if (excludeFilter !== 'estados' && filters.selectedEstados.length > 0) {
+      result = result.filter((oc: any) => filters.selectedEstados.includes(oc.estado));
+    }
+
+    if (excludeFilter !== 'search' && filters.search) {
+      const searchLower = filters.search.toLowerCase();
+      result = result.filter((oc: any) => 
+        oc.proveedor?.toLowerCase().includes(searchLower) ||
+        oc.numeroOc?.toLowerCase().includes(searchLower) ||
+        oc.ruc?.includes(searchLower) ||
+        oc.support?.name?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    return result;
+  };
+
+  const availableProviders: ProviderOption[] = useMemo(() => {
+    const partialData = getPartiallyFilteredOcs('providers');
     const map = new Map<string, ProviderOption>();
-    ocs.forEach((oc: any) => {
+    partialData.forEach((oc: any) => {
       const label = oc.proveedorRef?.razonSocial || oc.proveedor || "Sin proveedor";
       const secondary = oc.proveedorRef?.ruc || oc.ruc || null;
       if (!map.has(label)) {
@@ -220,12 +274,12 @@ export default function OcGestionPage() {
       }
     });
     return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
-  }, [ocs]);
+  }, [ocs, filters.selectedUsers, filters.numeroOc, filters.moneda, filters.selectedEstados, filters.search]);
 
   const availableUsers: UserOption[] = useMemo(() => {
-    if (!ocs) return [];
+    const partialData = getPartiallyFilteredOcs('users');
     const userMap = new Map<string, UserOption>();
-    ocs.forEach((oc: any) => {
+    partialData.forEach((oc: any) => {
       const email = oc.solicitanteUser?.email || oc.correoSolicitante;
       const name = oc.solicitanteUser?.name || oc.nombreSolicitante || null;
       
@@ -238,7 +292,7 @@ export default function OcGestionPage() {
       const nameB = b.name || b.email;
       return nameA.localeCompare(nameB);
     });
-  }, [ocs]);
+  }, [ocs, filters.selectedProviders, filters.numeroOc, filters.moneda, filters.selectedEstados, filters.search]);
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -273,15 +327,6 @@ export default function OcGestionPage() {
     linkCotizacion: ""
   });
 
-  const [filters, setFilters] = useState({
-    proveedor: "",
-    numeroOc: "",
-    moneda: "",
-    selectedEstados: ESTADOS_OC.filter(e => e !== "ATENDIDO"),
-    search: "",
-    selectedProviders: [] as string[],
-    selectedUsers: [] as string[]
-  });
 
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" | null }>({
     key: "id",

@@ -76,6 +76,27 @@ export default function UserMultiSelect({
     return user.email;
   };
 
+  const getSelectedLabel = () => {
+    if (selectedUsers.length === 0) return placeholder;
+    if (selectedUsers.length === 1) {
+      const user = users.find(u => u.email === selectedUsers[0]);
+      return user ? getDisplayName(user) : selectedUsers[0];
+    }
+
+    const names = selectedUsers
+      .map(email => {
+        const user = users.find(u => u.email === email);
+        return user ? getDisplayName(user) : email;
+      })
+      .filter(Boolean);
+
+    if (names.length <= 2) {
+      return names.join(", ");
+    }
+
+    return `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
+  };
+
   return (
     <div className="relative" ref={dropdownRef}>
       {label && (
@@ -91,18 +112,7 @@ export default function UserMultiSelect({
         className="h-9 w-full px-3 text-left border border-brand-border rounded-xl bg-white text-xs sm:text-sm flex items-center justify-between gap-2 transition-all duration-200 hover:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
       >
         <span className={selectedUsers.length === 0 ? "text-brand-text-disabled" : "text-brand-text-primary truncate"}>
-          {selectedUsers.length === 0 ? (
-            placeholder
-          ) : selectedUsers.length === 1 ? (
-            // Mostrar nombre del único usuario seleccionado
-            (() => {
-              const user = users.find(u => u.email === selectedUsers[0]);
-              return user ? getDisplayName(user) : selectedUsers[0];
-            })()
-          ) : (
-            // Mostrar contador para múltiples usuarios
-            `${selectedUsers.length} usuarios seleccionados`
-          )}
+          {getSelectedLabel()}
         </span>
         <svg
           className={`w-4 h-4 transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`}

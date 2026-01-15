@@ -457,7 +457,7 @@ function AppLayout(){
             <div className="container-page">
               <Outlet />
               <div className="mt-6 text-center text-[11px] text-slate-400">
-                © Iago López — Practicante IT Governance
+                © Iago López — IT Governance & Budget
               </div>
             </div>
           </main>

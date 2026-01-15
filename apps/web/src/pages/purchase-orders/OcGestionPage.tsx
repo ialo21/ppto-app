@@ -1186,7 +1186,7 @@ export default function OcGestionPage() {
                 <tbody>
                   {sortedOcs.map((oc: any) => (
                     <tr key={oc.id}>
-                      <Td>{oc.numeroOc || `OC-${oc.id}`}</Td>
+                      <Td>{oc.numeroOc || (oc.incidenteOc ? `INC ${oc.incidenteOc}` : "PENDIENTE")}</Td>
                       <Td>{oc.proveedorRef?.razonSocial || oc.proveedor || "-"}</Td>
                       <Td className="text-xs">{oc.support?.name || "-"}</Td>
                       <Td className="text-xs">

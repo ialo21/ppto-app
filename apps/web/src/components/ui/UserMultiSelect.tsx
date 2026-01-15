@@ -111,7 +111,7 @@ export default function UserMultiSelect({
         onClick={() => setIsOpen(!isOpen)}
         className="h-9 w-full px-3 text-left border border-brand-border rounded-xl bg-white text-xs sm:text-sm flex items-center justify-between gap-2 transition-all duration-200 hover:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
       >
-        <span className={selectedUsers.length === 0 ? "text-brand-text-disabled" : "text-brand-text-primary truncate"}>
+        <span className={selectedUsers.length === 0 ? "text-brand-text-disabled" : "text-brand-text-primary"}>
           {getSelectedLabel()}
         </span>
         <svg
@@ -164,16 +164,13 @@ export default function UserMultiSelect({
               {filteredUsers.map((user) => {
                 const isSelected = selectedUsers.includes(user.email);
                 return (
-                  <label
+                  <button
                     key={user.email}
-                    className="flex items-center gap-2 px-3 py-2 hover:bg-brand-background cursor-pointer"
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => toggleUser(user.email)}
+                    className="w-full text-left flex items-center gap-2 px-3 py-2 hover:bg-brand-background cursor-pointer"
                   >
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => toggleUser(user.email)}
-                      className="sr-only"
-                    />
                     <div
                       className={`
                         w-4 h-4 border rounded flex items-center justify-center flex-shrink-0
@@ -186,16 +183,16 @@ export default function UserMultiSelect({
                       {isSelected && <Check size={12} className="text-white" strokeWidth={3} />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <span className="text-sm text-brand-text-primary font-medium block truncate">
+                      <span className="text-sm text-brand-text-primary font-medium block break-words" title={getDisplayName(user)}>
                         {getDisplayName(user)}
                       </span>
                       {user.name && (
-                        <span className="text-xs text-brand-text-disabled block truncate">
+                        <span className="text-xs text-brand-text-disabled block break-words" title={user.email}>
                           {user.email}
                         </span>
                       )}
                     </div>
-                  </label>
+                  </button>
                 );
               })}
             </div>

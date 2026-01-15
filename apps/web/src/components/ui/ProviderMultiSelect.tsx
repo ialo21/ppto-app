@@ -77,7 +77,7 @@ export default function ProviderMultiSelect({
         onClick={() => setIsOpen(!isOpen)}
         className="h-9 w-full px-3 text-left border border-brand-border rounded-xl bg-white text-xs sm:text-sm flex items-center justify-between gap-2 transition-all duration-200 hover:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
       >
-        <span className={selectedProviders.length === 0 ? "text-brand-text-disabled" : "text-brand-text-primary truncate"}>
+        <span className={selectedProviders.length === 0 ? "text-brand-text-disabled" : "text-brand-text-primary"}>
           {selectedProviders.length === 0
             ? placeholder
             : selectedProviders.length === 1
@@ -134,16 +134,13 @@ export default function ProviderMultiSelect({
               {filteredProviders.map((provider) => {
                 const isSelected = selectedProviders.includes(provider.value);
                 return (
-                  <label
+                  <button
                     key={provider.value}
-                    className="flex items-center gap-2 px-3 py-2 hover:bg-brand-background cursor-pointer"
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => toggleProvider(provider.value)}
+                    className="w-full text-left flex items-center gap-2 px-3 py-2 hover:bg-brand-background cursor-pointer"
                   >
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => toggleProvider(provider.value)}
-                      className="sr-only"
-                    />
                     <div
                       className={`
                         w-4 h-4 border rounded flex items-center justify-center flex-shrink-0
@@ -153,16 +150,16 @@ export default function ProviderMultiSelect({
                       {isSelected && <Check size={12} className="text-white" strokeWidth={3} />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <span className="text-sm text-brand-text-primary font-medium block truncate">
+                      <span className="text-sm text-brand-text-primary font-medium block truncate" title={provider.label}>
                         {provider.label}
                       </span>
                       {provider.secondary && (
-                        <span className="text-xs text-brand-text-disabled block truncate">
+                        <span className="text-xs text-brand-text-disabled block truncate" title={provider.secondary}>
                           {provider.secondary}
                         </span>
                       )}
                     </div>
-                  </label>
+                  </button>
                 );
               })}
             </div>

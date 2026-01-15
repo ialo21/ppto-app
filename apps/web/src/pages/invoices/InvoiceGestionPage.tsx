@@ -23,6 +23,7 @@ type OC = {
   numeroOc: string | null;
   proveedor: string;
   proveedorRef?: { razonSocial?: string | null; ruc?: string | null } | null;
+  solicitanteUser?: { id: number; name: string | null; email: string } | null;
   moneda: string;
   importeSinIgv: number;
   support: { id: number; name: string };
@@ -48,6 +49,7 @@ type Invoice = {
     numeroOc: string | null;
     proveedor: string;
     proveedorRef?: { razonSocial?: string | null; ruc?: string | null } | null;
+    solicitanteUser?: { id: number; name: string | null; email: string } | null;
     moneda: string;
     importeSinIgv: number;
     support: {
@@ -161,10 +163,18 @@ export default function InvoiceGestionPage() {
     if (!invoices) return [];
     const map = new Map<string, UserOption>();
     invoices.forEach((inv: any) => {
+      // Incluir createdByUser (facturas sin OC o usuario explícito)
       const email = inv.createdByUser?.email;
       const name = inv.createdByUser?.name || null;
       if (email && !map.has(email)) {
         map.set(email, { email, name });
+      }
+      
+      // Incluir oc.solicitanteUser (facturas con OC que tienen solicitante)
+      const ocSolicitanteEmail = inv.oc?.solicitanteUser?.email;
+      const ocSolicitanteName = inv.oc?.solicitanteUser?.name || null;
+      if (ocSolicitanteEmail && !map.has(ocSolicitanteEmail)) {
+        map.set(ocSolicitanteEmail, { email: ocSolicitanteEmail, name: ocSolicitanteName });
       }
     });
     return Array.from(map.values()).sort((a, b) => {
@@ -332,8 +342,13 @@ export default function InvoiceGestionPage() {
       if (filters.docType && inv.docType !== filters.docType) return false;
       if (filters.numeroOc && inv.oc?.numeroOc?.toLowerCase().includes(filters.numeroOc.toLowerCase()) === false) return false;
       if (filters.selectedUsers.length > 0) {
-        const email = inv.createdByUser?.email;
-        if (!email || !filters.selectedUsers.includes(email)) return false;
+        // Verificar tanto createdByUser como oc.solicitanteUser
+        const createdByEmail = inv.createdByUser?.email;
+        const solicitanteEmail = inv.oc?.solicitanteUser?.email;
+        const hasMatch = 
+          (createdByEmail && filters.selectedUsers.includes(createdByEmail)) ||
+          (solicitanteEmail && filters.selectedUsers.includes(solicitanteEmail));
+        if (!hasMatch) return false;
       }
       if (filters.selectedProviders.length > 0) {
         const proveedor =
@@ -595,7 +610,10 @@ export default function InvoiceGestionPage() {
         payload.supportId = form.supportId ? Number(form.supportId) : undefined;
         payload.proveedorId = form.proveedorId;
         payload.moneda = form.moneda;
-        payload.createdBy = form.responsableUserId;  // Asignar responsable para facturas sin OC
+        payload.responsableUserId = form.responsableUserId;  // Asignar responsable para facturas sin OC
+      } else if (form.responsableUserId) {
+        // Para facturas CON OC: también permitir override del responsable si se especifica
+        payload.responsableUserId = form.responsableUserId;
       }
 
       if (import.meta.env.DEV) {

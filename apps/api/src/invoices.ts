@@ -27,6 +27,7 @@ const createInvoiceSchema = z.object({
   proveedorId: z.number().int().positive().optional(),
   proveedor: z.string().optional(),  // Legacy - mantener por compatibilidad
   moneda: z.enum(["PEN", "USD"]).optional(),
+  responsableUserId: z.number().int().positive().optional(),  // Responsable (usuario) para facturas sin OC
   // Tipo de cambio override (opcional)
   exchangeRateOverride: z.number().positive().optional(),
   // Campos contables
@@ -47,6 +48,7 @@ const updateInvoiceSchema = z.object({
   proveedorId: z.number().int().positive().optional(),
   proveedor: z.string().optional(),  // Legacy - mantener por compatibilidad
   moneda: z.enum(["PEN", "USD"]).optional(),
+  responsableUserId: z.number().int().positive().optional(),  // Responsable (usuario) para facturas sin OC
   exchangeRateOverride: z.number().positive().optional(),
   // Campos contables
   // IMPORTANTE: .nullish() permite null y undefined, necesario para que el usuario pueda borrar el mes contable
@@ -228,6 +230,7 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
         oc: {
           include: {
             proveedorRef: { select: { id: true, razonSocial: true, ruc: true } },
+            solicitanteUser: { select: { id: true, name: true, email: true } },  // Solicitante de la OC
             support: {
               include: {
                 expensePackage: true,
@@ -356,6 +359,7 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
     let oc: any = null;
     let currency = data.moneda || "PEN";
     let proveedor = data.proveedor || "";
+    let responsableUserId: number | null = null;  // Responsable final a asignar
 
     if (data.ocId) {
       // Con OC: cargar y validar
@@ -387,6 +391,11 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
 
       currency = oc.moneda;
       proveedor = oc.proveedor;
+      
+      // NUEVO: Auto-copiar solicitante de la OC como responsable de la factura
+      if (oc.solicitanteUserId) {
+        responsableUserId = oc.solicitanteUserId;
+      }
 
       // Validar saldo OC
       const consumoActual = await calcularConsumoOC(data.ocId);
@@ -500,6 +509,11 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
           }]
         });
       }
+      
+      // NUEVO: Para facturas sin OC, usar el responsableUserId proporcionado
+      if (data.responsableUserId) {
+        responsableUserId = data.responsableUserId;
+      }
     }
 
     // 2. Validar tipo de cambio y calcular effectiveRate
@@ -556,8 +570,9 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
           ultimusIncident: data.ultimusIncident ?? null,
           detalle: data.detalle ?? null,
           statusCurrent: "INGRESADO",
-          // Auditoría: capturar usuario que crea la factura
-          createdBy: userId ?? null,
+          // Auditoría: usar responsableUserId si se proporcionó (facturas sin OC o con OC que tiene solicitante)
+          // Si no hay responsableUserId, usar el usuario autenticado actual
+          createdBy: responsableUserId ?? userId ?? null,
           // Campos contables
           mesContable: camposContables.mesContable,
           tcEstandar: camposContables.tcEstandar !== null ? new Prisma.Decimal(camposContables.tcEstandar) : null,
@@ -827,31 +842,35 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
     // Actualizar factura + periodos + distribución en una transacción
     const updated = await prisma.$transaction(async (tx) => {
       // Actualizar campos de Invoice
+      const updateData: any = {
+        ...(data.ocId !== undefined && { ocId: data.ocId, currency: targetOC?.moneda }),
+        ...(data.supportId !== undefined && { supportId: data.supportId }),
+        ...(data.proveedorId !== undefined && { proveedorId: data.proveedorId }),
+        ...(data.docType && { docType: data.docType as any }),
+        ...(data.numberNorm && { numberNorm: data.numberNorm }),
+        ...(data.montoSinIgv !== undefined && { montoSinIgv: new Prisma.Decimal(data.montoSinIgv) }),
+        ...(data.exchangeRateOverride !== undefined && {
+          exchangeRateOverride: data.exchangeRateOverride ? new Prisma.Decimal(data.exchangeRateOverride) : null
+        }),
+        ...(data.ultimusIncident !== undefined && { ultimusIncident: data.ultimusIncident }),
+        ...(data.detalle !== undefined && { detalle: data.detalle }),
+        ...(data.moneda !== undefined && !data.ocId && { currency: data.moneda }),
+        // NUEVO: Actualizar responsable si se proporciona
+        ...(data.responsableUserId !== undefined && { createdBy: data.responsableUserId }),
+        // Campos contables (si se recalcularon)
+        ...(camposContables && {
+          mesContable: camposContables.mesContable,
+          tcEstandar: camposContables.tcEstandar !== null ? new Prisma.Decimal(camposContables.tcEstandar) : null,
+          tcReal: camposContables.tcReal !== null ? new Prisma.Decimal(camposContables.tcReal) : null,
+          montoPEN_tcEstandar: camposContables.montoPEN_tcEstandar !== null ? new Prisma.Decimal(camposContables.montoPEN_tcEstandar) : null,
+          montoPEN_tcReal: camposContables.montoPEN_tcReal !== null ? new Prisma.Decimal(camposContables.montoPEN_tcReal) : null,
+          diferenciaTC: camposContables.diferenciaTC !== null ? new Prisma.Decimal(camposContables.diferenciaTC) : null
+        })
+      };
+      
       const invoice = await tx.invoice.update({
         where: { id },
-        data: {
-          ...(data.ocId !== undefined && { ocId: data.ocId, currency: targetOC?.moneda }),
-          ...(data.supportId !== undefined && { supportId: data.supportId }),
-          ...(data.proveedorId !== undefined && { proveedorId: data.proveedorId }),
-          ...(data.docType && { docType: data.docType as any }),
-          ...(data.numberNorm && { numberNorm: data.numberNorm }),
-          ...(data.montoSinIgv !== undefined && { montoSinIgv: new Prisma.Decimal(data.montoSinIgv) }),
-          ...(data.exchangeRateOverride !== undefined && {
-            exchangeRateOverride: data.exchangeRateOverride ? new Prisma.Decimal(data.exchangeRateOverride) : null
-          }),
-          ...(data.ultimusIncident !== undefined && { ultimusIncident: data.ultimusIncident }),
-          ...(data.detalle !== undefined && { detalle: data.detalle }),
-          ...(data.moneda !== undefined && !data.ocId && { currency: data.moneda }),
-          // Campos contables (si se recalcularon)
-          ...(camposContables && {
-            mesContable: camposContables.mesContable,
-            tcEstandar: camposContables.tcEstandar !== null ? new Prisma.Decimal(camposContables.tcEstandar) : null,
-            tcReal: camposContables.tcReal !== null ? new Prisma.Decimal(camposContables.tcReal) : null,
-            montoPEN_tcEstandar: camposContables.montoPEN_tcEstandar !== null ? new Prisma.Decimal(camposContables.montoPEN_tcEstandar) : null,
-            montoPEN_tcReal: camposContables.montoPEN_tcReal !== null ? new Prisma.Decimal(camposContables.montoPEN_tcReal) : null,
-            diferenciaTC: camposContables.diferenciaTC !== null ? new Prisma.Decimal(camposContables.diferenciaTC) : null
-          })
-        }
+        data: updateData
       });
 
       // Actualizar periodos si se proporcionan

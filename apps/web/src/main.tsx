@@ -446,6 +446,8 @@ function AppLayout(){
             isOpen={isMobileOpen}
             isMobile={!isDesktop}
             onMouseEnter={handleMouseEnter}
+
+            
             onMouseLeave={handleMouseLeave}
             onClose={handleCloseMobile}
           />

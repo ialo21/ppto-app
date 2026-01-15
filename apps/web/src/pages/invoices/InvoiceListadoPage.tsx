@@ -53,6 +53,7 @@ type Invoice = {
     numeroOc: string | null;
     proveedor: string;
     proveedorRef?: { razonSocial?: string | null; ruc?: string | null } | null;
+    solicitanteUser?: { id: number; name: string | null; email: string } | null;
     moneda: string;
   } | null;
   // Proveedor para facturas sin OC
@@ -382,10 +383,19 @@ export default function InvoiceListadoPage() {
     if (!invoices) return [];
     const userMap = new Map<string, UserOption>();
     invoices.forEach((inv) => {
+      // Incluir createdByUser (facturas sin OC o usuario explícito)
       if (inv.createdByUser?.email && !userMap.has(inv.createdByUser.email)) {
         userMap.set(inv.createdByUser.email, {
           email: inv.createdByUser.email,
           name: inv.createdByUser.name || null
+        });
+      }
+      
+      // Incluir oc.solicitanteUser (facturas con OC que tienen solicitante)
+      if (inv.oc?.solicitanteUser?.email && !userMap.has(inv.oc.solicitanteUser.email)) {
+        userMap.set(inv.oc.solicitanteUser.email, {
+          email: inv.oc.solicitanteUser.email,
+          name: inv.oc.solicitanteUser.name || null
         });
       }
     });
@@ -427,9 +437,14 @@ export default function InvoiceListadoPage() {
     
     // Filtro por usuarios seleccionados
     if (filters.selectedUsers.length > 0) {
-      result = result.filter((inv) => 
-        filters.selectedUsers.includes(inv.createdByUser?.email || '')
-      );
+      result = result.filter((inv) => {
+        const createdByEmail = inv.createdByUser?.email;
+        const solicitanteEmail = inv.oc?.solicitanteUser?.email;
+        return (
+          (createdByEmail && filters.selectedUsers.includes(createdByEmail)) ||
+          (solicitanteEmail && filters.selectedUsers.includes(solicitanteEmail))
+        );
+      });
     }
 
     // Filtro por proveedores seleccionados

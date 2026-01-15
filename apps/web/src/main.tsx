@@ -453,7 +453,7 @@ function AppLayout(){
           {/* Contenido principal con margen izquierdo dinámico */}
           <main className={`flex-1 w-full bg-brand-background transition-all duration-300 ease-in-out ${
             getMainMargin()
-          }`}>
+          }`}> 
             <div className="container-page">
               <Outlet />
               <div className="mt-6 text-center text-[11px] text-slate-400">

@@ -362,14 +362,6 @@ export default function OcListadoPage() {
     return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
   }, [ocs]);
 
-  // Seleccionar todos los proveedores por defecto cuando la lista esté disponible
-  React.useEffect(() => {
-    if (filters.selectedProviders.length === 0 && availableProviders.length > 0) {
-      setFilters(f => ({ ...f, selectedProviders: availableProviders.map(p => p.value) }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [availableProviders]);
-
   // Función de búsqueda y filtrado
   const filteredOcs = useMemo(() => {
     if (!ocs) return [];

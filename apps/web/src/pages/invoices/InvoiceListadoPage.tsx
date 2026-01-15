@@ -10,6 +10,7 @@ import Button from "../../components/ui/Button";
 import Modal from "../../components/ui/Modal";
 import InvoiceStatusTimeline from "../../components/InvoiceStatusTimeline";
 import UserMultiSelect, { UserOption } from "../../components/ui/UserMultiSelect";
+import ProviderMultiSelect, { ProviderOption } from "../../components/ui/ProviderMultiSelect";
 import StatusMultiSelect from "../../components/ui/StatusMultiSelect";
 import { formatNumber } from "../../utils/numberFormat";
 import { ExternalLink, FileText, Users, DollarSign, TrendingUp, Clock } from "lucide-react";
@@ -158,7 +159,10 @@ function StatCard({
       <div className={`
         ${isLongText ? 'text-base xl:text-lg 2xl:text-xl' : 'text-[22px] xl:text-[24px] 2xl:text-[26px]'}
         font-bold text-brand-text-primary leading-tight mb-1
-      `}>
+        whitespace-nowrap truncate
+      `}
+        title={typeof value === 'string' ? value : undefined}
+      >
         {value}
       </div>
       {subtitle && (
@@ -181,21 +185,21 @@ function InvoiceCard({
   onOpenTimeline: (invoiceId: number) => void;
 }) {
   const proveedor = invoice.oc?.proveedorRef?.razonSocial || invoice.oc?.proveedor || invoice.proveedor?.razonSocial || "Sin proveedor";
-  const numeroOc = invoice.oc?.numeroOc || "-";
+  const numeroOc = invoice.oc?.numeroOc || "No asociada a OC";
   
   return (
     <Card className="hover:shadow-lg transition-shadow duration-200">
       <CardContent className="p-4">
         {/* Header: Número Factura + Tipo Doc + Estado */}
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="text-lg font-bold text-brand-text-primary">
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1 min-w-0">
+              <h3
+                className="text-lg font-bold text-brand-text-primary truncate"
+                title={invoice.numberNorm || "Sin número"}
+              >
                 {invoice.numberNorm || "Sin número"}
               </h3>
-              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${getDocTypeColor(invoice.docType)}`}>
-                {invoice.docType === "NOTA_CREDITO" ? "NC" : "FAC"}
-              </span>
             </div>
             <p className="text-xs text-brand-text-disabled">
               {new Date(invoice.createdAt).toLocaleDateString('es-PE', {
@@ -205,21 +209,27 @@ function InvoiceCard({
               })}
             </p>
           </div>
-          <span className={`text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap ${getStatusColor(invoice.statusCurrent)}`}>
-            {invoice.statusCurrent.replace(/_/g, " ")}
-          </span>
+          <div className="flex flex-col items-end gap-1 min-w-fit">
+            <span className={`text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap flex-shrink-0 ${getStatusColor(invoice.statusCurrent)}`}>
+              {invoice.statusCurrent.replace(/_/g, " ")}
+            </span>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border whitespace-nowrap flex-shrink-0 ${getDocTypeColor(invoice.docType)}`}>
+              {invoice.docType === "NOTA_CREDITO" ? "NC" : "FAC"}
+            </span>
+          </div>
         </div>
         
         {/* Proveedor */}
-        <div className="mb-3">
-          <p className="text-sm font-semibold text-brand-text-primary mb-1">
+        <div className="mb-3 min-w-0">
+          <p
+            className="text-sm font-semibold text-brand-text-primary mb-1 truncate"
+            title={proveedor}
+          >
             {proveedor}
           </p>
-          {invoice.oc?.numeroOc && (
-            <p className="text-xs text-brand-text-secondary">
-              OC: {numeroOc}
-            </p>
-          )}
+          <p className="text-xs text-brand-text-secondary">
+            OC: {numeroOc}
+          </p>
         </div>
         
         {/* Importe */}
@@ -294,7 +304,7 @@ function InvoiceCard({
             title="Ver detalle de la factura"
           >
             <FileText size={14} />
-            Ver Detalle
+            Detalle
           </Button>
         </div>
       </CardContent>
@@ -324,7 +334,8 @@ export default function InvoiceListadoPage() {
     docType: "",
     selectedEstados: ESTADOS_FACTURA.filter(e => e !== "PAGADO"),  // Por defecto: todo menos PAGADO
     year: "",  // Sin filtro por año por defecto
-    selectedUsers: [] as string[]
+    selectedUsers: [] as string[],
+    selectedProviders: [] as string[]
   });
 
   // Actualizar filtro de usuario cuando el usuario cargue
@@ -385,6 +396,28 @@ export default function InvoiceListadoPage() {
     });
   }, [invoices]);
 
+  // Proveedores únicos para filtro
+  const availableProviders: ProviderOption[] = useMemo(() => {
+    if (!invoices) return [];
+    const map = new Map<string, ProviderOption>();
+    invoices.forEach((inv) => {
+      const label = inv.oc?.proveedorRef?.razonSocial || inv.oc?.proveedor || inv.proveedor?.razonSocial || "Sin proveedor";
+      const secondary = inv.oc?.proveedorRef?.ruc || inv.proveedor?.ruc || null;
+      if (!map.has(label)) {
+        map.set(label, { value: label, label, secondary });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [invoices]);
+
+  // Seleccionar todos los proveedores por defecto cuando la lista esté disponible
+  React.useEffect(() => {
+    if (filters.selectedProviders.length === 0 && availableProviders.length > 0) {
+      setFilters(f => ({ ...f, selectedProviders: availableProviders.map(p => p.value) }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableProviders]);
+
   // Función de búsqueda y filtrado
   const filteredInvoices = useMemo(() => {
     if (!invoices) return [];
@@ -406,13 +439,27 @@ export default function InvoiceListadoPage() {
         filters.selectedUsers.includes(inv.createdByUser?.email || '')
       );
     }
+
+    // Filtro por proveedores seleccionados
+    if (filters.selectedProviders.length > 0) {
+      result = result.filter((inv) => {
+        const proveedor =
+          inv.oc?.proveedorRef?.razonSocial ||
+          inv.oc?.proveedor ||
+          inv.proveedor?.razonSocial ||
+          "Sin proveedor";
+        return filters.selectedProviders.includes(proveedor);
+      });
+    }
     
     // Búsqueda global por texto libre
     if (filters.search.trim()) {
       const searchLower = filters.search.toLowerCase();
       result = result.filter((inv) => {
         if (inv.numberNorm?.toLowerCase().includes(searchLower)) return true;
+        if (inv.oc?.proveedorRef?.razonSocial?.toLowerCase().includes(searchLower)) return true;
         if (inv.oc?.proveedor?.toLowerCase().includes(searchLower)) return true;
+        if (inv.proveedor?.razonSocial?.toLowerCase().includes(searchLower)) return true;
         if (inv.oc?.numeroOc?.toLowerCase().includes(searchLower)) return true;
         if (inv.ultimusIncident?.toLowerCase().includes(searchLower)) return true;
         if (inv.detalle?.toLowerCase().includes(searchLower)) return true;
@@ -467,7 +514,11 @@ export default function InvoiceListadoPage() {
     // 3. Proveedor con más facturas
     const proveedorCounts: Record<string, number> = {};
     filteredInvoices.forEach((inv) => {
-      const proveedor = inv.oc?.proveedor || "Sin proveedor";
+      const proveedor =
+        inv.oc?.proveedorRef?.razonSocial ||
+        inv.oc?.proveedor ||
+        inv.proveedor?.razonSocial ||
+        "Sin proveedor";
       proveedorCounts[proveedor] = (proveedorCounts[proveedor] || 0) + 1;
     });
     
@@ -538,7 +589,7 @@ export default function InvoiceListadoPage() {
           <h2 className="text-lg font-medium text-brand-text-primary">Filtros de Búsqueda</h2>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3">
             {/* Filtro de Año */}
             <FilterSelect
               label="Año"
@@ -554,8 +605,17 @@ export default function InvoiceListadoPage() {
               users={availableUsers}
               selectedUsers={filters.selectedUsers}
               onChange={(selected) => setFilters(f => ({ ...f, selectedUsers: selected }))}
-              label="Usuarios"
-              placeholder="Todos los usuarios"
+              label="Responsable"
+              placeholder="Todos los responsables"
+            />
+
+            {/* Filtro de Proveedores */}
+            <ProviderMultiSelect
+              providers={availableProviders}
+              selectedProviders={filters.selectedProviders}
+              onChange={(selected) => setFilters(f => ({ ...f, selectedProviders: selected }))}
+              label="Proveedores"
+              placeholder="Todos los proveedores"
             />
             
             {/* Búsqueda global */}
@@ -600,6 +660,11 @@ export default function InvoiceListadoPage() {
               {filters.selectedUsers.length > 0 && (
                 <div className="text-sm text-brand-text-secondary">
                   Filtrando por {filters.selectedUsers.length} usuario{filters.selectedUsers.length > 1 ? 's' : ''}
+                </div>
+              )}
+              {filters.selectedProviders.length > 0 && (
+                <div className="text-sm text-brand-text-secondary">
+                  Filtrando por {filters.selectedProviders.length} proveedor{filters.selectedProviders.length > 1 ? 'es' : ''}
                 </div>
               )}
             </div>

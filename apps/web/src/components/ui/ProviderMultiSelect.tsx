@@ -1,31 +1,31 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
 
-export interface UserOption {
-  email: string;
-  name?: string | null;
+export interface ProviderOption {
+  value: string;
+  label: string;
+  secondary?: string | null;
 }
 
-interface UserMultiSelectProps {
-  users: UserOption[];  // Lista de usuarios con nombre y email
-  selectedUsers: string[];  // Array de emails seleccionados
+interface ProviderMultiSelectProps {
+  providers: ProviderOption[];
+  selectedProviders: string[];
   onChange: (selected: string[]) => void;
   label?: string;
   placeholder?: string;
 }
 
-export default function UserMultiSelect({
-  users,
-  selectedUsers,
+export default function ProviderMultiSelect({
+  providers,
+  selectedProviders,
   onChange,
-  label = "Usuarios",
-  placeholder = "Seleccionar usuarios..."
-}: UserMultiSelectProps) {
+  label = "Proveedores",
+  placeholder = "Todos los proveedores"
+}: ProviderMultiSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Cerrar dropdown al hacer clic fuera
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -43,38 +43,26 @@ export default function UserMultiSelect({
     };
   }, [isOpen]);
 
-  const toggleUser = (email: string) => {
-    if (selectedUsers.includes(email)) {
-      onChange(selectedUsers.filter(u => u !== email));
+  const toggleProvider = (value: string) => {
+    if (selectedProviders.includes(value)) {
+      onChange(selectedProviders.filter(p => p !== value));
     } else {
-      onChange([...selectedUsers, email]);
+      onChange([...selectedProviders, value]);
     }
   };
 
-  const selectAll = () => {
-    onChange(users.map(u => u.email));
-  };
+  const selectAll = () => onChange(providers.map(p => p.value));
+  const clearAll = () => onChange([]);
 
-  const clearAll = () => {
-    onChange([]);
-  };
-
-  const filteredUsers = users.filter((user) => {
+  const filteredProviders = providers.filter((p) => {
     if (!search.trim()) return true;
     const term = search.toLowerCase();
     return (
-      user.email.toLowerCase().includes(term) ||
-      (user.name?.toLowerCase().includes(term) ?? false)
+      p.label.toLowerCase().includes(term) ||
+      (p.secondary?.toLowerCase().includes(term) ?? false) ||
+      p.value.toLowerCase().includes(term)
     );
   });
-
-  // Helper para obtener el nombre a mostrar
-  const getDisplayName = (user: UserOption) => {
-    if (user.name) {
-      return user.name;
-    }
-    return user.email;
-  };
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -83,26 +71,21 @@ export default function UserMultiSelect({
           {label}
         </label>
       )}
-      
-      {/* Botón principal */}
+
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         className="h-9 w-full px-3 text-left border border-brand-border rounded-xl bg-white text-xs sm:text-sm flex items-center justify-between gap-2 transition-all duration-200 hover:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
       >
-        <span className={selectedUsers.length === 0 ? "text-brand-text-disabled" : "text-brand-text-primary truncate"}>
-          {selectedUsers.length === 0 ? (
-            placeholder
-          ) : selectedUsers.length === 1 ? (
-            // Mostrar nombre del único usuario seleccionado
-            (() => {
-              const user = users.find(u => u.email === selectedUsers[0]);
-              return user ? getDisplayName(user) : selectedUsers[0];
-            })()
-          ) : (
-            // Mostrar contador para múltiples usuarios
-            `${selectedUsers.length} usuarios seleccionados`
-          )}
+        <span className={selectedProviders.length === 0 ? "text-brand-text-disabled" : "text-brand-text-primary truncate"}>
+          {selectedProviders.length === 0
+            ? placeholder
+            : selectedProviders.length === 1
+              ? (() => {
+                  const selected = providers.find(p => p.value === selectedProviders[0]);
+                  return selected ? selected.label : selectedProviders[0];
+                })()
+              : `${selectedProviders.length} proveedores seleccionados`}
         </span>
         <svg
           className={`w-4 h-4 transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`}
@@ -114,74 +97,68 @@ export default function UserMultiSelect({
         </svg>
       </button>
 
-      {/* Dropdown */}
       {isOpen && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-brand-border rounded-xl shadow-lg max-h-72 overflow-hidden">
-          {/* Acciones rápidas */}
           <div className="sticky top-0 bg-white border-b border-brand-border p-2 flex flex-col gap-2">
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por nombre o correo"
+              placeholder="Buscar nombre o RUC"
               className="h-9 w-full px-3 text-sm border border-brand-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
             />
             <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={selectAll}
-              className="flex-1 px-2 py-1 text-xs bg-brand-primary text-white rounded hover:bg-brand-primary/90"
-            >
-              Todos
-            </button>
-            <button
-              type="button"
-              onClick={clearAll}
-              className="flex-1 px-2 py-1 text-xs bg-slate-200 text-slate-700 rounded hover:bg-slate-300"
-            >
-              Limpiar
-            </button>
+              <button
+                type="button"
+                onClick={selectAll}
+                className="flex-1 px-2 py-1 text-xs bg-brand-primary text-white rounded hover:bg-brand-primary/90"
+              >
+                Todos
+              </button>
+              <button
+                type="button"
+                onClick={clearAll}
+                className="flex-1 px-2 py-1 text-xs bg-slate-200 text-slate-700 rounded hover:bg-slate-300"
+              >
+                Limpiar
+              </button>
             </div>
           </div>
 
-          {/* Lista de usuarios */}
-          {filteredUsers.length === 0 ? (
+          {filteredProviders.length === 0 ? (
             <div className="p-3 text-sm text-brand-text-disabled text-center">
-              No hay usuarios disponibles
+              No hay proveedores
             </div>
           ) : (
-            <div className="max-h-52 overflow-y-auto">
-              {filteredUsers.map((user) => {
-                const isSelected = selectedUsers.includes(user.email);
+            <div className="max-h-60 overflow-y-auto pb-3 pr-1">
+              {filteredProviders.map((provider) => {
+                const isSelected = selectedProviders.includes(provider.value);
                 return (
                   <label
-                    key={user.email}
+                    key={provider.value}
                     className="flex items-center gap-2 px-3 py-2 hover:bg-brand-background cursor-pointer"
                   >
                     <input
                       type="checkbox"
                       checked={isSelected}
-                      onChange={() => toggleUser(user.email)}
+                      onChange={() => toggleProvider(provider.value)}
                       className="sr-only"
                     />
                     <div
                       className={`
                         w-4 h-4 border rounded flex items-center justify-center flex-shrink-0
-                        ${isSelected
-                          ? 'bg-brand-primary border-brand-primary'
-                          : 'border-brand-border bg-white'
-                        }
+                        ${isSelected ? 'bg-brand-primary border-brand-primary' : 'border-brand-border bg-white'}
                       `}
                     >
                       {isSelected && <Check size={12} className="text-white" strokeWidth={3} />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <span className="text-sm text-brand-text-primary font-medium block truncate">
-                        {getDisplayName(user)}
+                        {provider.label}
                       </span>
-                      {user.name && (
+                      {provider.secondary && (
                         <span className="text-xs text-brand-text-disabled block truncate">
-                          {user.email}
+                          {provider.secondary}
                         </span>
                       )}
                     </div>

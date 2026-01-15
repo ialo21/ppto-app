@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from "react";
-import { createPortal } from "react-dom";
 import { Check } from "lucide-react";
 
 interface StatusMultiSelectProps {
@@ -31,22 +30,9 @@ export default function StatusMultiSelect({
   excludeLabel = "Todo menos..."
 }: StatusMultiSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // Calcular posición del dropdown
-  const updateDropdownPosition = () => {
-    if (buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      setDropdownPosition({
-        top: rect.bottom + 4,
-        left: rect.left,
-        width: rect.width
-      });
-    }
-  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -60,25 +46,12 @@ export default function StatusMultiSelect({
       }
     };
 
-    const handleScroll = () => {
-      if (isOpen) updateDropdownPosition();
-    };
-
-    const handleResize = () => {
-      if (isOpen) updateDropdownPosition();
-    };
-
     if (isOpen) {
-      updateDropdownPosition();
       document.addEventListener("mousedown", handleClickOutside);
-      window.addEventListener("scroll", handleScroll, true);
-      window.addEventListener("resize", handleResize);
     }
 
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
-      window.removeEventListener("scroll", handleScroll, true);
-      window.removeEventListener("resize", handleResize);
     };
   }, [isOpen]);
 
@@ -150,41 +123,38 @@ export default function StatusMultiSelect({
       </button>
 
       {/* Dropdown */}
-      {isOpen && createPortal(
+      {isOpen && (
         <div
           ref={dropdownRef}
-          className="fixed z-50 bg-white border border-brand-border rounded-xl shadow-lg max-h-80 overflow-hidden"
-          style={{
-            top: dropdownPosition.top,
-            left: dropdownPosition.left,
-            width: dropdownPosition.width
-          }}
+          className="absolute z-50 w-full mt-1 bg-white border border-brand-border rounded-xl shadow-lg max-h-80 overflow-hidden"
         >
           {/* Acciones rápidas */}
-          <div className="p-2 border-b border-brand-border flex gap-1">
-            <button
-              type="button"
-              onClick={handleSelectAll}
-              className="flex-1 px-2 py-1 text-xs bg-brand-primary text-white rounded hover:bg-brand-hover"
-            >
-              Todos
-            </button>
+          <div className="p-2 border-b border-brand-border flex flex-col gap-2">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleSelectAll}
+                className="flex-1 px-2 py-1 text-xs bg-brand-primary text-white rounded hover:bg-brand-primary/90"
+              >
+                Todos
+              </button>
+              <button
+                type="button"
+                onClick={handleClear}
+                className="flex-1 px-2 py-1 text-xs bg-slate-200 text-slate-700 rounded hover:bg-slate-300"
+              >
+                Limpiar
+              </button>
+            </div>
             {excludeStatus && (
               <button
                 type="button"
                 onClick={handleExclude}
-                className="flex-1 px-2 py-1 text-xs bg-brand-secondary text-white rounded hover:opacity-90"
+                className="w-full px-2 py-1 text-xs bg-brand-primary text-white rounded hover:bg-brand-primary/90"
               >
-                {excludeLabel}
+                {excludeLabel?.trim() || `Todo menos ${excludeStatus}`}
               </button>
             )}
-            <button
-              type="button"
-              onClick={handleClear}
-              className="flex-1 px-2 py-1 text-xs border border-brand-border rounded hover:bg-brand-background"
-            >
-              Limpiar
-            </button>
           </div>
 
           {/* Lista de estados */}
@@ -210,8 +180,7 @@ export default function StatusMultiSelect({
               );
             })}
           </div>
-        </div>,
-        document.body
+        </div>
       )}
     </div>
   );

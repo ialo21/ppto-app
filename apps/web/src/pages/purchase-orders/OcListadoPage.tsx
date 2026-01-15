@@ -10,6 +10,7 @@ import Button from "../../components/ui/Button";
 import Modal from "../../components/ui/Modal";
 import OcStatusTimeline from "../../components/OcStatusTimeline";
 import UserMultiSelect, { UserOption } from "../../components/ui/UserMultiSelect";
+import ProviderMultiSelect, { ProviderOption } from "../../components/ui/ProviderMultiSelect";
 import StatusMultiSelect from "../../components/ui/StatusMultiSelect";
 import { formatNumber } from "../../utils/numberFormat";
 import { formatPeriodLabel } from "../../utils/periodFormat";
@@ -131,7 +132,10 @@ function StatCard({
       <div className={`
         ${isLongText ? 'text-base xl:text-lg 2xl:text-xl' : 'text-[22px] xl:text-[24px] 2xl:text-[26px]'}
         font-bold text-brand-text-primary leading-tight mb-1
-      `}>
+        whitespace-nowrap truncate
+      `}
+        title={typeof value === 'string' ? value : undefined}
+      >
         {value}
       </div>
       {/* Subtítulo - ahora debajo del valor */}
@@ -180,8 +184,11 @@ function OcCard({ oc, onOpenTimeline }: { oc: any; onOpenTimeline: (ocId: number
         </div>
         
         {/* Proveedor */}
-        <div className="mb-3">
-          <p className="text-sm font-semibold text-brand-text-primary mb-1">
+        <div className="mb-3 min-w-0">
+          <p
+            className="text-sm font-semibold text-brand-text-primary mb-1 truncate"
+            title={oc.proveedorRef?.razonSocial || oc.proveedor || "Sin proveedor"}
+          >
             {oc.proveedorRef?.razonSocial || oc.proveedor || "Sin proveedor"}
           </p>
           <p className="text-xs text-brand-text-secondary">
@@ -290,7 +297,8 @@ export default function OcListadoPage() {
     moneda: "",
     selectedEstados: ESTADOS_OC.filter(e => e !== "ATENDIDO"),  // Por defecto: todo menos ATENDIDO
     year: "",  // Sin filtro por año por defecto
-    selectedUsers: [] as string[]
+    selectedUsers: [] as string[],
+    selectedProviders: [] as string[]
   });
 
   // Actualizar filtro de usuario cuando el usuario cargue
@@ -340,6 +348,27 @@ export default function OcListadoPage() {
       return nameA.localeCompare(nameB);
     });
   }, [ocs]);
+
+  const availableProviders: ProviderOption[] = useMemo(() => {
+    if (!ocs) return [];
+    const map = new Map<string, ProviderOption>();
+    ocs.forEach((oc: any) => {
+      const label = oc.proveedorRef?.razonSocial || oc.proveedor || "Sin proveedor";
+      const secondary = oc.proveedorRef?.ruc || oc.ruc || null;
+      if (!map.has(label)) {
+        map.set(label, { value: label, label, secondary });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [ocs]);
+
+  // Seleccionar todos los proveedores por defecto cuando la lista esté disponible
+  React.useEffect(() => {
+    if (filters.selectedProviders.length === 0 && availableProviders.length > 0) {
+      setFilters(f => ({ ...f, selectedProviders: availableProviders.map(p => p.value) }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableProviders]);
 
   // Función de búsqueda y filtrado
   const filteredOcs = useMemo(() => {
@@ -402,6 +431,14 @@ export default function OcListadoPage() {
       result = result.filter((oc: any) => {
         const email = oc.solicitanteUser?.email || oc.correoSolicitante;
         return filters.selectedUsers.includes(email);
+      });
+    }
+    
+    // Filtro por proveedores seleccionados (multi-select)
+    if (filters.selectedProviders.length > 0) {
+      result = result.filter((oc: any) => {
+        const proveedor = oc.proveedorRef?.razonSocial || oc.proveedor || "Sin proveedor";
+        return filters.selectedProviders.includes(proveedor);
       });
     }
     
@@ -525,7 +562,7 @@ export default function OcListadoPage() {
         </CardHeader>
         <CardContent>
           {/* Filtros alineados siguiendo el patrón de otros módulos */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3">
             {/* Filtro de Año - más estrecho */}
             <FilterSelect
               label="Año"
@@ -543,6 +580,14 @@ export default function OcListadoPage() {
               onChange={(selected) => setFilters(f => ({ ...f, selectedUsers: selected }))}
               label="Usuarios"
               placeholder="Todos los usuarios"
+            />
+
+            <ProviderMultiSelect
+              providers={availableProviders}
+              selectedProviders={filters.selectedProviders}
+              onChange={(selected) => setFilters(f => ({ ...f, selectedProviders: selected }))}
+              label="Proveedores"
+              placeholder="Todos los proveedores"
             />
             
             {/* Búsqueda global - más ancho */}
@@ -587,6 +632,11 @@ export default function OcListadoPage() {
               {filters.selectedUsers.length > 0 && (
                 <div className="text-sm text-brand-text-secondary">
                   Filtrando por {filters.selectedUsers.length} usuario{filters.selectedUsers.length > 1 ? 's' : ''}
+                </div>
+              )}
+              {filters.selectedProviders.length > 0 && (
+                <div className="text-sm text-brand-text-secondary">
+                  Filtrando por {filters.selectedProviders.length} proveedor{filters.selectedProviders.length > 1 ? 'es' : ''}
                 </div>
               )}
             </div>

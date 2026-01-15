@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { toast } from "sonner";
@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import FilterSelect from "../../components/ui/FilterSelect";
 import Input from "../../components/ui/Input";
 import StatusMultiSelect from "../../components/ui/StatusMultiSelect";
+import UserMultiSelect, { UserOption } from "../../components/ui/UserMultiSelect";
 import Button from "../../components/ui/Button";
 import { Table, Th, Td } from "../../components/ui/Table";
 import OcStatusChip from "../../components/OcStatusChip";
@@ -14,6 +15,7 @@ import YearMonthPicker from "../../components/YearMonthPicker";
 import OcFileUploader from "../../components/OcFileUploader";
 import ProveedorSelector from "../../components/ProveedorSelector";
 import ResponsableSelector from "../../components/ResponsableSelector";
+import ProviderMultiSelect, { ProviderOption } from "../../components/ui/ProviderMultiSelect";
 import { formatNumber } from "../../utils/numberFormat";
 import { formatPeriodLabel } from "../../utils/periodFormat";
 
@@ -207,6 +209,37 @@ export default function OcGestionPage() {
     queryFn: async () => (await api.get("/cost-centers")).data
   });
 
+  const availableProviders: ProviderOption[] = useMemo(() => {
+    if (!ocs) return [];
+    const map = new Map<string, ProviderOption>();
+    ocs.forEach((oc: any) => {
+      const label = oc.proveedorRef?.razonSocial || oc.proveedor || "Sin proveedor";
+      const secondary = oc.proveedorRef?.ruc || oc.ruc || null;
+      if (!map.has(label)) {
+        map.set(label, { value: label, label, secondary });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [ocs]);
+
+  const availableUsers: UserOption[] = useMemo(() => {
+    if (!ocs) return [];
+    const userMap = new Map<string, UserOption>();
+    ocs.forEach((oc: any) => {
+      const email = oc.solicitanteUser?.email || oc.correoSolicitante;
+      const name = oc.solicitanteUser?.name || oc.nombreSolicitante || null;
+      
+      if (email && !userMap.has(email)) {
+        userMap.set(email, { email, name });
+      }
+    });
+    return Array.from(userMap.values()).sort((a, b) => {
+      const nameA = a.name || a.email;
+      const nameB = b.name || b.email;
+      return nameA.localeCompare(nameB);
+    });
+  }, [ocs]);
+
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   
@@ -244,8 +277,15 @@ export default function OcGestionPage() {
     proveedor: "",
     numeroOc: "",
     moneda: "",
-    selectedEstados: [] as string[],  // Multi-select de estados
-    search: ""
+    selectedEstados: ESTADOS_OC.filter(e => e !== "ATENDIDO"),
+    search: "",
+    selectedProviders: [] as string[],
+    selectedUsers: [] as string[]
+  });
+
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" | null }>({
+    key: "id",
+    direction: "desc"
   });
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -570,7 +610,14 @@ export default function OcGestionPage() {
   };
 
   const filteredOcs = ocs?.filter((oc: any) => {
-    if (filters.proveedor && !oc.proveedor?.toLowerCase().includes(filters.proveedor.toLowerCase())) return false;
+    if (filters.selectedProviders.length > 0) {
+      const proveedor = oc.proveedorRef?.razonSocial || oc.proveedor || "Sin proveedor";
+      if (!filters.selectedProviders.includes(proveedor)) return false;
+    }
+    if (filters.selectedUsers.length > 0) {
+      const email = oc.solicitanteUser?.email || oc.correoSolicitante;
+      if (!email || !filters.selectedUsers.includes(email)) return false;
+    }
     if (filters.numeroOc && !oc.numeroOc?.toLowerCase().includes(filters.numeroOc.toLowerCase())) return false;
     if (filters.moneda && oc.moneda !== filters.moneda) return false;
     // Filtro por estados seleccionados (multi-select)
@@ -587,11 +634,84 @@ export default function OcGestionPage() {
     return true;
   }) || [];
 
+  const sortedOcs = useMemo(() => {
+    if (!sortConfig.key || !sortConfig.direction) return filteredOcs;
+
+    return [...filteredOcs].sort((a: any, b: any) => {
+      let aValue: any;
+      let bValue: any;
+
+      switch (sortConfig.key) {
+        case "numeroOc":
+          aValue = a.numeroOc || "";
+          bValue = b.numeroOc || "";
+          break;
+        case "proveedor":
+          aValue = a.proveedorRef?.razonSocial || a.proveedor || "";
+          bValue = b.proveedorRef?.razonSocial || b.proveedor || "";
+          break;
+        case "support":
+          aValue = a.support?.name || "";
+          bValue = b.support?.name || "";
+          break;
+        case "periodo": {
+          const aFrom = a.budgetPeriodFrom ? a.budgetPeriodFrom.year * 100 + a.budgetPeriodFrom.month : 0;
+          const bFrom = b.budgetPeriodFrom ? b.budgetPeriodFrom.year * 100 + b.budgetPeriodFrom.month : 0;
+          const aTo = a.budgetPeriodTo ? a.budgetPeriodTo.year * 100 + a.budgetPeriodTo.month : 0;
+          const bTo = b.budgetPeriodTo ? b.budgetPeriodTo.year * 100 + b.budgetPeriodTo.month : 0;
+          // ordenar por desde, luego hasta
+          if (aFrom !== bFrom) {
+            aValue = aFrom;
+            bValue = bFrom;
+          } else {
+            aValue = aTo;
+            bValue = bTo;
+          }
+          break;
+        }
+        case "moneda":
+          aValue = a.moneda || "";
+          bValue = b.moneda || "";
+          break;
+        case "importeSinIgv":
+          aValue = Number(a.importeSinIgv) || 0;
+          bValue = Number(b.importeSinIgv) || 0;
+          break;
+        case "estado":
+          aValue = a.estado || "";
+          bValue = b.estado || "";
+          break;
+        case "createdAt":
+          aValue = new Date(a.createdAt || a.id).getTime();
+          bValue = new Date(b.createdAt || b.id).getTime();
+          break;
+        default:
+          aValue = a.id;
+          bValue = b.id;
+      }
+
+      if (aValue < bValue) return sortConfig.direction === "asc" ? -1 : 1;
+      if (aValue > bValue) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [filteredOcs, sortConfig]);
+
+  const handleSort = useCallback((key: string) => {
+    setSortConfig(prev => {
+      if (prev.key === key) {
+        if (prev.direction === "asc") return { key, direction: "desc" };
+        if (prev.direction === "desc") return { key: "id", direction: "desc" };
+        return { key, direction: "asc" };
+      }
+      return { key, direction: "asc" };
+    });
+  }, []);
+
   const handleExportCSV = () => {
     const params = new URLSearchParams();
     if (filters.moneda) params.set("moneda", filters.moneda);
     if (filters.selectedEstados.length > 0) params.set("estado", filters.selectedEstados.join(","));
-    if (filters.proveedor) params.set("proveedor", filters.proveedor);
+    if (filters.selectedProviders.length > 0) params.set("proveedor", filters.selectedProviders.join(","));
     if (filters.search) params.set("search", filters.search);
     window.open(`http://localhost:3001/ocs/export/csv?${params.toString()}`, "_blank");
   };
@@ -955,27 +1075,47 @@ export default function OcGestionPage() {
       {/* Tabla de OCs */}
       <Card>
         <CardHeader>
-          <div className="flex flex-wrap gap-2">
-            <Input
-              placeholder="Buscar..."
-              value={filters.search}
-              onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
-              className="w-auto flex-1 min-w-[200px]"
+          <h2 className="text-lg font-medium">Listado de Órdenes de Compra</h2>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+            <div>
+              <label className="block text-xs text-brand-text-secondary font-medium mb-1">Búsqueda</label>
+              <Input
+                placeholder="Proveedor, OC, RUC..."
+                value={filters.search}
+                onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
+              />
+            </div>
+
+            <UserMultiSelect
+              users={availableUsers}
+              selectedUsers={filters.selectedUsers}
+              onChange={(selected) => setFilters(f => ({ ...f, selectedUsers: selected }))}
+              label="Usuarios"
+              placeholder="Todos los usuarios"
             />
-            <Input
-              placeholder="Proveedor"
-              value={filters.proveedor}
-              onChange={e => setFilters(f => ({ ...f, proveedor: e.target.value }))}
-              className="w-auto flex-1 min-w-[150px]"
+
+            <ProviderMultiSelect
+              label="Proveedores"
+              providers={availableProviders}
+              selectedProviders={filters.selectedProviders}
+              onChange={(selected) => setFilters(f => ({ ...f, selectedProviders: selected }))}
+              placeholder="Todos los proveedores"
             />
-            <Input
-              placeholder="Número OC"
-              value={filters.numeroOc}
-              onChange={e => setFilters(f => ({ ...f, numeroOc: e.target.value }))}
-              className="w-auto flex-1 min-w-[150px]"
-            />
+
+            <div>
+              <label className="block text-xs text-brand-text-secondary font-medium mb-1">Número OC</label>
+              <Input
+                placeholder="Buscar por Número OC"
+                value={filters.numeroOc}
+                onChange={e => setFilters(f => ({ ...f, numeroOc: e.target.value }))}
+              />
+            </div>
+
             <FilterSelect
-              placeholder="(Moneda)"
+              label="Moneda"
+              placeholder="Todas"
               value={filters.moneda}
               onChange={(value) => setFilters(f => ({ ...f, moneda: value }))}
               options={[
@@ -983,66 +1123,75 @@ export default function OcGestionPage() {
                 { value: "USD", label: "USD" }
               ]}
               searchable={false}
-              className="w-auto min-w-[120px]"
+              className="w-full"
             />
-            <div className="w-auto min-w-[200px]">
-              <StatusMultiSelect
-                placeholder="Todos los estados"
-                statuses={ESTADOS_OC}
-                selectedStatuses={filters.selectedEstados}
-                onChange={(selected) => setFilters(f => ({ ...f, selectedEstados: selected }))}
-                excludeStatus="ATENDIDO"
-                excludeLabel="Todo menos ATENDIDO"
-              />
+
+            <StatusMultiSelect
+              label="Estado"
+              placeholder="Todos los estados"
+              statuses={ESTADOS_OC}
+              selectedStatuses={filters.selectedEstados}
+              onChange={(selected) => setFilters(f => ({ ...f, selectedEstados: selected }))}
+              excludeStatus="ATENDIDO"
+              excludeLabel="Todo menos ATENDIDO"
+            />
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2 items-center justify-between">
+            <div className="flex gap-4 text-sm text-brand-text-secondary">
+              {filters.selectedUsers.length > 0 && (
+                <span>Usuarios: {filters.selectedUsers.length}</span>
+              )}
+              {filters.selectedProviders.length > 0 && (
+                <span>Proveedores: {filters.selectedProviders.length}</span>
+              )}
             </div>
-            <Button variant="secondary" onClick={handleExportCSV}>
+            <Button variant="secondary" onClick={handleExportCSV} size="sm">
               Exportar CSV
             </Button>
           </div>
-        </CardHeader>
-        <CardContent>
+
           {isLoading ? (
             <p>Cargando...</p>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto mt-4">
               <Table>
                 <thead>
                   <tr>
-                    <Th>Número OC / INC</Th>
-                    <Th>Proveedor</Th>
-                    <Th>Moneda</Th>
-                    <Th>Importe sin IGV</Th>
-                    <Th>Estado</Th>
-                    <Th>Sustento</Th>
+                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("numeroOc")}>
+                      Número OC {sortConfig.key === "numeroOc" && (sortConfig.direction === "asc" ? "↑" : "↓")}
+                    </Th>
+                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("proveedor")}>
+                      Proveedor {sortConfig.key === "proveedor" && (sortConfig.direction === "asc" ? "↑" : "↓")}
+                    </Th>
+                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("support")}>
+                      Sustento {sortConfig.key === "support" && (sortConfig.direction === "asc" ? "↑" : "↓")}
+                    </Th>
+                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("periodo")}>
+                      Periodos {sortConfig.key === "periodo" && (sortConfig.direction === "asc" ? "↑" : "↓")}
+                    </Th>
                     <Th>CECOs</Th>
-                    <Th>Periodo</Th>
-                    <Th>Fecha</Th>
+                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("moneda")}>
+                      Moneda {sortConfig.key === "moneda" && (sortConfig.direction === "asc" ? "↑" : "↓")}
+                    </Th>
+                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("importeSinIgv")}>
+                      Importe sin IGV {sortConfig.key === "importeSinIgv" && (sortConfig.direction === "asc" ? "↑" : "↓")}
+                    </Th>
+                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("estado")}>
+                      Estado {sortConfig.key === "estado" && (sortConfig.direction === "asc" ? "↑" : "↓")}
+                    </Th>
                     <Th>Acciones</Th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredOcs.map((oc: any) => (
+                  {sortedOcs.map((oc: any) => (
                     <tr key={oc.id}>
-                      <Td>
-                        {/* Prioridad: numeroOc > INC > Solicitud > "INC PENDIENTE" */}
-                        {oc.numeroOc || 
-                         (oc.incidenteOc ? `INC ${oc.incidenteOc}` : 
-                         (oc.solicitudOc ? `SOL ${oc.solicitudOc}` : "INC PENDIENTE"))}
-                      </Td>
-                      <Td>{oc.proveedor}</Td>
-                      <Td>{oc.moneda}</Td>
-                      <Td className="text-right">{formatNumber(oc.importeSinIgv)}</Td>
-                      <Td>
-                        {/* Cambio de estado inline con OcStatusChip (estilo Facturas) */}
-                        <OcStatusChip
-                          currentStatus={oc.estado}
-                          onStatusChange={(newStatus) => {
-                            updateStatusMutation.mutate({ id: oc.id, estado: newStatus });
-                          }}
-                          isLoading={updateStatusMutation.isPending && updateStatusMutation.variables?.id === oc.id}
-                        />
-                      </Td>
+                      <Td>{oc.numeroOc || `OC-${oc.id}`}</Td>
+                      <Td>{oc.proveedorRef?.razonSocial || oc.proveedor || "-"}</Td>
                       <Td className="text-xs">{oc.support?.name || "-"}</Td>
+                      <Td className="text-xs">
+                        {formatPeriodRange(oc.budgetPeriodFrom, oc.budgetPeriodTo)}
+                      </Td>
                       <Td className="text-xs">
                         {oc.costCenters && oc.costCenters.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
@@ -1059,20 +1208,33 @@ export default function OcGestionPage() {
                           "-"
                         )}
                       </Td>
-                      <Td className="text-xs">
-                        {formatPeriodRange(oc.budgetPeriodFrom, oc.budgetPeriodTo)}
-                      </Td>
-                      <Td className="text-xs">{new Date(oc.fechaRegistro).toLocaleDateString()}</Td>
+                      <Td>{oc.moneda}</Td>
+                      <Td className="text-right">{formatNumber(oc.importeSinIgv)}</Td>
                       <Td>
-                        <div className="flex gap-1">
-                          <Button size="sm" variant="secondary" onClick={() => handleEdit(oc)}>
+                        <OcStatusChip
+                          currentStatus={oc.estado}
+                          onStatusChange={(newStatus) =>
+                            updateStatusMutation.mutate({ id: oc.id, estado: newStatus })
+                          }
+                          isLoading={updateStatusMutation.isPending && updateStatusMutation.variables?.id === oc.id}
+                        />
+                      </Td>
+                      <Td>
+                        <div className="flex flex-wrap gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleEdit(oc)}
+                          >
                             Editar
                           </Button>
                           <Button
                             size="sm"
                             variant="ghost"
                             onClick={() => {
-                              if (confirm("¿Eliminar esta OC?")) deleteMutation.mutate(oc.id);
+                              if (confirm("¿Eliminar esta OC?")) {
+                                deleteMutation.mutate(oc.id);
+                              }
                             }}
                           >
                             Eliminar
@@ -1083,9 +1245,6 @@ export default function OcGestionPage() {
                   ))}
                 </tbody>
               </Table>
-              {filteredOcs.length === 0 && (
-                <p className="text-center text-slate-500 py-8">No se encontraron órdenes de compra</p>
-              )}
             </div>
           )}
         </CardContent>
@@ -1093,4 +1252,3 @@ export default function OcGestionPage() {
     </div>
   );
 }
-

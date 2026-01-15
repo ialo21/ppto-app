@@ -12,6 +12,8 @@ import StatusChip from "../../components/StatusChip";
 import YearMonthPicker from "../../components/YearMonthPicker";
 import ResponsableSelector from "../../components/ResponsableSelector";
 import StatusMultiSelect from "../../components/ui/StatusMultiSelect";
+import ProviderMultiSelect, { ProviderOption } from "../../components/ui/ProviderMultiSelect";
+import UserMultiSelect, { UserOption } from "../../components/ui/UserMultiSelect";
 import { formatNumber } from "../../utils/numberFormat";
 import { formatPeriodLabel } from "../../utils/periodFormat";
 import ProveedorSelector from "../../components/ProveedorSelector";
@@ -142,6 +144,36 @@ export default function InvoiceGestionPage() {
     queryFn: async () => (await api.get("/cost-centers")).data
   });
 
+  const availableProviders: ProviderOption[] = useMemo(() => {
+    if (!invoices) return [];
+    const map = new Map<string, ProviderOption>();
+    invoices.forEach((inv: any) => {
+      const label = inv.oc?.proveedorRef?.razonSocial || inv.oc?.proveedor || inv.proveedor?.razonSocial || "Sin proveedor";
+      const secondary = inv.oc?.proveedorRef?.ruc || inv.proveedor?.ruc || null;
+      if (!map.has(label)) {
+        map.set(label, { value: label, label, secondary });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [invoices]);
+
+  const availableUsers: UserOption[] = useMemo(() => {
+    if (!invoices) return [];
+    const map = new Map<string, UserOption>();
+    invoices.forEach((inv: any) => {
+      const email = inv.createdByUser?.email;
+      const name = inv.createdByUser?.name || null;
+      if (email && !map.has(email)) {
+        map.set(email, { email, name });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => {
+      const nameA = a.name || a.email;
+      const nameB = b.name || b.email;
+      return nameA.localeCompare(nameB);
+    });
+  }, [invoices]);
+
   const { data: supports } = useQuery({
     queryKey: ["supports"],
     queryFn: async () => (await api.get("/supports")).data
@@ -151,7 +183,9 @@ export default function InvoiceGestionPage() {
   const [filters, setFilters] = useState({ 
     selectedEstados: [] as string[],  // Multi-select de estados
     docType: "", 
-    numeroOc: ""
+    numeroOc: "",
+    selectedProviders: [] as string[],
+    selectedUsers: [] as string[]
   });
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" | null }>({
     key: "createdAt",
@@ -297,6 +331,18 @@ export default function InvoiceGestionPage() {
       if (filters.selectedEstados.length > 0 && !filters.selectedEstados.includes(inv.statusCurrent)) return false;
       if (filters.docType && inv.docType !== filters.docType) return false;
       if (filters.numeroOc && inv.oc?.numeroOc?.toLowerCase().includes(filters.numeroOc.toLowerCase()) === false) return false;
+      if (filters.selectedUsers.length > 0) {
+        const email = inv.createdByUser?.email;
+        if (!email || !filters.selectedUsers.includes(email)) return false;
+      }
+      if (filters.selectedProviders.length > 0) {
+        const proveedor =
+          inv.oc?.proveedorRef?.razonSocial ||
+          inv.oc?.proveedor ||
+          inv.proveedor?.razonSocial ||
+          "Sin proveedor";
+        if (!filters.selectedProviders.includes(proveedor)) return false;
+      }
       return true;
     });
 
@@ -1196,8 +1242,25 @@ export default function InvoiceGestionPage() {
           <h2 className="text-lg font-medium">Listado de Facturas</h2>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap gap-2 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+            <UserMultiSelect
+              label="Responsable"
+              users={availableUsers}
+              selectedUsers={filters.selectedUsers}
+              onChange={(selected) => setFilters(f => ({ ...f, selectedUsers: selected }))}
+              placeholder="Todos los responsables"
+            />
+
+            <ProviderMultiSelect
+              label="Proveedores"
+              providers={availableProviders}
+              selectedProviders={filters.selectedProviders}
+              onChange={(selected) => setFilters(f => ({ ...f, selectedProviders: selected }))}
+              placeholder="Todos los proveedores"
+            />
+
             <FilterSelect
+              label="Tipo"
               placeholder="Todos los tipos"
               value={filters.docType}
               onChange={(value) => {
@@ -1209,10 +1272,11 @@ export default function InvoiceGestionPage() {
                 { value: "NOTA_CREDITO", label: "NOTA DE CRÉDITO" }
               ]}
               searchable={false}
-              className="w-auto min-w-[160px]"
+              className="w-full"
             />
 
             <StatusMultiSelect
+              label="Estado"
               placeholder="Todos los estados"
               statuses={[
                 "INGRESADO",
@@ -1232,23 +1296,37 @@ export default function InvoiceGestionPage() {
               }}
             />
 
-            <Input
-              placeholder="Buscar por Número OC"
-              value={filters.numeroOc}
-              onChange={e => {
-                setFilters(f => ({ ...f, numeroOc: e.target.value }));
-                setSortConfig(DEFAULT_SORT);
-              }}
-              className="max-w-xs"
-            />
+            <div>
+              <label className="block text-xs text-brand-text-secondary font-medium mb-1">Número OC</label>
+              <Input
+                placeholder="Buscar por Número OC"
+                value={filters.numeroOc}
+                onChange={e => {
+                  setFilters(f => ({ ...f, numeroOc: e.target.value }));
+                  setSortConfig(DEFAULT_SORT);
+                }}
+              />
+            </div>
+          </div>
 
+          <div className="mt-4 flex flex-wrap gap-2 items-center justify-between">
+            <div className="flex gap-3 text-sm text-brand-text-secondary">
+              {filters.selectedUsers.length > 0 && (
+                <span>Responsables: {filters.selectedUsers.length}</span>
+              )}
+              {filters.selectedProviders.length > 0 && (
+                <span>Proveedores: {filters.selectedProviders.length}</span>
+              )}
+            </div>
             <Button
+              variant="secondary"
               onClick={() => {
                 const p = new URLSearchParams();
                 if (filters.selectedEstados.length > 0) p.set("status", filters.selectedEstados.join(","));
                 if (filters.docType) p.set("docType", filters.docType);
                 window.open(`http://localhost:3001/invoices/export/csv?${p.toString()}`, "_blank");
               }}
+              size="sm"
             >
               Exportar CSV
             </Button>

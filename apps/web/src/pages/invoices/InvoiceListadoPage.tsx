@@ -5,13 +5,14 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
-import FilterSelect from "../../components/ui/FilterSelect";
 import Button from "../../components/ui/Button";
 import Modal from "../../components/ui/Modal";
 import InvoiceStatusTimeline from "../../components/InvoiceStatusTimeline";
 import UserMultiSelect, { UserOption } from "../../components/ui/UserMultiSelect";
 import ProviderMultiSelect, { ProviderOption } from "../../components/ui/ProviderMultiSelect";
 import StatusMultiSelect from "../../components/ui/StatusMultiSelect";
+import FilterSelect from "../../components/ui/FilterSelect";
+import YearMultiSelect from "../../components/ui/YearMultiSelect";
 import { formatNumber } from "../../utils/numberFormat";
 import { ExternalLink, FileText, Users, DollarSign, TrendingUp, Clock } from "lucide-react";
 
@@ -334,7 +335,7 @@ export default function InvoiceListadoPage() {
     search: "",
     docType: "",
     selectedEstados: ESTADOS_FACTURA.filter(e => e !== "PAGADO"),  // Por defecto: todo menos PAGADO
-    year: "",  // Sin filtro por año por defecto
+    years: [] as string[],  // Multi-select de años
     selectedUsers: [] as string[],
     selectedProviders: [] as string[]
   });
@@ -426,12 +427,12 @@ export default function InvoiceListadoPage() {
     
     let result = [...invoices];
     
-    // Filtro por año (usando createdAt)
-    if (filters.year) {
-      const year = parseInt(filters.year);
+    // Filtro por años (multi)
+    if (filters.years.length > 0) {
+      const selectedYearsSet = new Set(filters.years.map(y => Number(y)));
       result = result.filter((inv) => {
         const invYear = new Date(inv.createdAt).getFullYear();
-        return invYear === year;
+        return selectedYearsSet.has(invYear);
       });
     }
     
@@ -566,15 +567,19 @@ export default function InvoiceListadoPage() {
     window.open(`http://localhost:3001/invoices/export/csv?${params.toString()}`, "_blank");
   };
 
-  // Generar opciones de años
+  // Generar opciones de años según datos cargados (sin "Todos" en multi)
   const yearOptions = useMemo(() => {
-    const currentYear = new Date().getFullYear();
-    const years = [];
-    for (let i = currentYear - 5; i <= currentYear + 1; i++) {
-      years.push({ value: i.toString(), label: i.toString() });
-    }
-    return years.reverse();
-  }, []);
+    if (!invoices) return [];
+    const yearsSet = new Set<number>();
+    invoices.forEach((inv) => {
+      if (inv.createdAt) {
+        yearsSet.add(new Date(inv.createdAt).getFullYear());
+      }
+    });
+    return Array.from(yearsSet)
+      .sort((a, b) => b - a)
+      .map((y) => ({ value: y.toString(), label: y.toString() }));
+  }, [invoices]);
 
   return (
     <div className="space-y-6">
@@ -597,14 +602,13 @@ export default function InvoiceListadoPage() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-            {/* Filtro de Año */}
-            <FilterSelect
-              label="Año"
-              placeholder="Año"
-              value={filters.year}
-              onChange={(value) => setFilters(f => ({ ...f, year: value }))}
+            {/* Filtro de Años (multi) */}
+            <YearMultiSelect
+              label="Años"
+              placeholder="Todos los años"
               options={yearOptions}
-              searchable={false}
+              selectedYears={filters.years}
+              onChange={(years) => setFilters(f => ({ ...f, years }))}
             />
             
             {/* Filtro de Usuarios */}
@@ -642,7 +646,7 @@ export default function InvoiceListadoPage() {
               label="Tipo"
               placeholder="Todos"
               value={filters.docType}
-              onChange={(value) => setFilters(f => ({ ...f, docType: value }))}
+              onChange={(value: string) => setFilters(f => ({ ...f, docType: value }))}
               options={TIPOS_DOC.map(tipo => ({
                 value: tipo,
                 label: tipo === "NOTA_CREDITO" ? "Nota de Crédito" : "Factura"
@@ -689,7 +693,7 @@ export default function InvoiceListadoPage() {
             title="Total de Facturas"
             value={statistics.totalFacturas}
             icon={FileText}
-            subtitle={`Año ${filters.year}`}
+            subtitle={filters.years.length > 0 ? `Años: ${filters.years.join(", ")}` : "Todos los años"}
             highlighted
           />
           

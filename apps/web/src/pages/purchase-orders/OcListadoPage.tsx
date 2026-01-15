@@ -6,6 +6,7 @@ import { useWebSocket } from "../../hooks/useWebSocket";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
 import FilterSelect from "../../components/ui/FilterSelect";
+import YearMultiSelect from "../../components/ui/YearMultiSelect";
 import Button from "../../components/ui/Button";
 import Modal from "../../components/ui/Modal";
 import OcStatusTimeline from "../../components/OcStatusTimeline";
@@ -296,7 +297,7 @@ export default function OcListadoPage() {
     search: "",          // Búsqueda global
     moneda: "",
     selectedEstados: ESTADOS_OC.filter(e => e !== "ATENDIDO"),  // Por defecto: todo menos ATENDIDO
-    year: "",  // Sin filtro por año por defecto
+    years: [] as string[],  // Multi-select de años
     selectedUsers: [] as string[],
     selectedProviders: [] as string[]
   });
@@ -368,12 +369,12 @@ export default function OcListadoPage() {
     
     let result = [...ocs];
     
-    // Filtro por año (usando fechaRegistro)
-    if (filters.year) {
-      const year = parseInt(filters.year);
+    // Filtro por años (multi)
+    if (filters.years.length > 0) {
+      const selectedYearsSet = new Set(filters.years.map(y => Number(y)));
       result = result.filter((oc: any) => {
         const ocYear = new Date(oc.fechaRegistro).getFullYear();
-        return ocYear === year;
+        return selectedYearsSet.has(ocYear);
       });
     }
     
@@ -519,15 +520,19 @@ export default function OcListadoPage() {
     window.open(`http://localhost:3001/ocs/export/csv?${params.toString()}`, "_blank");
   };
 
-  // Generar opciones de años (últimos 5 años + año actual + próximo año)
+  // Generar opciones de años según OCs cargadas (sin "Todos" en multi)
   const yearOptions = useMemo(() => {
-    const currentYear = new Date().getFullYear();
-    const years = [];
-    for (let i = currentYear - 5; i <= currentYear + 1; i++) {
-      years.push({ value: i.toString(), label: i.toString() });
-    }
-    return years.reverse();
-  }, []);
+    if (!ocs) return [];
+    const yearsSet = new Set<number>();
+    ocs.forEach((oc: any) => {
+      if (oc.fechaRegistro) {
+        yearsSet.add(new Date(oc.fechaRegistro).getFullYear());
+      }
+    });
+    return Array.from(yearsSet)
+      .sort((a, b) => b - a)
+      .map((y) => ({ value: y.toString(), label: y.toString() }));
+  }, [ocs]);
 
   return (
     <div className="space-y-6">
@@ -555,14 +560,13 @@ export default function OcListadoPage() {
         <CardContent>
           {/* Filtros alineados siguiendo el patrón de otros módulos */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-            {/* Filtro de Año - más estrecho */}
-            <FilterSelect
-              label="Año"
-              placeholder="Año"
-              value={filters.year}
-              onChange={(value) => setFilters(f => ({ ...f, year: value }))}
+            {/* Filtro de Años (multi) */}
+            <YearMultiSelect
+              label="Años"
+              placeholder="Todos los años"
               options={yearOptions}
-              searchable={false}
+              selectedYears={filters.years}
+              onChange={(years) => setFilters(f => ({ ...f, years }))}
             />
             
             {/* Filtro de Usuarios con multi-select */}
@@ -649,7 +653,7 @@ export default function OcListadoPage() {
             title="Total de OCs"
             value={statistics.totalOcs}
             icon={Package}
-            subtitle={`Año ${filters.year}`}
+            subtitle={filters.years.length > 0 ? `Años: ${filters.years.join(", ")}` : "Todos los años"}
             highlighted
           />
           

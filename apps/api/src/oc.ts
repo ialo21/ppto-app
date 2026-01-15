@@ -29,8 +29,11 @@ const createOcSchema = z.object({
   supportId: z.number().int().positive(),
   periodoEnFechasText: z.string().trim().optional(),
   descripcion: z.string().trim().optional(),
-  nombreSolicitante: z.string().min(1),
-  correoSolicitante: z.string().email(),
+  // NUEVO: solicitanteUserId (referencia a Usuario)
+  solicitanteUserId: z.number().int().positive().optional(),
+  // DEPRECATED: campos legacy (mantener para compatibilidad)
+  nombreSolicitante: z.string().min(1).optional(),
+  correoSolicitante: z.string().email().optional(),
   // NUEVO: proveedorId (referencia a entidad Proveedor)
   proveedorId: z.number().int().positive().optional(),
   // DEPRECATED: campos legacy (mantener para compatibilidad)
@@ -107,6 +110,7 @@ export async function registerOcRoutes(app: FastifyInstance) {
           articulo: { select: { id: true, code: true, name: true } },
           ceco: { select: { id: true, code: true, name: true } },
           proveedorRef: { select: { id: true, razonSocial: true, ruc: true } },
+          solicitanteUser: { select: { id: true, email: true, name: true } },
           costCenters: { 
             include: { 
               costCenter: { select: { id: true, code: true, name: true } }
@@ -137,6 +141,7 @@ export async function registerOcRoutes(app: FastifyInstance) {
         articulo: true,
         ceco: true,
         proveedorRef: true,
+        solicitanteUser: { select: { id: true, email: true, name: true } },
         costCenters: { include: { costCenter: true } }
       }
     });
@@ -205,8 +210,11 @@ export async function registerOcRoutes(app: FastifyInstance) {
             supportId: data.supportId,
             periodoEnFechasText: data.periodoEnFechasText || null,
             descripcion: data.descripcion || null,
-            nombreSolicitante: data.nombreSolicitante,
-            correoSolicitante: data.correoSolicitante,
+            // NUEVO: usar solicitanteUserId si está disponible
+            solicitanteUserId: data.solicitanteUserId || null,
+            // DEPRECATED: campos legacy (mantener para compatibilidad)
+            nombreSolicitante: data.nombreSolicitante || null,
+            correoSolicitante: data.correoSolicitante || null,
             // NUEVO: usar proveedorId si está disponible
             proveedorId: data.proveedorId || null,
             // DEPRECATED: campos legacy (mantener para compatibilidad)
@@ -252,6 +260,7 @@ export async function registerOcRoutes(app: FastifyInstance) {
             budgetPeriodTo: true,
             articulo: true,
             ceco: true,
+            solicitanteUser: { select: { id: true, email: true, name: true } },
             proveedorRef: true,
             costCenters: { include: { costCenter: true } }
           }
@@ -348,8 +357,11 @@ export async function registerOcRoutes(app: FastifyInstance) {
       if (data.supportId !== undefined) updateData.supportId = data.supportId;
       if (data.periodoEnFechasText !== undefined) updateData.periodoEnFechasText = data.periodoEnFechasText || null;
       if (data.descripcion !== undefined) updateData.descripcion = data.descripcion || null;
-      if (data.nombreSolicitante !== undefined) updateData.nombreSolicitante = data.nombreSolicitante;
-      if (data.correoSolicitante !== undefined) updateData.correoSolicitante = data.correoSolicitante;
+      // NUEVO: manejar solicitanteUserId
+      if (data.solicitanteUserId !== undefined) updateData.solicitanteUserId = data.solicitanteUserId;
+      // DEPRECATED: campos legacy
+      if (data.nombreSolicitante !== undefined) updateData.nombreSolicitante = data.nombreSolicitante || null;
+      if (data.correoSolicitante !== undefined) updateData.correoSolicitante = data.correoSolicitante || null;
       // NUEVO: manejar proveedorId
       if (data.proveedorId !== undefined) updateData.proveedorId = data.proveedorId;
       // DEPRECATED: campos legacy

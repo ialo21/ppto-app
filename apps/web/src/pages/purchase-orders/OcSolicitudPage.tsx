@@ -204,8 +204,7 @@ export default function OcSolicitudPage() {
         budgetPeriodToId: Number(form.budgetPeriodToId),
         supportId: Number(form.supportId),
         descripcion: form.descripcion.trim(),
-        nombreSolicitante: user?.name || user?.email || "Usuario",
-        correoSolicitante: user?.email || "",
+        solicitanteUserId: user?.id,  // Usar ID del usuario autenticado
         proveedorId: form.proveedorId,
         proveedor: form.proveedorNombre.trim(),
         ruc: form.proveedorRuc.trim(),

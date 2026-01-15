@@ -20,19 +20,24 @@ import { CheckCircle, XCircle, Eye, ShoppingCart, DollarSign, Clock, Ban, AlertT
  * - Vista tipo bandeja de trabajo, solo lectura + acción
  */
 
-type OC = {
+interface OcPendienteVP {
   id: number;
   numeroOc: string | null;
   incidenteOc: string | null;
-  solicitudOc: string | null;
   estado: string;
+  // NUEVO: Relación con Proveedor
+  proveedorRef?: { id: number; razonSocial: string; ruc: string };
+  // DEPRECATED: campos legacy
   proveedor: string;
   ruc: string;
   moneda: string;
   importeSinIgv: number;
   descripcion: string | null;
-  nombreSolicitante: string;
-  correoSolicitante: string;
+  // NUEVO: Relación con Usuario
+  solicitanteUser?: { id: number; email: string; name: string | null };
+  // DEPRECATED: campos legacy
+  nombreSolicitante?: string;
+  correoSolicitante?: string;
   fechaRegistro: string;
   comentario: string | null;
   support?: { id: number; code: string | null; name: string };
@@ -96,11 +101,11 @@ function OCCard({
   onViewDetail,
   isPending
 }: { 
-  oc: OC;
+  oc: OcPendienteVP;
   onApprove: (id: number) => void;
   onApproveCancel: (id: number) => void;
   onRejectCancel: (id: number, note: string) => void;
-  onViewDetail: (oc: OC) => void;
+  onViewDetail: (oc: OcPendienteVP) => void;
   isPending: boolean;
 }) {
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -169,7 +174,7 @@ function OCCard({
             </div>
             <div className="col-span-2">
               <p className="text-brand-text-disabled text-xs">Solicitante</p>
-              <p className="font-medium">{oc.nombreSolicitante}</p>
+              <p className="font-medium">{oc.solicitanteUser?.name || oc.nombreSolicitante || "Sin solicitante"}</p>
             </div>
           </div>
 
@@ -275,13 +280,13 @@ function OCCard({
 export default function AprobacionVPOCsPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
-  const [selectedOC, setSelectedOC] = useState<OC | null>(null);
+  const [selectedOC, setSelectedOC] = useState<OcPendienteVP | null>(null);
   const [filterType, setFilterType] = useState<"all" | "approval" | "cancel">("all");
 
   // Fetch OCs pending VP approval or cancellation
   const { data: ocs = [], isLoading } = useQuery({
     queryKey: ["approvals", "ocs", "vp"],
-    queryFn: async () => (await api.get("/approvals/ocs/vp")).data as OC[]
+    queryFn: async () => (await api.get("/approvals/ocs/vp")).data as OcPendienteVP[]
   });
 
   // Approve OC mutation
@@ -543,11 +548,11 @@ export default function AprobacionVPOCsPage() {
               <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
                 <div>
                   <p className="text-gray-500 text-xs mb-1">Nombre</p>
-                  <p className="font-medium">{selectedOC.nombreSolicitante}</p>
+                  <p className="font-medium">{selectedOC.solicitanteUser?.name || selectedOC.nombreSolicitante || "Sin nombre"}</p>
                 </div>
                 <div>
                   <p className="text-gray-500 text-xs mb-1">Correo</p>
-                  <p className="font-medium text-brand-primary">{selectedOC.correoSolicitante}</p>
+                  <p className="font-medium text-brand-primary">{selectedOC.solicitanteUser?.email || selectedOC.correoSolicitante || "Sin correo"}</p>
                 </div>
               </div>
             </section>
@@ -559,7 +564,7 @@ export default function AprobacionVPOCsPage() {
                   Centros de Costo
                 </h4>
                 <div className="flex flex-wrap gap-2">
-                  {selectedOC.costCenters.map(cc => (
+                  {selectedOC.costCenters.map((cc: any) => (
                     <span key={cc.id} className="px-3 py-1.5 bg-gray-100 rounded-lg text-xs font-medium">
                       {cc.costCenter.code} - {cc.costCenter.name}
                     </span>

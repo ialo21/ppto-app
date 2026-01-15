@@ -428,12 +428,16 @@ model OC {
   
   periodoEnFechasText    String?
   descripcion            String?   @db.Text
-  nombreSolicitante      String
-  correoSolicitante      String
+  
+  // NUEVO: Relación con Usuario (solicitante)
+  solicitanteUserId      Int?
+  solicitanteUser        User?      @relation("OC_SOLICITANTE", fields: [solicitanteUserId], references: [id], onDelete: SetNull)
   
   // DEPRECATED: campos legacy (mantener para compatibilidad/migración)
-  proveedor              String?   // Usar proveedorRef.razonSocial
-  ruc                    String?   // Usar proveedorRef.ruc
+  nombreSolicitante      String?    // Usar solicitanteUser.name
+  correoSolicitante      String?    // Usar solicitanteUser.email
+  proveedor              String?    // Usar proveedorRef.razonSocial
+  ruc                    String?    // Usar proveedorRef.ruc
   
   // NUEVO: Relación con entidad Proveedor
   proveedorId            Int?
@@ -468,6 +472,7 @@ model OC {
   @@index([estado], name: "ix_oc_estado")
   @@index([fechaRegistro], name: "ix_oc_fecha_registro")
   @@index([proveedorId], name: "ix_oc_proveedor")
+  @@index([solicitanteUserId], name: "ix_oc_solicitante")
 }
 
 model SupportCostCenter {
@@ -674,6 +679,7 @@ model User {
   recursosTercerizados RecursoTercerizado[]
   invoicesCreated   Invoice[] @relation("InvoiceCreatedBy")
   invoicesApproved  Invoice[] @relation("InvoiceApprovedBy")
+  ocsSolicitante    OC[]      @relation("OC_SOLICITANTE")
   
   @@index([email], name: "ix_user_email")
 }

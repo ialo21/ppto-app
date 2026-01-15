@@ -13,6 +13,7 @@ import OcStatusChip from "../../components/OcStatusChip";
 import YearMonthPicker from "../../components/YearMonthPicker";
 import OcFileUploader from "../../components/OcFileUploader";
 import ProveedorSelector from "../../components/ProveedorSelector";
+import ResponsableSelector from "../../components/ResponsableSelector";
 import { formatNumber } from "../../utils/numberFormat";
 import { formatPeriodLabel } from "../../utils/periodFormat";
 
@@ -221,8 +222,8 @@ export default function OcGestionPage() {
     supportId: "",
     periodoEnFechasText: "",
     descripcion: "",
-    nombreSolicitante: "",
-    correoSolicitante: "",
+    // NUEVO: solicitanteUserId para referencia a Usuario
+    solicitanteUserId: null as number | null,
     // NUEVO: proveedorId para referencia a entidad
     proveedorId: null as number | null,
     // DEPRECATED: mantener por compatibilidad con OCs existentes
@@ -292,8 +293,7 @@ export default function OcGestionPage() {
       supportId: "",
       periodoEnFechasText: "",
       descripcion: "",
-      nombreSolicitante: "",
-      correoSolicitante: "",
+      solicitanteUserId: null,
       proveedorId: null,
       proveedor: "",
       ruc: "",
@@ -333,7 +333,7 @@ export default function OcGestionPage() {
     }
     
     if (!form.supportId) errors.supportId = "Sustento es requerido";
-    if (!form.nombreSolicitante.trim()) errors.nombreSolicitante = "Nombre solicitante es requerido";
+    if (!form.solicitanteUserId) errors.solicitanteUserId = "Solicitante es requerido";
 
     // Validar que haya al menos un CECO seleccionado
     if (!form.costCenterIds || form.costCenterIds.length === 0) {
@@ -355,14 +355,6 @@ export default function OcGestionPage() {
       errors.fechaRegistro = "Fecha de registro es requerida";
     } else if (!isValidDate(form.fechaRegistro)) {
       errors.fechaRegistro = "Fecha inválida. Usa formato DD/MM/YYYY o YYYY-MM-DD";
-    }
-    
-    // Email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!form.correoSolicitante.trim()) {
-      errors.correoSolicitante = "Correo es requerido";
-    } else if (!emailRegex.test(form.correoSolicitante)) {
-      errors.correoSolicitante = "Correo inválido";
     }
 
     if (!form.proveedor.trim()) errors.proveedor = "Proveedor es requerido";
@@ -412,15 +404,13 @@ export default function OcGestionPage() {
       const payload: any = {
         budgetPeriodFromId: Number(form.budgetPeriodFromId),
         budgetPeriodToId: Number(form.budgetPeriodToId),
-        // Fix: Enviar string vacío para permitir borrar estos campos
-        incidenteOc: form.incidenteOc.trim(),
-        solicitudOc: form.solicitudOc.trim(),
+        incidenteOc: form.incidenteOc.trim() || undefined,
+        solicitudOc: form.solicitudOc.trim() || undefined,
         fechaRegistro: fechaISO, // Convertido a ISO completo
         supportId: Number(form.supportId),
         periodoEnFechasText: form.periodoEnFechasText.trim() || undefined,
         descripcion: form.descripcion.trim() || undefined,
-        nombreSolicitante: form.nombreSolicitante.trim(),
-        correoSolicitante: form.correoSolicitante.trim(),
+        solicitanteUserId: form.solicitanteUserId,
         proveedorId: form.proveedorId,
         proveedor: form.proveedor.trim(),
         ruc: form.ruc.trim(),
@@ -561,8 +551,7 @@ export default function OcGestionPage() {
       supportId: oc.supportId?.toString() || "",
       periodoEnFechasText: oc.periodoEnFechasText || "",
       descripcion: oc.descripcion || "",
-      nombreSolicitante: oc.nombreSolicitante || "",
-      correoSolicitante: oc.correoSolicitante || "",
+      solicitanteUserId: oc.solicitanteUserId || null,
       proveedorId: oc.proveedorId || null,
       proveedor: oc.proveedor || "",
       ruc: oc.ruc || "",
@@ -632,8 +621,7 @@ export default function OcGestionPage() {
               supportId: "",
               periodoEnFechasText: "",
               descripcion: "",
-              nombreSolicitante: "",
-              correoSolicitante: "",
+              solicitanteUserId: null,
               proveedorId: null,
               proveedor: "",
               ruc: "",
@@ -768,24 +756,23 @@ export default function OcGestionPage() {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1">Nombre Solicitante *</label>
-                <InputWithError 
-                  placeholder="Juan Pérez" 
-                  value={form.nombreSolicitante} 
-                  onChange={(e: any) => setForm(f => ({ ...f, nombreSolicitante: e.target.value }))}
-                  error={fieldErrors.nombreSolicitante}
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-1">Correo Solicitante *</label>
-                <InputWithError 
-                  type="email" 
-                  placeholder="juan.perez@empresa.com" 
-                  value={form.correoSolicitante} 
-                  onChange={(e: any) => setForm(f => ({ ...f, correoSolicitante: e.target.value }))}
-                  error={fieldErrors.correoSolicitante}
+              <div className="md:col-span-3">
+                <ResponsableSelector
+                  label="Solicitante *"
+                  placeholder="Seleccionar solicitante..."
+                  value={form.solicitanteUserId}
+                  onChange={(userId) => {
+                    setForm(f => ({ ...f, solicitanteUserId: userId }));
+                    if (userId) {
+                      setFieldErrors(e => {
+                        const newErrors = { ...e };
+                        delete newErrors.solicitanteUserId;
+                        return newErrors;
+                      });
+                    }
+                  }}
+                  error={fieldErrors.solicitanteUserId}
+                  allowCreate={true}
                 />
               </div>
 

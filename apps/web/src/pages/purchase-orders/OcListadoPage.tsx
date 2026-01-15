@@ -326,11 +326,12 @@ export default function OcListadoPage() {
     if (!ocs) return [];
     const userMap = new Map<string, UserOption>();
     ocs.forEach((oc: any) => {
-      if (oc.correoSolicitante && !userMap.has(oc.correoSolicitante)) {
-        userMap.set(oc.correoSolicitante, {
-          email: oc.correoSolicitante,
-          name: oc.nombreSolicitante || null
-        });
+      // Preferir solicitanteUser, fallback a campos legacy
+      const email = oc.solicitanteUser?.email || oc.correoSolicitante;
+      const name = oc.solicitanteUser?.name || oc.nombreSolicitante || null;
+      
+      if (email && !userMap.has(email)) {
+        userMap.set(email, { email, name });
       }
     });
     return Array.from(userMap.values()).sort((a, b) => {
@@ -398,9 +399,10 @@ export default function OcListadoPage() {
     
     // Filtro por usuarios seleccionados (multi-select)
     if (filters.selectedUsers.length > 0) {
-      result = result.filter((oc: any) => 
-        filters.selectedUsers.includes(oc.correoSolicitante)
-      );
+      result = result.filter((oc: any) => {
+        const email = oc.solicitanteUser?.email || oc.correoSolicitante;
+        return filters.selectedUsers.includes(email);
+      });
     }
     
     return result;
@@ -458,7 +460,8 @@ export default function OcListadoPage() {
     // 4. Solicitante con más OCs (NUEVO)
     const solicitanteCounts: Record<string, number> = {};
     filteredOcs.forEach((oc: any) => {
-      const solicitante = oc.nombreSolicitante || "Sin solicitante";
+      // Preferir solicitanteUser.name, fallback a nombreSolicitante legacy
+      const solicitante = oc.solicitanteUser?.name || oc.nombreSolicitante || "Sin solicitante";
       solicitanteCounts[solicitante] = (solicitanteCounts[solicitante] || 0) + 1;
     });
     

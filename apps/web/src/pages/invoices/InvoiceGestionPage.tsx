@@ -114,20 +114,25 @@ function formatPeriodsRange(periods: { year: number; month: number }[]): string 
 
 export default function InvoiceGestionPage() {
   const queryClient = useQueryClient();
+  const isLocalStatusChangeRef = useRef(false);
 
   // WebSocket para actualizaciones en tiempo real
   useWebSocket({
     onInvoiceStatusChange: (data) => {
       console.log(`[WS] Factura ${data.invoiceId} cambió a estado ${data.newStatus}`);
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
-      toast.success(`Factura actualizada: nuevo estado ${data.newStatus}`);
+      // NOTA: No mostrar toast aquí para evitar duplicados.
+      // El toast ya se muestra en las mutations cuando el usuario actual cambia el estado.
+      // Este handler es principalmente para sincronizar cambios hechos por otros usuarios/sistemas.
     }
   });
 
   // Queries
   const { data: invoices, isLoading } = useQuery<Invoice[]>({
     queryKey: ["invoices"],
-    queryFn: async () => (await api.get("/invoices")).data
+    queryFn: async () => (await api.get("/invoices")).data,
+    staleTime: 30 * 1000, // 30 segundos - reducir refetches automáticos
+    refetchOnWindowFocus: false
   });
 
   const ocsQuery = useQuery<OC[]>({
@@ -718,6 +723,9 @@ export default function InvoiceGestionPage() {
       return (await api.patch(`/invoices/${id}/status`, { status })).data;
     },
     onMutate: async ({ id, status }) => {
+      // Marcar que este cambio proviene de esta pestaña
+      isLocalStatusChangeRef.current = true;
+
       await queryClient.cancelQueries({ queryKey: ["invoices"] });
       const previousInvoices = queryClient.getQueryData<Invoice[]>(["invoices"]);
       if (previousInvoices) {
@@ -743,14 +751,21 @@ export default function InvoiceGestionPage() {
       }
     },
     onSuccess: (data, { status }) => {
-      const statusLabel = status.replace(/_/g, " ");
-      toast.success(`Estado actualizado a ${statusLabel}`);
+      // Mostrar toast solo si fue un cambio iniciado en esta pestaña y la ventana está activa
+      if (isLocalStatusChangeRef.current && document.visibilityState === "visible" && document.hasFocus()) {
+        const statusLabel = status.replace(/_/g, " ");
+        toast.success(`Estado actualizado a ${statusLabel}`);
+      }
       if (import.meta.env.DEV) {
         console.log("✅ Estado actualizado:", data);
       }
-    },
+    }
+    // NOTA: No invalidar aquí - el optimistic update en onMutate ya actualiza la UI,
+    // y el WebSocket sincroniza cambios de otros usuarios si es necesario.
+    ,
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      // Resetear flag para evitar que futuros eventos (WS) muestren toast en otras pestañas
+      isLocalStatusChangeRef.current = false;
     }
   });
 

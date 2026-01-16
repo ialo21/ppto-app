@@ -318,7 +318,9 @@ export default function InvoiceListadoPage() {
   const queryClient = useQueryClient();
   const { data: invoices, isLoading } = useQuery<Invoice[]>({
     queryKey: ["invoices"],
-    queryFn: async () => (await api.get("/invoices")).data
+    queryFn: async () => (await api.get("/invoices")).data,
+    staleTime: 30 * 1000, // 30 segundos - reducir refetches automáticos
+    refetchOnWindowFocus: false
   });
 
   // WebSocket para actualizaciones en tiempo real

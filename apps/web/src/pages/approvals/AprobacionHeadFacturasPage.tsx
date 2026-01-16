@@ -30,6 +30,8 @@ type Invoice = {
     moneda: string;
     support?: { id: number; code: string | null; name: string };
   } | null;
+  proveedor?: { id: number; ruc: string; razonSocial: string } | null;
+  support?: { id: number; code: string | null; name: string } | null;
   docType: string;
   numberNorm: string | null;
   currency: string;
@@ -124,7 +126,7 @@ function InvoiceCard({
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectNote, setRejectNote] = useState("");
   
-  const proveedor = invoice.oc?.proveedor || "Sin proveedor";
+  const proveedor = invoice.oc?.proveedor || invoice.proveedor?.razonSocial || "Sin proveedor";
   const numeroOc = invoice.oc?.numeroOc || "-";
   const montoSinIgv = invoice.montoSinIgv ? Number(invoice.montoSinIgv) : 0;
   const montoConIGV = calcularMontoConIGV(montoSinIgv);
@@ -341,6 +343,7 @@ export default function AprobacionHeadFacturasPage() {
       inv.ultimusIncident?.toLowerCase().includes(searchLower) ||
       inv.numberNorm?.toLowerCase().includes(searchLower) ||
       inv.oc?.proveedor?.toLowerCase().includes(searchLower) ||
+      inv.proveedor?.razonSocial?.toLowerCase().includes(searchLower) ||
       inv.oc?.numeroOc?.toLowerCase().includes(searchLower)
     );
   }, [invoices, search]);
@@ -475,7 +478,7 @@ export default function AprobacionHeadFacturasPage() {
               <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
                 <div className="col-span-2">
                   <p className="text-gray-500 text-xs mb-1">Proveedor</p>
-                  <p className="font-medium">{selectedInvoice.oc?.proveedor || "-"}</p>
+                  <p className="font-medium">{selectedInvoice.oc?.proveedor || selectedInvoice.proveedor?.razonSocial || "-"}</p>
                 </div>
                 <div>
                   <p className="text-gray-500 text-xs mb-1">Moneda</p>

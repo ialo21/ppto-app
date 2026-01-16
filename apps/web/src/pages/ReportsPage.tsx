@@ -319,7 +319,8 @@ export default function ReportsPage() {
   // Queries para datos de reportes
   const { data: invoices = [] } = useQuery({
     queryKey: ["invoices"],
-    queryFn: async () => (await api.get("/invoices")).data
+    queryFn: async () => (await api.get("/invoices")).data,
+    staleTime: 30 * 1000 // 30 segundos - reducir refetches automáticos
   });
 
   const { data: provisions = [] } = useQuery({

@@ -194,6 +194,8 @@ export async function registerApprovalRoutes(app: FastifyInstance) {
             }
           }
         },
+        proveedor: { select: { id: true, ruc: true, razonSocial: true } },
+        support: { select: { id: true, code: true, name: true } },
         periods: {
           include: { period: { select: { id: true, year: true, month: true, label: true } } }
         },
@@ -252,6 +254,8 @@ export async function registerApprovalRoutes(app: FastifyInstance) {
             }
           }
         },
+        proveedor: { select: { id: true, ruc: true, razonSocial: true } },
+        support: { select: { id: true, code: true, name: true } },
         periods: {
           include: { period: { select: { id: true, year: true, month: true, label: true } } }
         },

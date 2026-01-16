@@ -169,6 +169,7 @@ const FilterSelectWithError = ({ error, label, options, ...props }: any) => {
 
 export default function OcGestionPage() {
   const queryClient = useQueryClient();
+  const isLocalOcStatusChangeRef = useRef(false);
   const { data: ocs, refetch, isLoading } = useQuery({
     queryKey: ["ocs"],
     queryFn: async () => (await api.get("/ocs")).data
@@ -581,6 +582,9 @@ export default function OcGestionPage() {
       return (await api.patch(`/ocs/${id}/status`, { estado })).data;
     },
     onMutate: async ({ id, estado }) => {
+      // Marcar que este cambio proviene de esta pestaña
+      isLocalOcStatusChangeRef.current = true;
+
       // Cancelar queries en curso
       await queryClient.cancelQueries({ queryKey: ["ocs"] });
       
@@ -611,14 +615,18 @@ export default function OcGestionPage() {
       }
     },
     onSuccess: (data, { estado }) => {
-      const estadoLabel = estado.replace(/_/g, " ");
-      toast.success(`Estado actualizado a ${estadoLabel}`);
+      // Mostrar toast solo si fue un cambio iniciado en esta pestaña y la ventana está activa
+      if (isLocalOcStatusChangeRef.current && document.visibilityState === "visible" && document.hasFocus()) {
+        const estadoLabel = estado.replace(/_/g, " ");
+        toast.success(`Estado actualizado a ${estadoLabel}`);
+      }
       if (import.meta.env.DEV) {
         console.log("✅ Estado OC actualizado:", data);
       }
     },
     onSettled: () => {
-      // Refrescar datos
+      // Resetear flag y refrescar datos
+      isLocalOcStatusChangeRef.current = false;
       queryClient.invalidateQueries({ queryKey: ["ocs"] });
     }
   });

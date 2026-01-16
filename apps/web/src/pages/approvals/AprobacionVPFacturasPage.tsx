@@ -140,22 +140,14 @@ function InvoiceCard({
 
           {/* Info Grid */}
           <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
-            <div>
+            <div className="col-span-2">
               <p className="text-brand-text-disabled text-xs">Proveedor</p>
               <p className="font-medium truncate" title={proveedor}>{proveedor}</p>
             </div>
-            <div>
-              <p className="text-brand-text-disabled text-xs">OC</p>
-              <p className="font-medium">{numeroOc}</p>
-            </div>
-            <div>
+            <div className="col-span-2">
               <p className="text-brand-text-disabled text-xs">Monto sin IGV</p>
-              <p className="font-semibold">{invoice.currency} {formatNumber(montoSinIgv)}</p>
-            </div>
-            <div>
-              <p className="text-brand-text-disabled text-xs">Monto con IGV</p>
               <p className="font-bold text-purple-700 text-lg">
-                S/ {formatNumber(montoConIGV)}
+                {invoice.currency} {formatNumber(montoSinIgv)}
               </p>
             </div>
             {invoice.periods && invoice.periods.length > 0 && (
@@ -398,6 +390,7 @@ export default function AprobacionVPFacturasPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b">
                   <tr>
+                    <th className="text-left p-3 font-semibold">Incidente</th>
                     <th className="text-left p-3 font-semibold">Número</th>
                     <th className="text-left p-3 font-semibold">Proveedor</th>
                     <th className="text-left p-3 font-semibold">Monto sin IGV</th>
@@ -411,18 +404,19 @@ export default function AprobacionVPFacturasPage() {
                 <tbody>
                   {filteredInvoices.map(invoice => {
                     const proveedor = invoice.oc?.proveedor || invoice.proveedor?.razonSocial || "Sin proveedor";
+                    const sustento = invoice.oc?.support?.name || invoice.support?.name || "-";
                     const montoSinIgv = invoice.montoSinIgv ? Number(invoice.montoSinIgv) : 0;
                     return (
                       <tr key={invoice.id} className="border-b hover:bg-gray-50">
                         <td className="p-3">
-                          <div className="font-medium">{invoice.numberNorm || "Sin número"}</div>
+                          <div className="font-medium">{invoice.ultimusIncident ? `INC ${invoice.ultimusIncident}` : "Sin incidente"}</div>
                           <div className="text-xs text-gray-500">{new Date(invoice.createdAt).toLocaleDateString('es-PE')}</div>
                         </td>
                         <td className="p-3">
-                          <div className="font-medium truncate max-w-[200px]" title={proveedor}>{proveedor}</div>
+                          <div className="font-medium">{invoice.numberNorm || "Sin número"}</div>
                         </td>
                         <td className="p-3">
-                          <div className="text-sm">{invoice.oc?.numeroOc || "-"}</div>
+                          <div className="font-medium truncate max-w-[200px]" title={proveedor}>{proveedor}</div>
                         </td>
                         <td className="p-3 font-semibold">
                           <div className="font-bold text-purple-700">
@@ -438,8 +432,8 @@ export default function AprobacionVPFacturasPage() {
                           </div>
                         </td>
                         <td className="p-3">
-                          <div className="text-sm" title={invoice.support?.name}>
-                            {invoice.support?.name || "-"}
+                          <div className="text-sm" title={sustento}>
+                            {sustento}
                           </div>
                         </td>
                         <td className="p-3">

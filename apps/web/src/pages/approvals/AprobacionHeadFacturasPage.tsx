@@ -474,6 +474,7 @@ export default function AprobacionHeadFacturasPage() {
                 <tbody>
                   {filteredInvoices.map(invoice => {
                     const proveedor = invoice.oc?.proveedor || invoice.proveedor?.razonSocial || "Sin proveedor";
+                    const sustento = invoice.oc?.support?.name || invoice.support?.name || "-";
                     const montoSinIgv = invoice.montoSinIgv ? Number(invoice.montoSinIgv) : 0;
                     const montoConIGV = calcularMontoConIGV(montoSinIgv);
                     const superaUmbral = invoice._requiresVP ?? (vpThreshold !== null && montoConIGV >= vpThreshold);
@@ -498,8 +499,8 @@ export default function AprobacionHeadFacturasPage() {
                           )}
                         </td>
                         <td className="p-3">
-                          <div className="text-sm" title={invoice.support?.name}>
-                            {invoice.support?.name || "-"}
+                          <div className="text-sm" title={sustento}>
+                            {sustento}
                           </div>
                         </td>
                         <td className="p-3">

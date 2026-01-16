@@ -400,10 +400,10 @@ export default function AprobacionVPFacturasPage() {
                   <tr>
                     <th className="text-left p-3 font-semibold">Número</th>
                     <th className="text-left p-3 font-semibold">Proveedor</th>
-                    <th className="text-left p-3 font-semibold">OC</th>
                     <th className="text-left p-3 font-semibold">Monto sin IGV</th>
-                    <th className="text-left p-3 font-semibold">Monto con IGV</th>
                     <th className="text-left p-3 font-semibold">Períodos</th>
+                    <th className="text-left p-3 font-semibold">Sustento</th>
+                    <th className="text-left p-3 font-semibold">Detalle</th>
                     <th className="text-left p-3 font-semibold">Tipo</th>
                     <th className="text-right p-3 font-semibold">Acciones</th>
                   </tr>
@@ -412,7 +412,6 @@ export default function AprobacionVPFacturasPage() {
                   {filteredInvoices.map(invoice => {
                     const proveedor = invoice.oc?.proveedor || invoice.proveedor?.razonSocial || "Sin proveedor";
                     const montoSinIgv = invoice.montoSinIgv ? Number(invoice.montoSinIgv) : 0;
-                    const montoConIGV = calcularMontoConIGV(montoSinIgv);
                     return (
                       <tr key={invoice.id} className="border-b hover:bg-gray-50">
                         <td className="p-3">
@@ -426,11 +425,8 @@ export default function AprobacionVPFacturasPage() {
                           <div className="text-sm">{invoice.oc?.numeroOc || "-"}</div>
                         </td>
                         <td className="p-3 font-semibold">
-                          {invoice.currency} {formatNumber(montoSinIgv)}
-                        </td>
-                        <td className="p-3">
-                          <div className="font-bold text-purple-700 text-lg">
-                            S/ {formatNumber(montoConIGV)}
+                          <div className="font-bold text-purple-700">
+                            {invoice.currency} {formatNumber(montoSinIgv)}
                           </div>
                         </td>
                         <td className="p-3">
@@ -439,6 +435,16 @@ export default function AprobacionVPFacturasPage() {
                               ? formatPeriodsRange(invoice.periods.map(p => p.period))
                               : "-"
                             }
+                          </div>
+                        </td>
+                        <td className="p-3">
+                          <div className="text-sm" title={invoice.support?.name}>
+                            {invoice.support?.name || "-"}
+                          </div>
+                        </td>
+                        <td className="p-3">
+                          <div className="text-sm whitespace-pre-wrap" title={invoice.detalle || "-"}>
+                            {invoice.detalle || "-"}
                           </div>
                         </td>
                         <td className="p-3">

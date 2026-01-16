@@ -464,9 +464,9 @@ export default function AprobacionHeadFacturasPage() {
                     <th className="text-left p-3 font-semibold">Incidente</th>
                     <th className="text-left p-3 font-semibold">Número</th>
                     <th className="text-left p-3 font-semibold">Proveedor</th>
-                    <th className="text-left p-3 font-semibold">OC</th>
                     <th className="text-left p-3 font-semibold">Monto sin IGV</th>
-                    <th className="text-left p-3 font-semibold">Monto con IGV</th>
+                    <th className="text-left p-3 font-semibold">Sustento</th>
+                    <th className="text-left p-3 font-semibold">Detalle</th>
                     <th className="text-left p-3 font-semibold">Tipo</th>
                     <th className="text-right p-3 font-semibold">Acciones</th>
                   </tr>
@@ -489,19 +489,23 @@ export default function AprobacionHeadFacturasPage() {
                         <td className="p-3">
                           <div className="font-medium truncate max-w-[200px]" title={proveedor}>{proveedor}</div>
                         </td>
-                        <td className="p-3">
-                          <div className="text-sm">{invoice.oc?.numeroOc || "-"}</div>
-                        </td>
                         <td className="p-3 font-semibold">
-                          {invoice.currency} {formatNumber(montoSinIgv)}
-                        </td>
-                        <td className="p-3">
-                          <div className={`font-bold ${superaUmbral ? 'text-orange-600' : 'text-green-600'}`}>
-                            {getCurrencySymbol(invoice.currency)} {formatNumber(montoConIGV)}
+                          <div className={`font-bold ${superaUmbral ? 'text-orange-600' : 'text-green-700'}`}>
+                            {invoice.currency} {formatNumber(montoSinIgv)}
                           </div>
                           {superaUmbral && (
                             <div className="text-xs text-orange-600 mt-1">Requiere VP</div>
                           )}
+                        </td>
+                        <td className="p-3">
+                          <div className="text-sm" title={invoice.support?.name}>
+                            {invoice.support?.name || "-"}
+                          </div>
+                        </td>
+                        <td className="p-3">
+                          <div className="text-sm whitespace-pre-wrap" title={invoice.detalle || "-"}>
+                            {invoice.detalle || "-"}
+                          </div>
                         </td>
                         <td className="p-3">
                           <span className={`text-xs px-2 py-1 rounded-full font-medium ${

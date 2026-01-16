@@ -508,6 +508,7 @@ export default function AprobacionVPOCsPage() {
                     <th className="text-left p-3 font-semibold">Monto sin IGV</th>
                     <th className="text-left p-3 font-semibold">Sustento</th>
                     <th className="text-left p-3 font-semibold">Detalle</th>
+                    <th className="text-left p-3 font-semibold">Acción</th>
                     <th className="text-right p-3 font-semibold">Acciones</th>
                   </tr>
                 </thead>
@@ -544,6 +545,13 @@ export default function AprobacionVPOCsPage() {
                           <div className="text-sm whitespace-pre-wrap" title={oc.descripcion || "-"}>
                             {oc.descripcion || "-"}
                           </div>
+                        </td>
+                        <td className="p-3">
+                          <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
+                            isAnularRequest ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
+                          }`}>
+                            {isAnularRequest ? "Anular" : "Aprobar"}
+                          </span>
                         </td>
                         <td className="p-3">
                           <div className="flex justify-end gap-2">

@@ -184,7 +184,10 @@ export async function registerApprovalRoutes(app: FastifyInstance) {
           in: ["APROBACION_HEAD", "EN_APROBACION"] 
         } 
       },
-      orderBy: [{ createdAt: "desc" }],
+      orderBy: [
+        { ultimusIncident: "asc" },
+        { createdAt: "desc" }
+      ],
       include: {
         oc: {
           include: {
@@ -244,7 +247,10 @@ export async function registerApprovalRoutes(app: FastifyInstance) {
   }, async () => {
     const invoices = await prisma.invoice.findMany({
       where: { statusCurrent: "APROBACION_VP" },
-      orderBy: [{ createdAt: "desc" }],
+      orderBy: [
+        { ultimusIncident: "asc" },
+        { createdAt: "desc" }
+      ],
       include: {
         oc: {
           include: {
@@ -465,12 +471,17 @@ export async function registerApprovalRoutes(app: FastifyInstance) {
           { estado: "ANULAR" }  // Solicitudes de anulación también van a VP
         ]
       },
-      orderBy: [{ fechaRegistro: "desc" }],
+      orderBy: [
+        { incidenteOc: "asc" },
+        { fechaRegistro: "desc" }
+      ],
       include: {
         support: { select: { id: true, code: true, name: true } },
         budgetPeriodFrom: { select: { id: true, year: true, month: true, label: true } },
         budgetPeriodTo: { select: { id: true, year: true, month: true, label: true } },
         articulo: { select: { id: true, code: true, name: true } },
+        proveedorRef: { select: { id: true, razonSocial: true, ruc: true } },
+        solicitanteUser: { select: { id: true, email: true, name: true } },
         costCenters: {
           include: { costCenter: { select: { id: true, code: true, name: true } } }
         },

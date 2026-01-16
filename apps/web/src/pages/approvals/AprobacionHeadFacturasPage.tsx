@@ -7,7 +7,7 @@ import Input from "../../components/ui/Input";
 import Button from "../../components/ui/Button";
 import Modal from "../../components/ui/Modal";
 import { formatNumber } from "../../utils/numberFormat";
-import { CheckCircle, XCircle, Eye, FileText, DollarSign, Clock, AlertTriangle } from "lucide-react";
+import { CheckCircle, XCircle, Eye, FileText, DollarSign, Clock, AlertTriangle, LayoutGrid, List } from "lucide-react";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -284,6 +284,7 @@ export default function AprobacionHeadFacturasPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
 
   // Fetch invoices pending Head approval
   const { data: invoices = [], isLoading } = useQuery({
@@ -392,14 +393,34 @@ export default function AprobacionHeadFacturasPage() {
         />
       </div>
 
-      {/* Search */}
-      <div className="flex gap-4">
+      {/* Search and View Toggle */}
+      <div className="flex flex-wrap gap-4 items-center justify-between">
         <Input
           placeholder="Buscar por incidente, número factura, proveedor u OC..."
           value={search}
           onChange={(e: any) => setSearch(e.target.value)}
           className="max-w-md"
         />
+        <div className="flex gap-2 border rounded-lg p-1">
+          <Button
+            variant={viewMode === "cards" ? "primary" : "ghost"}
+            size="sm"
+            onClick={() => setViewMode("cards")}
+            className="px-3"
+          >
+            <LayoutGrid size={16} className="mr-1" />
+            Tarjetas
+          </Button>
+          <Button
+            variant={viewMode === "table" ? "primary" : "ghost"}
+            size="sm"
+            onClick={() => setViewMode("table")}
+            className="px-3"
+          >
+            <List size={16} className="mr-1" />
+            Tabla
+          </Button>
+        </div>
       </div>
 
       {/* Content */}
@@ -418,7 +439,7 @@ export default function AprobacionHeadFacturasPage() {
             </p>
           </CardContent>
         </Card>
-      ) : (
+      ) : viewMode === "cards" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filteredInvoices.map(invoice => (
             <InvoiceCard
@@ -433,6 +454,103 @@ export default function AprobacionHeadFacturasPage() {
             />
           ))}
         </div>
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="text-left p-3 font-semibold">Incidente</th>
+                    <th className="text-left p-3 font-semibold">Número</th>
+                    <th className="text-left p-3 font-semibold">Proveedor</th>
+                    <th className="text-left p-3 font-semibold">OC</th>
+                    <th className="text-left p-3 font-semibold">Monto sin IGV</th>
+                    <th className="text-left p-3 font-semibold">Monto con IGV</th>
+                    <th className="text-left p-3 font-semibold">Tipo</th>
+                    <th className="text-right p-3 font-semibold">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredInvoices.map(invoice => {
+                    const proveedor = invoice.oc?.proveedor || invoice.proveedor?.razonSocial || "Sin proveedor";
+                    const montoSinIgv = invoice.montoSinIgv ? Number(invoice.montoSinIgv) : 0;
+                    const montoConIGV = calcularMontoConIGV(montoSinIgv);
+                    const superaUmbral = invoice._requiresVP ?? (vpThreshold !== null && montoConIGV >= vpThreshold);
+                    return (
+                      <tr key={invoice.id} className="border-b hover:bg-gray-50">
+                        <td className="p-3">
+                          <div className="font-medium">{invoice.ultimusIncident ? `INC ${invoice.ultimusIncident}` : "Sin incidente"}</div>
+                          <div className="text-xs text-gray-500">{new Date(invoice.createdAt).toLocaleDateString('es-PE')}</div>
+                        </td>
+                        <td className="p-3">
+                          <div className="font-medium">{invoice.numberNorm || "Sin número"}</div>
+                        </td>
+                        <td className="p-3">
+                          <div className="font-medium truncate max-w-[200px]" title={proveedor}>{proveedor}</div>
+                        </td>
+                        <td className="p-3">
+                          <div className="text-sm">{invoice.oc?.numeroOc || "-"}</div>
+                        </td>
+                        <td className="p-3 font-semibold">
+                          {invoice.currency} {formatNumber(montoSinIgv)}
+                        </td>
+                        <td className="p-3">
+                          <div className={`font-bold ${superaUmbral ? 'text-orange-600' : 'text-green-600'}`}>
+                            {getCurrencySymbol(invoice.currency)} {formatNumber(montoConIGV)}
+                          </div>
+                          {superaUmbral && (
+                            <div className="text-xs text-orange-600 mt-1">Requiere VP</div>
+                          )}
+                        </td>
+                        <td className="p-3">
+                          <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                            invoice.docType === "NOTA_CREDITO" 
+                              ? "bg-red-100 text-red-800" 
+                              : "bg-blue-100 text-blue-800"
+                          }`}>
+                            {invoice.docType === "NOTA_CREDITO" ? "NC" : "FAC"}
+                          </span>
+                        </td>
+                        <td className="p-3">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => approveMutation.mutate(invoice.id)}
+                              disabled={approveMutation.isPending || rejectMutation.isPending}
+                            >
+                              <CheckCircle size={14} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                const note = prompt("Motivo del rechazo:");
+                                if (note) rejectMutation.mutate({ invoiceId: invoice.id, note });
+                              }}
+                              disabled={approveMutation.isPending || rejectMutation.isPending}
+                              className="text-red-600 hover:bg-red-50"
+                            >
+                              <XCircle size={14} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setSelectedInvoice(invoice)}
+                            >
+                              <Eye size={14} />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Detail Modal */}

@@ -7,7 +7,7 @@ import Input from "../../components/ui/Input";
 import Button from "../../components/ui/Button";
 import Modal from "../../components/ui/Modal";
 import { formatNumber } from "../../utils/numberFormat";
-import { CheckCircle, XCircle, Eye, ShoppingCart, DollarSign, Clock, Ban, AlertTriangle } from "lucide-react";
+import { CheckCircle, XCircle, Eye, ShoppingCart, DollarSign, Clock, Ban, AlertTriangle, LayoutGrid, List } from "lucide-react";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -282,6 +282,7 @@ export default function AprobacionVPOCsPage() {
   const [search, setSearch] = useState("");
   const [selectedOC, setSelectedOC] = useState<OcPendienteVP | null>(null);
   const [filterType, setFilterType] = useState<"all" | "approval" | "cancel">("all");
+  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
 
   // Fetch OCs pending VP approval or cancellation
   const { data: ocs = [], isLoading } = useQuery({
@@ -407,8 +408,9 @@ export default function AprobacionVPOCsPage() {
         />
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-4">
+      {/* Filters and View Toggle */}
+      <div className="flex flex-wrap gap-4 items-center justify-between">
+        <div className="flex flex-wrap gap-4">
         <Input
           placeholder="Buscar por número OC, proveedor o RUC..."
           value={search}
@@ -440,6 +442,27 @@ export default function AprobacionVPOCsPage() {
             Anulación ({stats.cancelCount})
           </Button>
         </div>
+        </div>
+        <div className="flex gap-2 border rounded-lg p-1">
+          <Button
+            variant={viewMode === "cards" ? "primary" : "ghost"}
+            size="sm"
+            onClick={() => setViewMode("cards")}
+            className="px-3"
+          >
+            <LayoutGrid size={16} className="mr-1" />
+            Tarjetas
+          </Button>
+          <Button
+            variant={viewMode === "table" ? "primary" : "ghost"}
+            size="sm"
+            onClick={() => setViewMode("table")}
+            className="px-3"
+          >
+            <List size={16} className="mr-1" />
+            Tabla
+          </Button>
+        </div>
       </div>
 
       {/* Content */}
@@ -458,7 +481,7 @@ export default function AprobacionVPOCsPage() {
             </p>
           </CardContent>
         </Card>
-      ) : (
+      ) : viewMode === "cards" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filteredOCs.map(oc => (
             <OCCard
@@ -472,6 +495,117 @@ export default function AprobacionVPOCsPage() {
             />
           ))}
         </div>
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="text-left p-3 font-semibold">INC</th>
+                    <th className="text-left p-3 font-semibold">Proveedor</th>
+                    <th className="text-left p-3 font-semibold">Solicitante</th>
+                    <th className="text-left p-3 font-semibold">Monto sin IGV</th>
+                    <th className="text-left p-3 font-semibold">Monto con IGV</th>
+                    <th className="text-left p-3 font-semibold">Estado</th>
+                    <th className="text-left p-3 font-semibold">Sustento</th>
+                    <th className="text-right p-3 font-semibold">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredOCs.map(oc => {
+                    const isAnularRequest = oc.estado === "ANULAR";
+                    const montoSinIgv = oc.importeSinIgv ? Number(oc.importeSinIgv) : 0;
+                    const montoConIGV = calcularMontoConIGV(montoSinIgv);
+                    return (
+                      <tr key={oc.id} className="border-b hover:bg-gray-50">
+                        <td className="p-3">
+                          <div className="font-medium">{oc.incidenteOc || "Sin INC"}</div>
+                          <div className="text-xs text-gray-500">{new Date(oc.fechaRegistro).toLocaleDateString('es-PE')}</div>
+                        </td>
+                        <td className="p-3">
+                          <div className="font-medium truncate max-w-[200px]" title={oc.proveedorRef?.razonSocial || oc.proveedor}>
+                            {oc.proveedorRef?.razonSocial || oc.proveedor || "Sin proveedor"}
+                          </div>
+                          <div className="text-xs text-gray-500">{oc.proveedorRef?.ruc || oc.ruc || "-"}</div>
+                        </td>
+                        <td className="p-3">
+                          <div className="text-sm">{oc.solicitanteUser?.name || oc.nombreSolicitante || "Sin solicitante"}</div>
+                        </td>
+                        <td className="p-3 font-semibold">
+                          {oc.moneda} {formatNumber(montoSinIgv)}
+                        </td>
+                        <td className="p-3 font-bold text-green-700">
+                          {oc.moneda === "PEN" ? "S/" : "$"} {formatNumber(montoConIGV)}
+                        </td>
+                        <td className="p-3">
+                          <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                            isAnularRequest 
+                              ? "bg-red-100 text-red-800" 
+                              : "bg-green-100 text-green-800"
+                          }`}>
+                            {isAnularRequest ? "Anulación" : "Aprobación VP"}
+                          </span>
+                        </td>
+                        <td className="p-3">
+                          <div className="text-sm truncate max-w-[150px]" title={oc.support?.name}>
+                            {oc.support?.name || "-"}
+                          </div>
+                        </td>
+                        <td className="p-3">
+                          <div className="flex justify-end gap-2">
+                            {isAnularRequest ? (
+                              <>
+                                <Button
+                                  variant="primary"
+                                  size="sm"
+                                  onClick={() => approveCancelMutation.mutate(oc.id)}
+                                  disabled={isPending}
+                                  className="bg-red-600 hover:bg-red-700"
+                                >
+                                  <Ban size={14} />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    const note = prompt("Motivo del rechazo:");
+                                    if (note) rejectCancelMutation.mutate({ ocId: oc.id, note });
+                                  }}
+                                  disabled={isPending}
+                                  className="text-green-600 hover:bg-green-50"
+                                >
+                                  <XCircle size={14} />
+                                </Button>
+                              </>
+                            ) : (
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                onClick={() => approveMutation.mutate(oc.id)}
+                                disabled={isPending}
+                                className="bg-green-600 hover:bg-green-700"
+                              >
+                                <CheckCircle size={14} />
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setSelectedOC(oc)}
+                            >
+                              <Eye size={14} />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Detail Modal */}

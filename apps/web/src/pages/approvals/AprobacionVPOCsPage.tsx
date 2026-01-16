@@ -506,9 +506,8 @@ export default function AprobacionVPOCsPage() {
                     <th className="text-left p-3 font-semibold">Proveedor</th>
                     <th className="text-left p-3 font-semibold">Solicitante</th>
                     <th className="text-left p-3 font-semibold">Monto sin IGV</th>
-                    <th className="text-left p-3 font-semibold">Monto con IGV</th>
-                    <th className="text-left p-3 font-semibold">Estado</th>
                     <th className="text-left p-3 font-semibold">Sustento</th>
+                    <th className="text-left p-3 font-semibold">Detalle</th>
                     <th className="text-right p-3 font-semibold">Acciones</th>
                   </tr>
                 </thead>
@@ -516,7 +515,6 @@ export default function AprobacionVPOCsPage() {
                   {filteredOCs.map(oc => {
                     const isAnularRequest = oc.estado === "ANULAR";
                     const montoSinIgv = oc.importeSinIgv ? Number(oc.importeSinIgv) : 0;
-                    const montoConIGV = calcularMontoConIGV(montoSinIgv);
                     return (
                       <tr key={oc.id} className="border-b hover:bg-gray-50">
                         <td className="p-3">
@@ -533,23 +531,18 @@ export default function AprobacionVPOCsPage() {
                           <div className="text-sm">{oc.solicitanteUser?.name || oc.nombreSolicitante || "Sin solicitante"}</div>
                         </td>
                         <td className="p-3 font-semibold">
-                          {oc.moneda} {formatNumber(montoSinIgv)}
-                        </td>
-                        <td className="p-3 font-bold text-green-700">
-                          {oc.moneda === "PEN" ? "S/" : "$"} {formatNumber(montoConIGV)}
-                        </td>
-                        <td className="p-3">
-                          <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                            isAnularRequest 
-                              ? "bg-red-100 text-red-800" 
-                              : "bg-green-100 text-green-800"
-                          }`}>
-                            {isAnularRequest ? "Anulación" : "Aprobación VP"}
-                          </span>
+                          <div className="font-bold text-green-700">
+                            {oc.moneda === "PEN" ? "S/" : "$"} {formatNumber(montoSinIgv)}
+                          </div>
                         </td>
                         <td className="p-3">
-                          <div className="text-sm truncate max-w-[150px]" title={oc.support?.name}>
+                          <div className="text-sm" title={oc.support?.name}>
                             {oc.support?.name || "-"}
+                          </div>
+                        </td>
+                        <td className="p-3">
+                          <div className="text-sm whitespace-pre-wrap" title={oc.descripcion || "-"}>
+                            {oc.descripcion || "-"}
                           </div>
                         </td>
                         <td className="p-3">

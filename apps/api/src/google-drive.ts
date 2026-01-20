@@ -255,9 +255,13 @@ class GoogleDriveService {
     // Usar carpeta raíz de incidentes (separada de cotizaciones pendientes)
     const incidentsRoot = this.config.incidentsFolderId || this.config.rootFolderId;
     
-    // Crear carpeta específica del incidente directamente en la raíz de incidentes
-    // Nombre: INC XXXX (el incidentId ya viene con ese formato)
-    return this.ensureFolder(incidentId, incidentsRoot);
+    // Asegurar que el nombre de la carpeta tiene el prefijo "INC "
+    // Si incidentId ya tiene el prefijo, usarlo; si no, agregarlo
+    const folderName = incidentId.toUpperCase().startsWith('INC ') 
+      ? incidentId 
+      : `INC ${incidentId}`;
+    
+    return this.ensureFolder(folderName, incidentsRoot);
   }
 
   async moveDocumentsToIncidentFolder(

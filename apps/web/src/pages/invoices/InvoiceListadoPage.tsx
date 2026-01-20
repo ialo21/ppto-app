@@ -2,7 +2,6 @@ import React, { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { useAuth } from "../../contexts/AuthContext";
-import { useWebSocket } from "../../hooks/useWebSocket";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
 import Button from "../../components/ui/Button";
@@ -323,12 +322,7 @@ export default function InvoiceListadoPage() {
     refetchOnWindowFocus: false
   });
 
-  // WebSocket para actualizaciones en tiempo real
-  useWebSocket({
-    onInvoiceStatusChange: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["invoices"] });
-    }
-  });
+  // WebSocket se maneja centralizadamente en WebSocketProvider
 
   // Obtener usuario actual para filtro por defecto
   const { user: currentUser } = useAuth();

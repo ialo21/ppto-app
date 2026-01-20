@@ -2,7 +2,6 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { toast } from "sonner";
-import { useWebSocket } from "../../hooks/useWebSocket";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import FilterSelect from "../../components/ui/FilterSelect";
 import Input from "../../components/ui/Input";
@@ -12,7 +11,7 @@ import Button from "../../components/ui/Button";
 import { Table, Th, Td } from "../../components/ui/Table";
 import OcStatusChip from "../../components/OcStatusChip";
 import YearMonthPicker from "../../components/YearMonthPicker";
-import OcFileUploader from "../../components/OcFileUploader";
+import OcFileUploader, { useOcPendingFiles } from "../../components/OcFileUploader";
 import ProveedorSelector from "../../components/ProveedorSelector";
 import ResponsableSelector from "../../components/ResponsableSelector";
 import ProviderMultiSelect, { ProviderOption } from "../../components/ui/ProviderMultiSelect";
@@ -170,25 +169,15 @@ const FilterSelectWithError = ({ error, label, options, ...props }: any) => {
 export default function OcGestionPage() {
   const queryClient = useQueryClient();
   const isLocalOcStatusChangeRef = useRef(false);
+  const formRef = useRef<HTMLDivElement>(null);
+  const { pendingFiles, setPendingFiles, uploadPendingFiles } = useOcPendingFiles();
   const { data: ocs, refetch, isLoading } = useQuery({
     queryKey: ["ocs"],
     queryFn: async () => (await api.get("/ocs")).data
   });
 
-  // WebSocket para actualizaciones en tiempo real
-  useWebSocket({
-    onOcStatusChange: (data) => {
-      console.log(`[WS] OC ${data.ocId} cambió a estado ${data.newStatus}`);
-      // Invalidar cache para refrescar la lista de OCs
-      queryClient.invalidateQueries({ queryKey: ["ocs"] });
-      // NOTA: No mostrar toast aquí para evitar duplicados.
-      // El toast ya se muestra en updateStatusMutation.onSuccess cuando el usuario actual cambia el estado.
-      // Este handler es principalmente para sincronizar cambios hechos por otros usuarios/sistemas.
-    },
-    onConnected: () => {
-      console.log("[WS] Conectado - recibiendo actualizaciones en tiempo real");
-    }
-  });
+  // WebSocket se maneja centralizadamente en WebSocketProvider
+  // Las actualizaciones de estado se reflejan automáticamente vía invalidación de queries
 
   const { data: periods } = useQuery({
     queryKey: ["periods"],
@@ -469,6 +458,12 @@ export default function OcGestionPage() {
       }
     }
 
+    // VALIDACIÓN DE NEGOCIO: Estado PROCESAR requiere artículo
+    if (form.estado === "PROCESAR" && !form.articuloId) {
+      errors.articuloId = "Debe seleccionar un artículo para procesar la OC";
+      errors.estado = "No se puede procesar sin artículo";
+    }
+
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -522,8 +517,25 @@ export default function OcGestionPage() {
         return (await api.post("/ocs", payload)).data;
       }
     },
-    onSuccess: () => {
-      toast.success(editingId ? "OC actualizada exitosamente" : "OC creada exitosamente");
+    onSuccess: async (data) => {
+      const isEdit = !!editingId;
+      const ocId = data.id || editingId;
+      
+      // Si es creación y hay archivos pendientes, subirlos
+      if (!isEdit && pendingFiles.length > 0 && ocId) {
+        const uploadResult = await uploadPendingFiles(ocId);
+        if (uploadResult.success > 0) {
+          toast.success(`OC creada y ${uploadResult.success} archivo(s) subido(s)`);
+        } else {
+          toast.success("OC creada exitosamente");
+        }
+        if (uploadResult.errors.length > 0) {
+          uploadResult.errors.forEach(err => toast.error(err));
+        }
+      } else {
+        toast.success(isEdit ? "OC actualizada exitosamente" : "OC creada exitosamente");
+      }
+      
       queryClient.invalidateQueries({ queryKey: ["ocs"] });
       refetch();
       resetForm();
@@ -576,6 +588,14 @@ export default function OcGestionPage() {
    */
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, estado }: { id: number; estado: string }) => {
+      // VALIDACIÓN DE NEGOCIO: Validar estado PROCESAR requiere artículo
+      if (estado === "PROCESAR") {
+        const oc = ocs?.find((o: any) => o.id === id);
+        if (oc && !oc.articuloId) {
+          throw new Error("VALIDATION_PROCESAR_SIN_ARTICULO");
+        }
+      }
+
       if (import.meta.env.DEV) {
         console.log("📤 Actualizando estado OC:", { id, estado });
       }
@@ -608,8 +628,15 @@ export default function OcGestionPage() {
       if (context?.previousOcs) {
         queryClient.setQueryData(["ocs"], context.previousOcs);
       }
-      const errorMsg = error.response?.data?.error || "Error al actualizar estado";
-      toast.error(errorMsg);
+      
+      // Manejar error de validación específico
+      if (error.message === "VALIDATION_PROCESAR_SIN_ARTICULO") {
+        toast.error("No se puede cambiar a estado PROCESAR sin artículo asignado");
+      } else {
+        const errorMsg = error.response?.data?.message || error.response?.data?.error || "Error al actualizar estado";
+        toast.error(errorMsg);
+      }
+      
       if (import.meta.env.DEV) {
         console.error("❌ Error actualizando estado OC:", error.response?.data || error);
       }
@@ -660,6 +687,11 @@ export default function OcGestionPage() {
     });
     setEditingId(oc.id);
     setShowForm(true);
+    
+    // Scroll al formulario para mejorar UX
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
   };
 
   const filteredOcs = ocs?.filter((oc: any) => {
@@ -698,6 +730,10 @@ export default function OcGestionPage() {
         case "numeroOc":
           aValue = a.numeroOc || "";
           bValue = b.numeroOc || "";
+          break;
+        case "incidenteOc":
+          aValue = a.incidenteOc || "";
+          bValue = b.incidenteOc || "";
           break;
         case "proveedor":
           aValue = a.proveedorRef?.razonSocial || a.proveedor || "";
@@ -817,6 +853,7 @@ export default function OcGestionPage() {
 
       {/* Formulario de registro/edición */}
       {showForm && (
+        <div ref={formRef}>
         <Card>
           <CardHeader>
             <h2 className="text-lg font-medium">{editingId ? "Editar OC" : "Nueva Orden de Compra"}</h2>
@@ -1086,21 +1123,25 @@ export default function OcGestionPage() {
                 )}
               </div>
 
-              {/* Documentos adjuntos - solo mostrar si es edición de OC existente */}
-              {editingId && (
-                <div className="md:col-span-3">
-                  <label className="block text-sm font-medium mb-1">Cotizaciones (PDF)</label>
-                  <OcFileUploader
-                    ocId={editingId}
-                    disabled={!['PENDIENTE', 'PROCESAR'].includes(form.estado)}
-                  />
-                  {!['PENDIENTE', 'PROCESAR'].includes(form.estado) && (
-                    <p className="text-xs text-slate-500 mt-1">
-                      Los documentos no se pueden modificar en estado {form.estado.replace(/_/g, ' ')}
-                    </p>
-                  )}
-                </div>
-              )}
+              {/* Documentos adjuntos - disponible en creación y edición */}
+              <div className="md:col-span-3">
+                <label className="block text-sm font-medium mb-1">Cotizaciones (PDF)</label>
+                <OcFileUploader
+                  ocId={editingId}
+                  disabled={editingId ? !['PENDIENTE', 'PROCESAR'].includes(form.estado) : false}
+                  onFilesChange={setPendingFiles}
+                />
+                {editingId && !['PENDIENTE', 'PROCESAR'].includes(form.estado) && (
+                  <p className="text-xs text-slate-500 mt-1">
+                    Los documentos no se pueden modificar en estado {form.estado.replace(/_/g, ' ')}
+                  </p>
+                )}
+                {!editingId && (
+                  <p className="text-xs text-slate-500 mt-1">
+                    Los archivos se subirán automáticamente al guardar la OC
+                  </p>
+                )}
+              </div>
 
               <div className="md:col-span-3">
                 <label className="block text-sm font-medium mb-1">Comentario</label>
@@ -1123,6 +1164,7 @@ export default function OcGestionPage() {
             </div>
           </CardContent>
         </Card>
+        </div>
       )}
 
       {/* Tabla de OCs */}
@@ -1214,6 +1256,9 @@ export default function OcGestionPage() {
                     <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("numeroOc")}>
                       Número OC {sortConfig.key === "numeroOc" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
+                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("incidenteOc")}>
+                      Incidente {sortConfig.key === "incidenteOc" && (sortConfig.direction === "asc" ? "↑" : "↓")}
+                    </Th>
                     <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("proveedor")}>
                       Proveedor {sortConfig.key === "proveedor" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
@@ -1239,7 +1284,8 @@ export default function OcGestionPage() {
                 <tbody>
                   {sortedOcs.map((oc: any) => (
                     <tr key={oc.id}>
-                      <Td>{oc.numeroOc || (oc.incidenteOc ? `INC ${oc.incidenteOc}` : "PENDIENTE")}</Td>
+                      <Td>{oc.numeroOc || "PENDIENTE"}</Td>
+                      <Td>{oc.incidenteOc || "-"}</Td>
                       <Td>{oc.proveedorRef?.razonSocial || oc.proveedor || "-"}</Td>
                       <Td className="text-xs">{oc.support?.name || "-"}</Td>
                       <Td className="text-xs">

@@ -2,7 +2,6 @@ import React, { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { useAuth } from "../../contexts/AuthContext";
-import { useWebSocket } from "../../hooks/useWebSocket";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
 import FilterSelect from "../../components/ui/FilterSelect";
@@ -283,12 +282,7 @@ export default function OcListadoPage() {
     queryFn: async () => (await api.get("/ocs")).data
   });
 
-  // WebSocket para actualizaciones en tiempo real
-  useWebSocket({
-    onOcStatusChange: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["ocs"] });
-    }
-  });
+  // WebSocket se maneja centralizadamente en WebSocketProvider
 
   // Obtener usuario actual para filtro por defecto
   const { user: currentUser } = useAuth();

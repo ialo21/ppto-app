@@ -2,7 +2,6 @@ import React, { useState, useMemo, useCallback, useEffect, useRef } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { toast } from "sonner";
-import { useWebSocket } from "../../hooks/useWebSocket";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
 import FilterSelect from "../../components/ui/FilterSelect";
@@ -115,17 +114,10 @@ function formatPeriodsRange(periods: { year: number; month: number }[]): string 
 export default function InvoiceGestionPage() {
   const queryClient = useQueryClient();
   const isLocalStatusChangeRef = useRef(false);
+  const formRef = useRef<HTMLDivElement>(null);
 
-  // WebSocket para actualizaciones en tiempo real
-  useWebSocket({
-    onInvoiceStatusChange: (data) => {
-      console.log(`[WS] Factura ${data.invoiceId} cambió a estado ${data.newStatus}`);
-      queryClient.invalidateQueries({ queryKey: ["invoices"] });
-      // NOTA: No mostrar toast aquí para evitar duplicados.
-      // El toast ya se muestra en las mutations cuando el usuario actual cambia el estado.
-      // Este handler es principalmente para sincronizar cambios hechos por otros usuarios/sistemas.
-    }
-  });
+  // WebSocket se maneja centralizadamente en WebSocketProvider
+  // Las actualizaciones de estado se reflejan automáticamente vía invalidación de queries
 
   // Queries
   const { data: invoices, isLoading } = useQuery<Invoice[]>({
@@ -576,6 +568,11 @@ export default function InvoiceGestionPage() {
     
     setFormMode('edit');
     setShowForm(true);
+    
+    // Scroll al formulario para mejorar UX
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
   };
 
   // Auto-distribuir porcentajes entre CECOs
@@ -830,6 +827,7 @@ export default function InvoiceGestionPage() {
 
       {/* Formulario de Creación/Edición */}
       {showForm && (
+        <div ref={formRef}>
         <Card>
         <CardHeader>
           <h2 className="text-lg font-medium">{formMode === 'edit' ? "Editar Factura" : "Nueva Factura"}</h2>
@@ -1309,6 +1307,7 @@ export default function InvoiceGestionPage() {
           </div>
         </CardContent>
       </Card>
+      </div>
       )}
 
       {/* Filtros y Tabla */}

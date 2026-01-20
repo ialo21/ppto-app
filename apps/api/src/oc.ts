@@ -166,6 +166,14 @@ export async function registerOcRoutes(app: FastifyInstance) {
 
     const data = parsed.data;
 
+    // VALIDACIÓN DE NEGOCIO: No permitir crear OC con estado PROCESAR sin artículo
+    if (data.estado === "PROCESAR" && !data.articuloId) {
+      return reply.code(400).send({ 
+        error: "No se puede crear OC en estado PROCESAR",
+        message: "La OC debe tener un artículo asignado para poder procesarse"
+      });
+    }
+
     // Determinar CECOs a validar (nuevo array o legacy cecoId único)
     const cecoIdsToValidate = data.costCenterIds || (data.cecoId ? [data.cecoId] : []);
 
@@ -304,6 +312,17 @@ export async function registerOcRoutes(app: FastifyInstance) {
       include: { costCenters: true }
     });
     if (!existing) return reply.code(404).send({ error: "OC no encontrada" });
+
+    // VALIDACIÓN DE NEGOCIO: No permitir cambiar a PROCESAR sin artículo
+    if (data.estado === "PROCESAR") {
+      const articuloIdToCheck = data.articuloId !== undefined ? data.articuloId : existing.articuloId;
+      if (!articuloIdToCheck) {
+        return reply.code(400).send({ 
+          error: "No se puede cambiar a estado PROCESAR",
+          message: "La OC debe tener un artículo asignado para poder procesarse"
+        });
+      }
+    }
 
     // Determinar CECOs a validar
     const supportIdToValidate = data.supportId ?? existing.supportId;
@@ -447,6 +466,25 @@ export async function registerOcRoutes(app: FastifyInstance) {
         error: "Estado inválido", 
         validEstados 
       });
+    }
+
+    // VALIDACIÓN DE NEGOCIO: No permitir cambiar a PROCESAR sin artículo
+    if (estado === "PROCESAR") {
+      const oc = await prisma.oC.findUnique({
+        where: { id },
+        select: { articuloId: true }
+      });
+
+      if (!oc) {
+        return reply.code(404).send({ error: "OC no encontrada" });
+      }
+
+      if (!oc.articuloId) {
+        return reply.code(400).send({ 
+          error: "No se puede cambiar a estado PROCESAR",
+          message: "La OC debe tener un artículo asignado para poder procesarse"
+        });
+      }
     }
 
     try {

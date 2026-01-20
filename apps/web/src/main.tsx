@@ -7,6 +7,7 @@ import { Toaster } from "sonner";
 import { Home, Wallet, FileText, BarChart3, Archive, ShoppingCart, Calendar, Menu, X, Sparkles, Shield, LogOut, User, ClipboardCheck, FileText as Contratos } from "lucide-react";
 import Button from "./components/ui/Button";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { WebSocketProvider } from "./contexts/WebSocketContext";
 
 const qc = new QueryClient({
   defaultOptions: {
@@ -532,7 +533,9 @@ const router = createBrowserRouter([
 createRoot(document.getElementById("root")!).render(
   <QueryClientProvider client={qc}>
     <AuthProvider>
-      <RouterProvider router={router} />
+      <WebSocketProvider>
+        <RouterProvider router={router} />
+      </WebSocketProvider>
     </AuthProvider>
   </QueryClientProvider>
 );

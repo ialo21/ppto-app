@@ -13,9 +13,11 @@ import ResponsableSelector from "../../components/ResponsableSelector";
 import StatusMultiSelect from "../../components/ui/StatusMultiSelect";
 import ProviderMultiSelect, { ProviderOption } from "../../components/ui/ProviderMultiSelect";
 import UserMultiSelect, { UserOption } from "../../components/ui/UserMultiSelect";
+import SupportMultiSelect, { SupportOption } from "../../components/ui/SupportMultiSelect";
 import { formatNumber } from "../../utils/numberFormat";
 import { formatPeriodLabel } from "../../utils/periodFormat";
 import ProveedorSelector from "../../components/ProveedorSelector";
+import { Pencil, Copy, Trash2 } from "lucide-react";
 
 type OC = {
   id: number;
@@ -149,7 +151,8 @@ export default function InvoiceGestionPage() {
     docType: "", 
     numeroOc: "",
     selectedProviders: [] as string[],
-    selectedUsers: [] as string[]
+    selectedUsers: [] as string[],
+    selectedSupports: [] as string[]  // Multi-select de sustentos
   });
 
   // Filtrado parcial para opciones de filtros interconectados
@@ -191,6 +194,13 @@ export default function InvoiceGestionPage() {
       });
     }
 
+    if (excludeFilter !== 'supports' && filters.selectedSupports.length > 0) {
+      result = result.filter(inv => {
+        const supportName = inv.oc?.support?.name || inv.support?.name;
+        return supportName && filters.selectedSupports.includes(supportName);
+      });
+    }
+
     return result;
   };
 
@@ -205,7 +215,23 @@ export default function InvoiceGestionPage() {
       }
     });
     return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
-  }, [invoices, filters.selectedEstados, filters.docType, filters.numeroOc, filters.selectedUsers]);
+  }, [invoices, filters.selectedEstados, filters.docType, filters.numeroOc, filters.selectedUsers, filters.selectedSupports]);
+
+  const availableSupports: SupportOption[] = useMemo(() => {
+    const partialData = getPartiallyFilteredInvoices('supports');
+    const map = new Map<string, SupportOption>();
+    partialData.forEach((inv: any) => {
+      const supportName = inv.oc?.support?.name || inv.support?.name;
+      if (supportName && !map.has(supportName)) {
+        map.set(supportName, { 
+          value: supportName, 
+          label: supportName,
+          code: null
+        });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [invoices, filters.selectedEstados, filters.docType, filters.numeroOc, filters.selectedUsers, filters.selectedProviders]);
 
   const availableUsers: UserOption[] = useMemo(() => {
     const partialData = getPartiallyFilteredInvoices('users');
@@ -230,7 +256,7 @@ export default function InvoiceGestionPage() {
       const nameB = b.name || b.email;
       return nameA.localeCompare(nameB);
     });
-  }, [invoices, filters.selectedEstados, filters.docType, filters.numeroOc, filters.selectedProviders]);
+  }, [invoices, filters.selectedEstados, filters.docType, filters.numeroOc, filters.selectedProviders, filters.selectedSupports]);
 
   const { data: supports } = useQuery({
     queryKey: ["supports"],
@@ -396,6 +422,10 @@ export default function InvoiceGestionPage() {
           inv.proveedor?.razonSocial ||
           "Sin proveedor";
         if (!filters.selectedProviders.includes(proveedor)) return false;
+      }
+      if (filters.selectedSupports.length > 0) {
+        const supportName = inv.oc?.support?.name || inv.support?.name;
+        if (!supportName || !filters.selectedSupports.includes(supportName)) return false;
       }
       return true;
     });
@@ -567,6 +597,67 @@ export default function InvoiceGestionPage() {
     );
     
     setFormMode('edit');
+    setShowForm(true);
+    
+    // Scroll al formulario para mejorar UX
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  };
+  
+  // Función para duplicar una factura
+  const handleDuplicate = (invoice: Invoice) => {
+    // Cargar datos de la factura en el formulario (similar a editar, pero sin ID)
+    setForm({
+      id: "",  // Sin ID = nueva factura
+      ocId: invoice.ocId ? String(invoice.ocId) : "",
+      supportId: invoice.supportId ? String(invoice.supportId) : "",
+      responsableUserId: invoice.createdByUser?.id || null,
+      docType: invoice.docType,
+      numberNorm: "",  // Dejar vacío para que el usuario ingrese el nuevo número
+      montoSinIgv: invoice.montoSinIgv ? String(invoice.montoSinIgv) : "",
+      exchangeRateOverride: invoice.exchangeRateOverride ? String(invoice.exchangeRateOverride) : "",
+      ultimusIncident: invoice.ultimusIncident || "",
+      detalle: invoice.detalle || "",
+      proveedorId: (invoice as any).proveedorId || null,
+      proveedor: (invoice as any).proveedor?.razonSocial || invoice.oc?.proveedor || "",
+      moneda: invoice.oc?.moneda || invoice.currency || "PEN",
+      mesContable: "",  // Limpiar mes contable en duplicación
+      tcReal: ""  // Limpiar TC real en duplicación
+    });
+    setHasOC(!!invoice.ocId);
+    
+    // Establecer rango de periodos desde/hasta
+    if (invoice.periods && invoice.periods.length > 0) {
+      const sortedPeriods = [...invoice.periods].sort((a, b) => {
+        const aVal = a.period.year * 100 + a.period.month;
+        const bVal = b.period.year * 100 + b.period.month;
+        return aVal - bVal;
+      });
+      setPeriodFromId(sortedPeriods[0].periodId);
+      setPeriodToId(sortedPeriods[sortedPeriods.length - 1].periodId);
+    }
+    
+    // No cargar mes contable en duplicación
+    setMesContablePeriodId(null);
+    
+    // Cargar allocations (convertir montos a porcentajes si es necesario)
+    const montoTotal = invoice.montoSinIgv ? Number(invoice.montoSinIgv) : 0;
+    setAllocations(
+      invoice.costCenters?.map(cc => {
+        let percentage = cc.percentage ? Number(cc.percentage) : undefined;
+        // Si no hay percentage pero hay amount, calcularlo
+        if (!percentage && cc.amount && montoTotal > 0) {
+          percentage = (Number(cc.amount) / montoTotal) * 100;
+        }
+        return {
+          costCenterId: cc.costCenterId,
+          percentage: percentage || 0
+        };
+      }) || []
+    );
+    
+    setFormMode('create');  // Modo creación para duplicar
     setShowForm(true);
     
     // Scroll al formulario para mejorar UX
@@ -1038,6 +1129,64 @@ export default function InvoiceGestionPage() {
 
             {/* Separador */}
             <div className="col-span-full border-t border-slate-200 pt-4">
+              <h3 className="text-md font-semibold text-slate-700 mb-3">📅 Periodos y Distribución</h3>
+            </div>
+
+            {/* Periodos (rango desde/hasta) */}
+            <div>
+              <label className="block text-sm font-medium mb-1">Periodo Desde *</label>
+              <YearMonthPicker
+                value={periodFromId}
+                onChange={(period) => {
+                  const newFromId = period ? period.id : null;
+                  setPeriodFromId(newFromId);
+                  
+                  // Lógica: Si es cambio manual Y periodToId está vacío → copiar Desde a Hasta
+                  if (!isProgrammaticChangeRef.current && newFromId !== null && periodToId === null) {
+                    setPeriodToId(newFromId);
+                  }
+                }}
+                periods={periods || []}
+                minId={periodMinMax.minId}
+                maxId={periodToId || periodMinMax.maxId}
+                placeholder="Seleccionar período desde..."
+                clearable={false}
+                error={fieldErrors.periodIds}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Periodo Hasta *</label>
+              <YearMonthPicker
+                value={periodToId}
+                onChange={(period) => setPeriodToId(period ? period.id : null)}
+                periods={periods || []}
+                minId={periodFromId || periodMinMax.minId}
+                maxId={periodMinMax.maxId}
+                placeholder="Seleccionar período hasta..."
+                error={fieldErrors.periodIds}
+              />
+              {periodIds.length > 0 && (
+                <p className="text-xs text-slate-600 mt-1">
+                  {periodIds.length} mes(es) seleccionado(s)
+                </p>
+              )}
+            </div>
+
+            {/* Detalle */}
+            <div className="md:col-span-3">
+              <label className="block text-sm font-medium mb-1">Detalle</label>
+              <Input
+                placeholder="Detalle (opcional)"
+                value={form.detalle}
+                onChange={(e) => handleFormChange("detalle", e.target.value)}
+                className={fieldErrors.detalle ? "border-red-500" : ""}
+              />
+              {fieldErrors.detalle && <p className="text-xs text-red-600 mt-1">{fieldErrors.detalle}</p>}
+            </div>
+
+            {/* Separador */}
+            <div className="col-span-full border-t border-slate-200 pt-4">
               <h3 className="text-md font-semibold text-slate-700 mb-3">📊 Datos Contables</h3>
             </div>
 
@@ -1097,64 +1246,6 @@ export default function InvoiceGestionPage() {
                 </p>
               </div>
             )}
-
-            {/* Separador */}
-            <div className="col-span-full border-t border-slate-200 pt-4">
-              <h3 className="text-md font-semibold text-slate-700 mb-3">📅 Periodos y Distribución</h3>
-            </div>
-
-            {/* Periodos (rango desde/hasta) */}
-            <div>
-              <label className="block text-sm font-medium mb-1">Periodo Desde *</label>
-              <YearMonthPicker
-                value={periodFromId}
-                onChange={(period) => {
-                  const newFromId = period ? period.id : null;
-                  setPeriodFromId(newFromId);
-                  
-                  // Lógica: Si es cambio manual Y periodToId está vacío → copiar Desde a Hasta
-                  if (!isProgrammaticChangeRef.current && newFromId !== null && periodToId === null) {
-                    setPeriodToId(newFromId);
-                  }
-                }}
-                periods={periods || []}
-                minId={periodMinMax.minId}
-                maxId={periodToId || periodMinMax.maxId}
-                placeholder="Seleccionar período desde..."
-                clearable={false}
-                error={fieldErrors.periodIds}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Periodo Hasta *</label>
-              <YearMonthPicker
-                value={periodToId}
-                onChange={(period) => setPeriodToId(period ? period.id : null)}
-                periods={periods || []}
-                minId={periodFromId || periodMinMax.minId}
-                maxId={periodMinMax.maxId}
-                placeholder="Seleccionar período hasta..."
-                error={fieldErrors.periodIds}
-              />
-              {periodIds.length > 0 && (
-                <p className="text-xs text-slate-600 mt-1">
-                  {periodIds.length} mes(es) seleccionado(s)
-                </p>
-              )}
-            </div>
-
-            {/* Detalle */}
-            <div className="md:col-span-3">
-              <label className="block text-sm font-medium mb-1">Detalle</label>
-              <Input
-                placeholder="Detalle (opcional)"
-                value={form.detalle}
-                onChange={(e) => handleFormChange("detalle", e.target.value)}
-                className={fieldErrors.detalle ? "border-red-500" : ""}
-              />
-              {fieldErrors.detalle && <p className="text-xs text-red-600 mt-1">{fieldErrors.detalle}</p>}
-            </div>
           </div>
 
           {/* Distribución por CECO */}
@@ -1316,6 +1407,7 @@ export default function InvoiceGestionPage() {
           <h2 className="text-lg font-medium">Listado de Facturas</h2>
         </CardHeader>
         <CardContent>
+          {/* Primera fila de filtros */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
             <UserMultiSelect
               label="Responsable"
@@ -1331,6 +1423,14 @@ export default function InvoiceGestionPage() {
               selectedProviders={filters.selectedProviders}
               onChange={(selected) => setFilters(f => ({ ...f, selectedProviders: selected }))}
               placeholder="Todos los proveedores"
+            />
+
+            <SupportMultiSelect
+              label="Sustentos"
+              supports={availableSupports}
+              selectedSupports={filters.selectedSupports}
+              onChange={(selected) => setFilters(f => ({ ...f, selectedSupports: selected }))}
+              placeholder="Todos los sustentos"
             />
 
             <FilterSelect
@@ -1349,6 +1449,21 @@ export default function InvoiceGestionPage() {
               className="w-full"
             />
 
+            <div>
+              <label className="block text-xs text-brand-text-secondary font-medium mb-1">Número OC</label>
+              <Input
+                placeholder="Buscar por Número OC"
+                value={filters.numeroOc}
+                onChange={e => {
+                  setFilters(f => ({ ...f, numeroOc: e.target.value }));
+                  setSortConfig(DEFAULT_SORT);
+                }}
+              />
+            </div>
+          </div>
+          
+          {/* Segunda fila de filtros */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 mt-3">
             <StatusMultiSelect
               label="Estado"
               placeholder="Todos los estados"
@@ -1369,18 +1484,6 @@ export default function InvoiceGestionPage() {
                 setSortConfig(DEFAULT_SORT);
               }}
             />
-
-            <div>
-              <label className="block text-xs text-brand-text-secondary font-medium mb-1">Número OC</label>
-              <Input
-                placeholder="Buscar por Número OC"
-                value={filters.numeroOc}
-                onChange={e => {
-                  setFilters(f => ({ ...f, numeroOc: e.target.value }));
-                  setSortConfig(DEFAULT_SORT);
-                }}
-              />
-            </div>
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2 items-center justify-between">
@@ -1390,6 +1493,9 @@ export default function InvoiceGestionPage() {
               )}
               {filters.selectedProviders.length > 0 && (
                 <span>Proveedores: {filters.selectedProviders.length}</span>
+              )}
+              {filters.selectedSupports.length > 0 && (
+                <span>Sustentos: {filters.selectedSupports.length}</span>
               )}
             </div>
             <Button
@@ -1413,40 +1519,40 @@ export default function InvoiceGestionPage() {
               <Table>
                 <thead>
                   <tr>
-                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("numberNorm")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("numberNorm")}>
                       Número {sortConfig.key === "numberNorm" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("docType")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("docType")}>
                       Tipo {sortConfig.key === "docType" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("numeroOc")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("numeroOc")}>
                       OC {sortConfig.key === "numeroOc" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("proveedor")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("proveedor")}>
                       Proveedor {sortConfig.key === "proveedor" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("currency")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("currency")}>
                       Moneda {sortConfig.key === "currency" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("montoSinIgv")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("montoSinIgv")}>
                       Monto sin IGV {sortConfig.key === "montoSinIgv" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th>Periodos</Th>
-                    <Th>CECOs</Th>
-                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("ultimusIncident")}>
+                    <Th className="text-center">Periodos</Th>
+                    <Th className="text-center">CECOs</Th>
+                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("ultimusIncident")}>
                       Incidente {sortConfig.key === "ultimusIncident" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("statusCurrent")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("statusCurrent")}>
                       Estado {sortConfig.key === "statusCurrent" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th>Acciones</Th>
+                    <Th className="text-center">Acciones</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredInvoices.map((inv: Invoice) => (
                     <tr key={inv.id}>
-                      <Td>{inv.numberNorm || "-"}</Td>
-                      <Td>
+                      <Td className="text-center">{inv.numberNorm || "-"}</Td>
+                      <Td className="text-center">
                         <span
                           className={`px-2 py-1 text-xs rounded ${
                             inv.docType === "FACTURA" ? "bg-blue-100 text-blue-800" : "bg-orange-100 text-orange-800"
@@ -1455,18 +1561,23 @@ export default function InvoiceGestionPage() {
                           {inv.docType}
                         </span>
                       </Td>
-                      <Td>{inv.oc?.numeroOc || "-"}</Td>
-                      <Td>{inv.oc?.proveedorRef?.razonSocial || inv.oc?.proveedor || inv.proveedor?.razonSocial || "-"}</Td>
-                      <Td>{inv.currency}</Td>
-                      <Td className="text-right">{inv.montoSinIgv ? formatNumber(inv.montoSinIgv) : "-"}</Td>
-                      <Td className="text-xs">
+                      <Td className="text-center">{inv.oc?.numeroOc || "-"}</Td>
+                      <Td
+                        className="max-w-[220px] whitespace-nowrap truncate text-center"
+                        title={inv.oc?.proveedorRef?.razonSocial || inv.oc?.proveedor || inv.proveedor?.razonSocial || "-"}
+                      >
+                        {inv.oc?.proveedorRef?.razonSocial || inv.oc?.proveedor || inv.proveedor?.razonSocial || "-"}
+                      </Td>
+                      <Td className="text-center">{inv.currency}</Td>
+                      <Td className="text-center">{inv.montoSinIgv ? formatNumber(inv.montoSinIgv) : "-"}</Td>
+                      <Td className="text-xs text-center">
                         {inv.periods && inv.periods.length > 0
                           ? formatPeriodsRange(inv.periods.map(p => p.period))
                           : "-"}
                       </Td>
-                      <Td className="text-xs">
+                      <Td className="text-xs text-center">
                         {inv.costCenters && inv.costCenters.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
+                          <div className="flex flex-wrap gap-1 justify-center">
                             {inv.costCenters.map((cc: any) => (
                               <span
                                 key={cc.id}
@@ -1480,8 +1591,8 @@ export default function InvoiceGestionPage() {
                           "-"
                         )}
                       </Td>
-                      <Td className="text-xs">{inv.ultimusIncident || "-"}</Td>
-                      <Td>
+                      <Td className="text-xs text-center">{inv.ultimusIncident || "-"}</Td>
+                      <Td className="text-center">
                         <StatusChip
                           currentStatus={inv.statusCurrent}
                           onStatusChange={(newStatus) =>
@@ -1490,14 +1601,25 @@ export default function InvoiceGestionPage() {
                           isLoading={updateStatusMutation.isPending && updateStatusMutation.variables?.id === inv.id}
                         />
                       </Td>
-                      <Td>
-                        <div className="flex flex-wrap gap-1">
+                      <Td className="text-center">
+                        <div className="flex items-center gap-1">
                           <Button
                             size="sm"
                             variant="ghost"
                             onClick={() => openEditForm(inv)}
+                            title="Editar factura"
+                            className="p-2 h-8 w-8"
                           >
-                            Editar
+                            <Pencil size={16} />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDuplicate(inv)}
+                            title="Duplicar factura"
+                            className="p-2 h-8 w-8"
+                          >
+                            <Copy size={16} />
                           </Button>
                           <Button
                             size="sm"
@@ -1507,8 +1629,10 @@ export default function InvoiceGestionPage() {
                                 deleteMutation.mutate(inv.id);
                               }
                             }}
+                            title="Eliminar factura"
+                            className="p-2 h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
                           >
-                            Eliminar
+                            <Trash2 size={16} />
                           </Button>
                         </div>
                       </Td>

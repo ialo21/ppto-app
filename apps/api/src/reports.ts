@@ -911,4 +911,238 @@ export async function registerReportRoutes(app: FastifyInstance) {
       totals 
     };
   });
+
+  /**
+   * GET /reports/dashboard/sustento/:supportId/invoices
+   * Endpoint para obtener el desglose de facturas que componen el gasto de un sustento
+   * 
+   * Query params (hereda los mismos filtros del dashboard):
+   * - year: Año a consultar
+   * - mode: "execution" | "contable"
+   * - periodFromId, periodToId: Rango de períodos
+   * 
+   * Response:
+   * - supportInfo: Información del sustento
+   * - invoices: Array de facturas con sus detalles
+   * - totals: Totales del sustento
+   */
+  app.get("/reports/dashboard/sustento/:supportId/invoices", async (req, reply) => {
+    const supportId = Number((req.params as any).supportId);
+    if (!supportId) return reply.code(400).send({ error: "supportId requerido" });
+
+    const q = req.query as any;
+    const year = Number(q.year) || new Date().getFullYear();
+    const mode = q.mode === "contable" ? "contable" : "execution";
+    const periodFromId = q.periodFromId ? Number(q.periodFromId) : null;
+    const periodToId = q.periodToId ? Number(q.periodToId) : null;
+
+    // Obtener información del sustento
+    const support = await prisma.support.findUnique({
+      where: { id: supportId },
+      include: {
+        managementRef: true,
+        areaRef: true,
+        expensePackage: true
+      }
+    });
+
+    if (!support) {
+      return reply.code(404).send({ error: "Sustento no encontrado" });
+    }
+
+    // Determinar períodos a consultar
+    const allPeriods = await prisma.period.findMany({
+      where: { year },
+      orderBy: { month: "asc" }
+    });
+
+    let periods = allPeriods;
+    if (periodFromId && periodToId) {
+      const fromPeriod = allPeriods.find(p => p.id === periodFromId);
+      const toPeriod = allPeriods.find(p => p.id === periodToId);
+      
+      if (fromPeriod && toPeriod) {
+        const fromValue = fromPeriod.year * 100 + fromPeriod.month;
+        const toValue = toPeriod.year * 100 + toPeriod.month;
+        
+        periods = allPeriods.filter(p => {
+          const pValue = p.year * 100 + p.month;
+          return pValue >= fromValue && pValue <= toValue;
+        });
+      }
+    } else if (periodFromId) {
+      const fromPeriod = allPeriods.find(p => p.id === periodFromId);
+      if (fromPeriod) {
+        const fromValue = fromPeriod.year * 100 + fromPeriod.month;
+        periods = allPeriods.filter(p => {
+          const pValue = p.year * 100 + p.month;
+          return pValue >= fromValue;
+        });
+      }
+    } else if (periodToId) {
+      const toPeriod = allPeriods.find(p => p.id === periodToId);
+      if (toPeriod) {
+        const toValue = toPeriod.year * 100 + toPeriod.month;
+        periods = allPeriods.filter(p => {
+          const pValue = p.year * 100 + p.month;
+          return pValue <= toValue;
+        });
+      }
+    }
+
+    const periodIds = periods.map(p => p.id);
+
+    let invoices: any[] = [];
+    let totalAmount = 0;
+
+    if (mode === "execution") {
+      // Modo Ejecución: facturas por distribución de períodos PPTO
+      const invoiceResults = await prisma.invoice.findMany({
+        where: {
+          periods: {
+            some: { periodId: { in: periodIds } }
+          },
+          OR: [
+            { oc: { supportId } },      // Facturas con OC del sustento
+            { supportId }                // Facturas directas del sustento
+          ]
+        },
+        include: {
+          periods: true,
+          oc: {
+            include: { 
+              support: true,
+              proveedorRef: true
+            }
+          },
+          support: true,
+          proveedor: true,
+          vendor: true
+        },
+        orderBy: [
+          { numberNorm: "asc" }
+        ]
+      });
+
+      // Procesar facturas con distribución
+      invoices = invoiceResults.map(inv => {
+        const support = inv.oc?.support || inv.support;
+        const proveedor = inv.oc?.proveedorRef || inv.proveedor;
+        
+        let montoPEN = Number(inv.montoPEN_tcReal ?? inv.montoPEN_tcEstandar ?? 0);
+        if (montoPEN === 0 && inv.currency === "PEN" && inv.montoSinIgv) {
+          montoPEN = Number(inv.montoSinIgv);
+        }
+        
+        // Contar períodos relevantes
+        const relevantPeriods = inv.periods.filter(p => periodIds.includes(p.periodId));
+        const numPeriods = inv.periods.length || 1;
+        const numRelevantPeriods = relevantPeriods.length;
+        
+        // Monto prorrateado
+        const amountForRange = (montoPEN / numPeriods) * numRelevantPeriods;
+        totalAmount += amountForRange;
+
+        return {
+          id: inv.id,
+          numeroFactura: inv.numberNorm || "Sin número",
+          proveedor: proveedor?.razonSocial || inv.vendor?.legalName || "Sin proveedor",
+          ruc: proveedor?.ruc || inv.vendor?.taxId || "",
+          ocNumero: inv.oc?.codigo || null,
+          moneda: inv.currency,
+          montoOriginal: Number(inv.montoSinIgv || 0),
+          montoPEN: amountForRange,
+          montoTotal: montoPEN,
+          periodos: inv.periods.map(p => {
+            const period = periods.find(per => per.id === p.periodId);
+            return period?.label || `${period?.year}-${String(period?.month).padStart(2, '0')}`;
+          }).join(", "),
+          numPeriodos: inv.periods.length,
+          periodosRelevantes: numRelevantPeriods,
+          status: inv.statusCurrent,
+          mesContable: inv.mesContable,
+          fechaEmision: inv.issueDate,
+          descripcion: inv.oc?.descripcion || "Sin descripción"
+        };
+      });
+
+    } else {
+      // Modo Contable: facturas por mes contable
+      const mesContableList = periods.map(p => `${p.year}-${String(p.month).padStart(2, "0")}`);
+
+      const invoiceResults = await prisma.invoice.findMany({
+        where: {
+          mesContable: { in: mesContableList },
+          OR: [
+            { oc: { supportId } },
+            { supportId }
+          ]
+        },
+        include: {
+          oc: {
+            include: { 
+              support: true,
+              proveedorRef: true
+            }
+          },
+          support: true,
+          proveedor: true,
+          vendor: true
+        },
+        orderBy: [
+          { mesContable: "asc" },
+          { numberNorm: "asc" }
+        ]
+      });
+
+      invoices = invoiceResults.map(inv => {
+        const support = inv.oc?.support || inv.support;
+        const proveedor = inv.oc?.proveedorRef || inv.proveedor;
+        
+        let montoPEN = Number(inv.montoPEN_tcReal ?? inv.montoPEN_tcEstandar ?? 0);
+        if (montoPEN === 0 && inv.currency === "PEN" && inv.montoSinIgv) {
+          montoPEN = Number(inv.montoSinIgv);
+        }
+        
+        totalAmount += montoPEN;
+
+        return {
+          id: inv.id,
+          numeroFactura: inv.numberNorm || "Sin número",
+          proveedor: proveedor?.razonSocial || inv.vendor?.legalName || "Sin proveedor",
+          ruc: proveedor?.ruc || inv.vendor?.taxId || "",
+          ocNumero: inv.oc?.codigo || null,
+          moneda: inv.currency,
+          montoOriginal: Number(inv.montoSinIgv || 0),
+          montoPEN: montoPEN,
+          status: inv.statusCurrent,
+          mesContable: inv.mesContable,
+          fechaEmision: inv.issueDate,
+          descripcion: inv.oc?.descripcion || "Sin descripción"
+        };
+      });
+    }
+
+    return {
+      supportInfo: {
+        id: support.id,
+        code: support.code,
+        name: support.name,
+        management: support.managementRef?.name || "",
+        area: support.areaRef?.name || "",
+        expensePackage: support.expensePackage?.name || ""
+      },
+      mode,
+      year,
+      periodRange: {
+        from: periods[0]?.label || "",
+        to: periods[periods.length - 1]?.label || ""
+      },
+      invoices,
+      totals: {
+        count: invoices.length,
+        totalAmount
+      }
+    };
+  });
 }

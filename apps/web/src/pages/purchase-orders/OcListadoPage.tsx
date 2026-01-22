@@ -12,6 +12,7 @@ import OcStatusTimeline from "../../components/OcStatusTimeline";
 import UserMultiSelect, { UserOption } from "../../components/ui/UserMultiSelect";
 import ProviderMultiSelect, { ProviderOption } from "../../components/ui/ProviderMultiSelect";
 import StatusMultiSelect from "../../components/ui/StatusMultiSelect";
+import SupportMultiSelect, { SupportOption } from "../../components/ui/SupportMultiSelect";
 import { formatNumber } from "../../utils/numberFormat";
 import { formatPeriodLabel } from "../../utils/periodFormat";
 import { ExternalLink, TrendingUp, Package, Users, DollarSign, Clock } from "lucide-react";
@@ -293,7 +294,8 @@ export default function OcListadoPage() {
     selectedEstados: ESTADOS_OC.filter(e => e !== "ATENDIDO"),  // Por defecto: todo menos ATENDIDO
     years: [] as string[],  // Multi-select de años
     selectedUsers: [] as string[],
-    selectedProviders: [] as string[]
+    selectedProviders: [] as string[],
+    selectedSupports: [] as string[]  // Multi-select de sustentos
   });
 
 
@@ -343,6 +345,13 @@ export default function OcListadoPage() {
       result = result.filter((oc: any) => {
         const proveedor = oc.proveedorRef?.razonSocial || oc.proveedor || "Sin proveedor";
         return filters.selectedProviders.includes(proveedor);
+      });
+    }
+
+    if (excludeFilter !== 'supports' && filters.selectedSupports.length > 0) {
+      result = result.filter((oc: any) => {
+        const supportName = oc.support?.name;
+        return supportName && filters.selectedSupports.includes(supportName);
       });
     }
 
@@ -432,7 +441,24 @@ export default function OcListadoPage() {
       }
     });
     return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
-  }, [ocs, filters.years, filters.selectedUsers, filters.selectedEstados, filters.moneda, filters.search]);
+  }, [ocs, filters.years, filters.selectedUsers, filters.selectedSupports, filters.selectedEstados, filters.moneda, filters.search]);
+
+  // Sustentos únicos para filtro (basado en datos filtrados)
+  const availableSupports: SupportOption[] = useMemo(() => {
+    const partialData = getPartiallyFilteredOcs('supports');
+    const map = new Map<string, SupportOption>();
+    partialData.forEach((oc: any) => {
+      const supportName = oc.support?.name;
+      if (supportName && !map.has(supportName)) {
+        map.set(supportName, { 
+          value: supportName, 
+          label: supportName,
+          code: oc.support?.code || null
+        });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [ocs, filters.years, filters.selectedUsers, filters.selectedProviders, filters.selectedEstados, filters.moneda, filters.search]);
 
   // Función de búsqueda y filtrado
   const filteredOcs = useMemo(() => {
@@ -503,6 +529,14 @@ export default function OcListadoPage() {
       result = result.filter((oc: any) => {
         const proveedor = oc.proveedorRef?.razonSocial || oc.proveedor || "Sin proveedor";
         return filters.selectedProviders.includes(proveedor);
+      });
+    }
+    
+    // Filtro por sustentos seleccionados (multi-select)
+    if (filters.selectedSupports.length > 0) {
+      result = result.filter((oc: any) => {
+        const supportName = oc.support?.name;
+        return supportName && filters.selectedSupports.includes(supportName);
       });
     }
     
@@ -629,8 +663,8 @@ export default function OcListadoPage() {
           <h2 className="text-lg font-medium text-brand-text-primary">Filtros de Búsqueda</h2>
         </CardHeader>
         <CardContent>
-          {/* Filtros alineados siguiendo el patrón de otros módulos */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+          {/* Primera fila de filtros */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
             {/* Filtro de Años (multi) */}
             <YearMultiSelect
               label="Años"
@@ -657,8 +691,17 @@ export default function OcListadoPage() {
               placeholder="Todos los proveedores"
             />
             
-            {/* Búsqueda global - más ancho */}
-            <div className="md:col-span-1">
+            {/* Filtro de Sustentos */}
+            <SupportMultiSelect
+              supports={availableSupports}
+              selectedSupports={filters.selectedSupports}
+              onChange={(selected) => setFilters(f => ({ ...f, selectedSupports: selected }))}
+              label="Sustentos"
+              placeholder="Todos los sustentos"
+            />
+            
+            {/* Búsqueda global */}
+            <div>
               <label className="block text-xs text-brand-text-secondary font-medium mb-1">
                 Buscar
               </label>
@@ -681,7 +724,10 @@ export default function OcListadoPage() {
               ]}
               searchable={false}
             />
-            
+          </div>
+          
+          {/* Segunda fila de filtros */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 mt-3">
             {/* Filtro de Estado - Multi-select */}
             <StatusMultiSelect
               label="Estado"
@@ -704,6 +750,11 @@ export default function OcListadoPage() {
               {filters.selectedProviders.length > 0 && (
                 <div className="text-sm text-brand-text-secondary">
                   Filtrando por {filters.selectedProviders.length} proveedor{filters.selectedProviders.length > 1 ? 'es' : ''}
+                </div>
+              )}
+              {filters.selectedSupports.length > 0 && (
+                <div className="text-sm text-brand-text-secondary">
+                  Filtrando por {filters.selectedSupports.length} sustento{filters.selectedSupports.length > 1 ? 's' : ''}
                 </div>
               )}
             </div>

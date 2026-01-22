@@ -187,77 +187,103 @@ function Sidebar({
         onMouseEnter={!isMobile ? onMouseEnter : undefined}
         onMouseLeave={!isMobile ? onMouseLeave : undefined}
       >
-        <nav className="space-y-1">
-          {allowedItems.map(item => {
-            const Icon = item.icon;
-            const hasChildren = item.children && item.children.length > 0;
-            const isExpanded = expandedGroups.has(item.path);
-            
-            // Si tiene hijos, renderizar grupo desplegable
-            if (hasChildren) {
-              return (
-                <div key={item.path}>
-                  {/* Botón padre para expandir/colapsar */}
-                  <button
-                    onClick={() => toggleGroup(item.path)}
-                    className={`${link} w-full justify-between`}
-                    title={item.label}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Icon size={18} className="flex-shrink-0"/>
-                      {(!isCollapsed || isMobile) && <span>{item.label}</span>}
-                    </div>
-                    {(!isCollapsed || isMobile) && (
-                      <svg 
-                        className={`w-4 h-4 chevron-icon transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                        fill="none" 
-                        stroke="currentColor" 
-                        viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    )}
-                  </button>
-                  
-                  {/* Subitems (solo si está expandido y no colapsado) */}
-                  {isExpanded && (!isCollapsed || isMobile) && (
-                    <div className="mt-1 space-y-1">
-                      {item.children.filter(child => 
-                        // hasPermission verifica automáticamente el permiso específico O el padre
-                        hasPermission(child.permission)
-                      ).map(child => (
-                        <NavLink
-                          key={child.path}
-                          to={child.path}
-                          className={({isActive}) => `${sublink} ${isActive ? subactive : ""}`}
-                          title={child.label}
-                          onClick={handleLinkClick}
+        <div className="flex flex-col h-full">
+          {/* Nav con scroll interno */}
+          <nav className="space-y-1 flex-1 overflow-y-auto overflow-x-hidden">
+            {allowedItems.map(item => {
+              const Icon = item.icon;
+              const hasChildren = item.children && item.children.length > 0;
+              const isExpanded = expandedGroups.has(item.path);
+              
+              // Si tiene hijos, renderizar grupo desplegable
+              if (hasChildren) {
+                return (
+                  <div key={item.path}>
+                    {/* Botón padre para expandir/colapsar */}
+                    <button
+                      onClick={() => toggleGroup(item.path)}
+                      className={`${link} w-full justify-between`}
+                      title={item.label}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Icon size={18} className="flex-shrink-0"/>
+                        {(!isCollapsed || isMobile) && <span>{item.label}</span>}
+                      </div>
+                      {(!isCollapsed || isMobile) && (
+                        <svg 
+                          className={`w-4 h-4 chevron-icon transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                          fill="none" 
+                          stroke="currentColor" 
+                          viewBox="0 0 24 24"
                         >
-                          <span>{child.label}</span>
-                        </NavLink>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      )}
+                    </button>
+                    
+                    {/* Subitems (solo si está expandido y no colapsado) */}
+                    {isExpanded && (!isCollapsed || isMobile) && (
+                      <div className="mt-1 space-y-1">
+                        {item.children.filter(child => 
+                          // hasPermission verifica automáticamente el permiso específico O el padre
+                          hasPermission(child.permission)
+                        ).map(child => (
+                          <NavLink
+                            key={child.path}
+                            to={child.path}
+                            className={({isActive}) => `${sublink} ${isActive ? subactive : ""}`}
+                            title={child.label}
+                            onClick={handleLinkClick}
+                          >
+                            <span>{child.label}</span>
+                          </NavLink>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+              
+              // Si no tiene hijos, renderizar link normal
+              return (
+                <NavLink 
+                  key={item.path}
+                  to={item.path} 
+                  end={item.end}
+                  className={({isActive})=>`${link} ${isActive?active:""}`} 
+                  title={item.label}
+                  onClick={handleLinkClick}
+                >
+                  <Icon size={18} className="flex-shrink-0"/>
+                  {(!isCollapsed || isMobile) && <span>{item.label}</span>}
+                </NavLink>
               );
-            }
-            
-            // Si no tiene hijos, renderizar link normal
-            return (
-              <NavLink 
-                key={item.path}
-                to={item.path} 
-                end={item.end}
-                className={({isActive})=>`${link} ${isActive?active:""}`} 
-                title={item.label}
-                onClick={handleLinkClick}
-              >
-                <Icon size={18} className="flex-shrink-0"/>
-                {(!isCollapsed || isMobile) && <span>{item.label}</span>}
-              </NavLink>
-            );
-          })}
-        </nav>
+            })}
+          </nav>
+          
+          {/* Logo IS fijo en la parte inferior */}
+          <div className="flex-shrink-0 pb-3 px-2">
+            {(!isCollapsed || isMobile) ? (
+              // Logo completo cuando está expandido
+              <div className="flex items-center justify-center py-3">
+                <img 
+                  src="/Logo-IS-blanco.png" 
+                  alt="IS Logo" 
+                  className="h-8 w-auto object-contain"
+                />
+              </div>
+            ) : (
+              // Logo icono cuando está colapsado (sin efectos)
+              <div className="flex items-center justify-center py-0.5">
+                <img 
+                  src="/logo-is-icon.png" 
+                  alt="IS" 
+                  className="w-16 h-16 object-contain"
+                />
+              </div>
+            )}
+          </div>
+        </div>
       </aside>
     </>
   );

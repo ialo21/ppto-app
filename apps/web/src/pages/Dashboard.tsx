@@ -5,6 +5,8 @@ import Input from "../components/ui/Input";
 import FilterSelect, { FilterOption } from "../components/ui/FilterSelect";
 import MultiSelectFilter from "../components/ui/MultiSelectFilter";
 import YearMonthPicker from "../components/YearMonthPicker";
+import SustentoInvoicesModal from "../components/SustentoInvoicesModal";
+import KpiDetailModal from "../components/KpiDetailModal";
 import { formatNumberAbbreviated } from "../utils/numberFormat";
 import { 
   ComposedChart, 
@@ -182,13 +184,15 @@ function KpiCard({
   value, 
   icon: Icon, 
   highlighted = false,
-  description
+  description,
+  onClick
 }: { 
   title: string; 
   value: number; 
   icon: React.ElementType;
   highlighted?: boolean;
   description?: string;
+  onClick?: () => void;
 }) {
   return (
     <div 
@@ -196,7 +200,11 @@ function KpiCard({
         ${highlighted ? 'bg-table-total border-brand-primary' : 'bg-white border-brand-border'}
         border rounded-xl p-4 xl:p-5 flex flex-col
         transition-all duration-200 hover:shadow-medium hover:scale-[1.02]
+        ${onClick ? 'cursor-pointer active:scale-[0.98]' : ''}
       `}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
     >
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1">
@@ -464,6 +472,16 @@ export default function Dashboard() {
   const [mode, setMode] = useState<DashboardMode>("execution");
   const [showFilters, setShowFilters] = useState(false);
   
+  // Estados para modales
+  const [selectedSupport, setSelectedSupport] = useState<{ id: number; name: string } | null>(null);
+  const [showSustentoModal, setShowSustentoModal] = useState(false);
+  const [selectedKpi, setSelectedKpi] = useState<{
+    type: "budget" | "executed" | "provisions" | "available" | "resultadoContable";
+    value: number;
+    seriesData: Array<{ label: string; value: number }>;
+  } | null>(null);
+  const [showKpiModal, setShowKpiModal] = useState(false);
+  
   // Filtros (ahora multi-select)
   const [supportIds, setSupportIds] = useState<string[]>([]);
   const [costCenterIds, setCostCenterIds] = useState<string[]>([]);
@@ -646,6 +664,37 @@ export default function Dashboard() {
     
     // Resetear la bandera después del cambio
     isProgrammaticChangeRef.current = false;
+  };
+
+  // Handlers para abrir modales
+  const handleKpiClick = (kpiType: "budget" | "executed" | "provisions" | "available" | "resultadoContable") => {
+    if (!data) return;
+    
+    const seriesDataMap: Record<string, string> = {
+      budget: "budget",
+      executed: "executed",
+      provisions: "provisions",
+      available: "available",
+      resultadoContable: "resultadoContable"
+    };
+    
+    const seriesKey = seriesDataMap[kpiType];
+    const seriesData = data.series.map(s => ({
+      label: s.label,
+      value: (s as any)[seriesKey] || 0
+    }));
+    
+    setSelectedKpi({
+      type: kpiType,
+      value: data.totals[kpiType],
+      seriesData
+    });
+    setShowKpiModal(true);
+  };
+
+  const handleSustentoClick = (supportId: number, supportName: string) => {
+    setSelectedSupport({ id: supportId, name: supportName });
+    setShowSustentoModal(true);
   };
 
   // Calcular métricas adicionales
@@ -965,12 +1014,14 @@ export default function Dashboard() {
                 value={data.totals.budget}
                 icon={Wallet}
                 description={getBudgetLabels(data.budgetType, year).fullLabel}
+                onClick={() => handleKpiClick("budget")}
               />
               <KpiCard
                 title="Ejecutado"
                 value={data.totals.executed}
                 icon={TrendingUp}
                 description={mode === "execution" ? "Ejecución real operativa" : "Ejecutado contable"}
+                onClick={() => handleKpiClick("executed")}
               />
               
               {/* Provisiones YTD - SOLO en modo Contable */}
@@ -980,6 +1031,7 @@ export default function Dashboard() {
                   value={data.totals.provisions}
                   icon={Activity}
                   description="Provisiones acumuladas"
+                  onClick={() => handleKpiClick("provisions")}
                 />
               )}
               
@@ -991,6 +1043,7 @@ export default function Dashboard() {
                   icon={CheckCircle2}
                   highlighted={true}
                   description={getBudgetLabels(data.budgetType, year).availableLabel}
+                  onClick={() => handleKpiClick("available")}
                 />
               ) : (
                 <KpiCard
@@ -999,6 +1052,7 @@ export default function Dashboard() {
                   icon={CheckCircle2}
                   highlighted={true}
                   description="Ejecutado + Provisiones"
+                  onClick={() => handleKpiClick("resultadoContable")}
                 />
               )}
             </div>
@@ -1447,8 +1501,10 @@ export default function Dashboard() {
                                   key={row.supportId}
                                   className={`
                                     ${idx % 2 === 0 ? 'bg-white' : 'bg-brand-background/30'}
-                                    hover:bg-brand-background transition-colors
+                                    hover:bg-blue-50 transition-colors cursor-pointer
                                   `}
+                                  onClick={() => handleSustentoClick(row.supportId, row.supportName)}
+                                  title="Click para ver desglose de facturas"
                                 >
                                   {/* Celda de gerencia solo en primera fila del grupo */}
                                   {idx === 0 ? (
@@ -1460,7 +1516,12 @@ export default function Dashboard() {
                                     </td>
                                   ) : null}
                                   <td className="p-3 text-xs text-brand-text-primary font-medium border-b border-brand-border-light">
-                                    {row.supportName}
+                                    <div className="flex items-center justify-between">
+                                      <span>{row.supportName}</span>
+                                      <span className="text-brand-action text-[10px] opacity-70 hover:opacity-100 transition-opacity">
+                                        📊 Ver facturas
+                                      </span>
+                                    </div>
                                   </td>
                                   <td className="p-3 text-xs text-brand-text-primary text-right font-medium border-b border-brand-border-light">
                                     {formatCurrency(row.budget)}
@@ -1630,6 +1691,44 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════
+            MODALES
+            ══════════════════════════════════════════════════════════════ */}
+        {/* Modal de desglose de facturas por sustento */}
+        {selectedSupport && (
+          <SustentoInvoicesModal
+            isOpen={showSustentoModal}
+            onClose={() => {
+              setShowSustentoModal(false);
+              setSelectedSupport(null);
+            }}
+            supportId={selectedSupport.id}
+            supportName={selectedSupport.name}
+            year={year}
+            mode={mode}
+            periodFromId={periodFromId}
+            periodToId={periodToId}
+          />
+        )}
+
+        {/* Modal de detalle de KPI */}
+        {selectedKpi && data && (
+          <KpiDetailModal
+            isOpen={showKpiModal}
+            onClose={() => {
+              setShowKpiModal(false);
+              setSelectedKpi(null);
+            }}
+            kpiType={selectedKpi.type}
+            value={selectedKpi.value}
+            totalBudget={data.totals.budget}
+            mode={mode}
+            year={year}
+            budgetType={data.budgetType}
+            seriesData={selectedKpi.seriesData}
+          />
         )}
     </div>
   );

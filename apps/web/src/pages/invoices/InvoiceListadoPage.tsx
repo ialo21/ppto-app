@@ -12,6 +12,7 @@ import ProviderMultiSelect, { ProviderOption } from "../../components/ui/Provide
 import StatusMultiSelect from "../../components/ui/StatusMultiSelect";
 import FilterSelect from "../../components/ui/FilterSelect";
 import YearMultiSelect from "../../components/ui/YearMultiSelect";
+import SupportMultiSelect, { SupportOption } from "../../components/ui/SupportMultiSelect";
 import { formatNumber } from "../../utils/numberFormat";
 import { ExternalLink, FileText, Users, DollarSign, TrendingUp, Clock } from "lucide-react";
 
@@ -55,10 +56,14 @@ type Invoice = {
     proveedorRef?: { razonSocial?: string | null; ruc?: string | null } | null;
     solicitanteUser?: { id: number; name: string | null; email: string } | null;
     moneda: string;
+    support?: { id: number; name: string } | null;
   } | null;
   // Proveedor para facturas sin OC
   proveedorId?: number | null;
   proveedor?: { razonSocial?: string | null; ruc?: string | null } | null;
+  // Sustento para facturas sin OC
+  supportId?: number | null;
+  support?: { id: number; name: string } | null;
   createdByUser?: { id: number; name: string | null; email: string } | null;
   approvedByUser?: { id: number; name: string | null; email: string } | null;
   docType: string;
@@ -333,7 +338,8 @@ export default function InvoiceListadoPage() {
     selectedEstados: ESTADOS_FACTURA.filter(e => e !== "PAGADO"),  // Por defecto: todo menos PAGADO
     years: [] as string[],  // Multi-select de años
     selectedUsers: [] as string[],
-    selectedProviders: [] as string[]
+    selectedProviders: [] as string[],
+    selectedSupports: [] as string[]  // Multi-select de sustentos
   });
 
 
@@ -402,6 +408,13 @@ export default function InvoiceListadoPage() {
           inv.proveedor?.razonSocial ||
           "Sin proveedor";
         return filters.selectedProviders.includes(proveedor);
+      });
+    }
+
+    if (excludeFilter !== 'supports' && filters.selectedSupports.length > 0) {
+      result = result.filter((inv) => {
+        const supportName = inv.oc?.support?.name || inv.support?.name;
+        return supportName && filters.selectedSupports.includes(supportName);
       });
     }
 
@@ -489,7 +502,24 @@ export default function InvoiceListadoPage() {
       }
     });
     return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
-  }, [invoices, filters.years, filters.selectedUsers, filters.selectedEstados, filters.docType, filters.search]);
+  }, [invoices, filters.years, filters.selectedUsers, filters.selectedSupports, filters.selectedEstados, filters.docType, filters.search]);
+
+  // Sustentos únicos para filtro (basado en datos filtrados)
+  const availableSupports: SupportOption[] = useMemo(() => {
+    const partialData = getPartiallyFilteredInvoices('supports');
+    const map = new Map<string, SupportOption>();
+    partialData.forEach((inv) => {
+      const supportName = inv.oc?.support?.name || inv.support?.name;
+      if (supportName && !map.has(supportName)) {
+        map.set(supportName, { 
+          value: supportName, 
+          label: supportName,
+          code: null
+        });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [invoices, filters.years, filters.selectedUsers, filters.selectedProviders, filters.selectedEstados, filters.docType, filters.search]);
 
   // Función de búsqueda y filtrado
   const filteredInvoices = useMemo(() => {
@@ -527,6 +557,14 @@ export default function InvoiceListadoPage() {
           inv.proveedor?.razonSocial ||
           "Sin proveedor";
         return filters.selectedProviders.includes(proveedor);
+      });
+    }
+    
+    // Filtro por sustentos seleccionados
+    if (filters.selectedSupports.length > 0) {
+      result = result.filter((inv) => {
+        const supportName = inv.oc?.support?.name || inv.support?.name;
+        return supportName && filters.selectedSupports.includes(supportName);
       });
     }
     
@@ -671,7 +709,8 @@ export default function InvoiceListadoPage() {
           <h2 className="text-lg font-medium text-brand-text-primary">Filtros de Búsqueda</h2>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+          {/* Primera fila de filtros */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
             {/* Filtro de Años (multi) */}
             <YearMultiSelect
               label="Años"
@@ -699,6 +738,15 @@ export default function InvoiceListadoPage() {
               placeholder="Todos los proveedores"
             />
             
+            {/* Filtro de Sustentos */}
+            <SupportMultiSelect
+              supports={availableSupports}
+              selectedSupports={filters.selectedSupports}
+              onChange={(selected) => setFilters(f => ({ ...f, selectedSupports: selected }))}
+              label="Sustentos"
+              placeholder="Todos los sustentos"
+            />
+            
             {/* Búsqueda global */}
             <div>
               <label className="block text-xs text-brand-text-secondary font-medium mb-1">
@@ -723,7 +771,10 @@ export default function InvoiceListadoPage() {
               }))}
               searchable={false}
             />
-            
+          </div>
+          
+          {/* Segunda fila de filtros */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 mt-3">
             {/* Filtro de Estado - Multi-select */}
             <StatusMultiSelect
               label="Estado"
@@ -746,6 +797,11 @@ export default function InvoiceListadoPage() {
               {filters.selectedProviders.length > 0 && (
                 <div className="text-sm text-brand-text-secondary">
                   Filtrando por {filters.selectedProviders.length} proveedor{filters.selectedProviders.length > 1 ? 'es' : ''}
+                </div>
+              )}
+              {filters.selectedSupports.length > 0 && (
+                <div className="text-sm text-brand-text-secondary">
+                  Filtrando por {filters.selectedSupports.length} sustento{filters.selectedSupports.length > 1 ? 's' : ''}
                 </div>
               )}
             </div>

@@ -8,6 +8,7 @@ import Input from "../../components/ui/Input";
 import StatusMultiSelect from "../../components/ui/StatusMultiSelect";
 import UserMultiSelect, { UserOption } from "../../components/ui/UserMultiSelect";
 import Button from "../../components/ui/Button";
+import SupportMultiSelect, { SupportOption } from "../../components/ui/SupportMultiSelect";
 import { Table, Th, Td } from "../../components/ui/Table";
 import OcStatusChip from "../../components/OcStatusChip";
 import YearMonthPicker from "../../components/YearMonthPicker";
@@ -17,6 +18,7 @@ import ResponsableSelector from "../../components/ResponsableSelector";
 import ProviderMultiSelect, { ProviderOption } from "../../components/ui/ProviderMultiSelect";
 import { formatNumber } from "../../utils/numberFormat";
 import { formatPeriodLabel } from "../../utils/periodFormat";
+import { Pencil, Copy, Trash2 } from "lucide-react";
 
 /**
  * SUBMÓDULO: Gestión / Registro de Órdenes de Compra
@@ -206,7 +208,8 @@ export default function OcGestionPage() {
     selectedEstados: ESTADOS_OC.filter(e => e !== "ATENDIDO"),
     search: "",
     selectedProviders: [] as string[],
-    selectedUsers: [] as string[]
+    selectedUsers: [] as string[],
+    selectedSupports: [] as string[]  // Multi-select de sustentos
   });
 
   // Filtrado parcial para opciones de filtros interconectados
@@ -225,6 +228,13 @@ export default function OcGestionPage() {
       result = result.filter((oc: any) => {
         const email = oc.solicitanteUser?.email || oc.correoSolicitante;
         return email && filters.selectedUsers.includes(email);
+      });
+    }
+
+    if (excludeFilter !== 'supports' && filters.selectedSupports.length > 0) {
+      result = result.filter((oc: any) => {
+        const supportName = oc.support?.name;
+        return supportName && filters.selectedSupports.includes(supportName);
       });
     }
 
@@ -264,7 +274,23 @@ export default function OcGestionPage() {
       }
     });
     return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
-  }, [ocs, filters.selectedUsers, filters.numeroOc, filters.moneda, filters.selectedEstados, filters.search]);
+  }, [ocs, filters.selectedUsers, filters.selectedSupports, filters.numeroOc, filters.moneda, filters.selectedEstados, filters.search]);
+
+  const availableSupports: SupportOption[] = useMemo(() => {
+    const partialData = getPartiallyFilteredOcs('supports');
+    const map = new Map<string, SupportOption>();
+    partialData.forEach((oc: any) => {
+      const supportName = oc.support?.name;
+      if (supportName && !map.has(supportName)) {
+        map.set(supportName, { 
+          value: supportName, 
+          label: supportName,
+          code: oc.support?.code || null
+        });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [ocs, filters.selectedUsers, filters.selectedProviders, filters.numeroOc, filters.moneda, filters.selectedEstados, filters.search]);
 
   const availableUsers: UserOption[] = useMemo(() => {
     const partialData = getPartiallyFilteredOcs('users');
@@ -282,7 +308,7 @@ export default function OcGestionPage() {
       const nameB = b.name || b.email;
       return nameA.localeCompare(nameB);
     });
-  }, [ocs, filters.selectedProviders, filters.numeroOc, filters.moneda, filters.selectedEstados, filters.search]);
+  }, [ocs, filters.selectedProviders, filters.selectedSupports, filters.numeroOc, filters.moneda, filters.selectedEstados, filters.search]);
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -693,6 +719,44 @@ export default function OcGestionPage() {
       formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
   };
+  
+  // Función para duplicar una OC
+  const handleDuplicate = (oc: any) => {
+    // Extraer IDs de CECOs de la relación M:N
+    const costCenterIds = oc.costCenters?.map((cc: any) => cc.costCenterId) || [];
+    
+    // Cargar datos de la OC en el formulario (similar a editar, pero sin ID y sin número OC)
+    setForm({
+      budgetPeriodFromId: oc.budgetPeriodFromId?.toString() || "",
+      budgetPeriodToId: oc.budgetPeriodToId?.toString() || "",
+      incidenteOc: "",  // Limpiar incidente en duplicación
+      solicitudOc: "",  // Limpiar solicitud en duplicación
+      fechaRegistro: new Date().toISOString().split("T")[0],  // Fecha actual
+      supportId: oc.supportId?.toString() || "",
+      periodoEnFechasText: oc.periodoEnFechasText || "",
+      descripcion: oc.descripcion || "",
+      solicitanteUserId: oc.solicitanteUserId || null,
+      proveedorId: oc.proveedorId || null,
+      proveedor: oc.proveedor || "",
+      ruc: oc.ruc || "",
+      moneda: oc.moneda || "PEN",
+      importeSinIgv: oc.importeSinIgv?.toString() || "",
+      estado: "PENDIENTE",  // Resetear a estado inicial
+      numeroOc: "",  // Limpiar número OC en duplicación
+      comentario: oc.comentario || "",
+      articuloId: "",  // Limpiar artículo en duplicación
+      cecoId: oc.cecoId?.toString() || "",
+      costCenterIds: costCenterIds,
+      linkCotizacion: oc.linkCotizacion || ""
+    });
+    setEditingId(null);  // Null = nueva OC
+    setShowForm(true);
+    
+    // Scroll al formulario para mejorar UX
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  };
 
   const filteredOcs = ocs?.filter((oc: any) => {
     if (filters.selectedProviders.length > 0) {
@@ -702,6 +766,10 @@ export default function OcGestionPage() {
     if (filters.selectedUsers.length > 0) {
       const email = oc.solicitanteUser?.email || oc.correoSolicitante;
       if (!email || !filters.selectedUsers.includes(email)) return false;
+    }
+    if (filters.selectedSupports.length > 0) {
+      const supportName = oc.support?.name;
+      if (!supportName || !filters.selectedSupports.includes(supportName)) return false;
     }
     if (filters.numeroOc && !oc.numeroOc?.toLowerCase().includes(filters.numeroOc.toLowerCase())) return false;
     if (filters.moneda && oc.moneda !== filters.moneda) return false;
@@ -1173,6 +1241,7 @@ export default function OcGestionPage() {
           <h2 className="text-lg font-medium">Listado de Órdenes de Compra</h2>
         </CardHeader>
         <CardContent>
+          {/* Primera fila de filtros */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
             <div>
               <label className="block text-xs text-brand-text-secondary font-medium mb-1">Búsqueda</label>
@@ -1199,6 +1268,14 @@ export default function OcGestionPage() {
               placeholder="Todos los proveedores"
             />
 
+            <SupportMultiSelect
+              label="Sustentos"
+              supports={availableSupports}
+              selectedSupports={filters.selectedSupports}
+              onChange={(selected) => setFilters(f => ({ ...f, selectedSupports: selected }))}
+              placeholder="Todos los sustentos"
+            />
+
             <div>
               <label className="block text-xs text-brand-text-secondary font-medium mb-1">Número OC</label>
               <Input
@@ -1220,7 +1297,10 @@ export default function OcGestionPage() {
               searchable={false}
               className="w-full"
             />
-
+          </div>
+          
+          {/* Segunda fila de filtros */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 mt-3">
             <StatusMultiSelect
               label="Estado"
               placeholder="Todos los estados"
@@ -1240,6 +1320,9 @@ export default function OcGestionPage() {
               {filters.selectedProviders.length > 0 && (
                 <span>Proveedores: {filters.selectedProviders.length}</span>
               )}
+              {filters.selectedSupports.length > 0 && (
+                <span>Sustentos: {filters.selectedSupports.length}</span>
+              )}
             </div>
             <Button variant="secondary" onClick={handleExportCSV} size="sm">
               Exportar CSV
@@ -1253,47 +1336,52 @@ export default function OcGestionPage() {
               <Table>
                 <thead>
                   <tr>
-                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("numeroOc")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("numeroOc")}>
                       Número OC {sortConfig.key === "numeroOc" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("incidenteOc")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("incidenteOc")}>
                       Incidente {sortConfig.key === "incidenteOc" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("proveedor")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("proveedor")}>
                       Proveedor {sortConfig.key === "proveedor" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("support")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("support")}>
                       Sustento {sortConfig.key === "support" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("periodo")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("periodo")}>
                       Periodos {sortConfig.key === "periodo" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th>CECOs</Th>
-                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("moneda")}>
+                    <Th className="text-center">CECOs</Th>
+                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("moneda")}>
                       Moneda {sortConfig.key === "moneda" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("importeSinIgv")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("importeSinIgv")}>
                       Importe sin IGV {sortConfig.key === "importeSinIgv" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100" onClick={() => handleSort("estado")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("estado")}>
                       Estado {sortConfig.key === "estado" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th>Acciones</Th>
+                    <Th className="text-center">Acciones</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {sortedOcs.map((oc: any) => (
                     <tr key={oc.id}>
-                      <Td>{oc.numeroOc || "PENDIENTE"}</Td>
-                      <Td>{oc.incidenteOc || "-"}</Td>
-                      <Td>{oc.proveedorRef?.razonSocial || oc.proveedor || "-"}</Td>
-                      <Td className="text-xs">{oc.support?.name || "-"}</Td>
-                      <Td className="text-xs">
+                      <Td className="text-center">{oc.numeroOc || "PENDIENTE"}</Td>
+                      <Td className="text-center">{oc.incidenteOc || "-"}</Td>
+                      <Td
+                        className="max-w-[220px] whitespace-nowrap truncate text-center"
+                        title={oc.proveedorRef?.razonSocial || oc.proveedor || "-"}
+                      >
+                        {oc.proveedorRef?.razonSocial || oc.proveedor || "-"}
+                      </Td>
+                      <Td className="text-xs text-center">{oc.support?.name || "-"}</Td>
+                      <Td className="text-xs text-center">
                         {formatPeriodRange(oc.budgetPeriodFrom, oc.budgetPeriodTo)}
                       </Td>
-                      <Td className="text-xs">
+                      <Td className="text-xs text-center">
                         {oc.costCenters && oc.costCenters.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
+                          <div className="flex flex-wrap gap-1 justify-center">
                             {oc.costCenters.map((cc: any) => (
                               <span
                                 key={cc.id}
@@ -1307,9 +1395,9 @@ export default function OcGestionPage() {
                           "-"
                         )}
                       </Td>
-                      <Td>{oc.moneda}</Td>
-                      <Td className="text-right">{formatNumber(oc.importeSinIgv)}</Td>
-                      <Td>
+                      <Td className="text-center">{oc.moneda}</Td>
+                      <Td className="text-center">{formatNumber(oc.importeSinIgv)}</Td>
+                      <Td className="text-center">
                         <OcStatusChip
                           currentStatus={oc.estado}
                           onStatusChange={(newStatus) =>
@@ -1318,14 +1406,25 @@ export default function OcGestionPage() {
                           isLoading={updateStatusMutation.isPending && updateStatusMutation.variables?.id === oc.id}
                         />
                       </Td>
-                      <Td>
-                        <div className="flex flex-wrap gap-1">
+                      <Td className="text-center">
+                        <div className="flex items-center gap-1">
                           <Button
                             size="sm"
                             variant="ghost"
                             onClick={() => handleEdit(oc)}
+                            title="Editar OC"
+                            className="p-2 h-8 w-8"
                           >
-                            Editar
+                            <Pencil size={16} />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDuplicate(oc)}
+                            title="Duplicar OC"
+                            className="p-2 h-8 w-8"
+                          >
+                            <Copy size={16} />
                           </Button>
                           <Button
                             size="sm"
@@ -1335,8 +1434,10 @@ export default function OcGestionPage() {
                                 deleteMutation.mutate(oc.id);
                               }
                             }}
+                            title="Eliminar OC"
+                            className="p-2 h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
                           >
-                            Eliminar
+                            <Trash2 size={16} />
                           </Button>
                         </div>
                       </Td>

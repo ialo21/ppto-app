@@ -3,6 +3,7 @@ import { PrismaClient, Prisma } from "@prisma/client";
 import { requireAuth, requirePermission, requireAnyPermission } from "./auth";
 import { z } from "zod";
 import { broadcastOcStatusChange } from "./websocket";
+import { gmailMailerService } from "./gmail-mailer";
 
 const prisma = new PrismaClient();
 
@@ -50,7 +51,8 @@ const createOcSchema = z.object({
   articuloId: z.number().int().positive().nullable().optional(),
   cecoId: z.number().int().positive().nullable().optional(),  // DEPRECATED: usar costCenterIds
   costCenterIds: z.array(z.number().int().positive()).min(1, "Debe seleccionar al menos un CECO").optional(),
-  linkCotizacion: z.string().url().optional().or(z.literal(""))
+  linkCotizacion: z.string().url().optional().or(z.literal("")),
+  deliveryLink: z.string().url().optional().or(z.literal(""))
 });
 
 const updateOcSchema = createOcSchema.partial();
@@ -114,6 +116,19 @@ export async function registerOcRoutes(app: FastifyInstance) {
           costCenters: { 
             include: { 
               costCenter: { select: { id: true, code: true, name: true } }
+            }
+          },
+          documents: {
+            take: 1,
+            orderBy: { createdAt: "desc" },
+            include: {
+              document: {
+                select: {
+                  id: true,
+                  driveFileId: true,
+                  filename: true
+                }
+              }
             }
           }
         }
@@ -501,6 +516,7 @@ export async function registerOcRoutes(app: FastifyInstance) {
             articulo: { select: { id: true, code: true, name: true } },
             ceco: { select: { id: true, code: true, name: true } },
             proveedorRef: { select: { id: true, razonSocial: true, ruc: true } },
+            solicitanteUser: { select: { id: true, email: true, name: true } },
             costCenters: { 
               include: { 
                 costCenter: { select: { id: true, code: true, name: true } }
@@ -526,6 +542,40 @@ export async function registerOcRoutes(app: FastifyInstance) {
         newStatus: estado,
         timestamp: new Date().toISOString()
       });
+
+      // Enviar correo de notificación si se marca como ATENDIDO
+      const recipientEmail = updated.solicitanteUser?.email || updated.correoSolicitante || "";
+      const recipientName = updated.solicitanteUser?.name || updated.nombreSolicitante || recipientEmail;
+      
+      if (process.env.NODE_ENV === "development") {
+        console.log(`[OC] Verificando envío de correo: estado=${estado}, gmailEnabled=${gmailMailerService.isEnabled()}, recipientEmail=${recipientEmail}, deliveryLink=${updated.deliveryLink ? 'presente' : 'ausente'}`);
+      }
+
+      if (estado === "ATENDIDO" && gmailMailerService.isEnabled() && recipientEmail && updated.deliveryLink) {
+        try {
+          const periodText = updated.periodoEnFechasText || 
+            `${updated.budgetPeriodFrom?.label || ''} - ${updated.budgetPeriodTo?.label || ''}`;
+          
+          const emailData = gmailMailerService.createOcDeliveryEmail({
+            recipientEmail,
+            recipientName,
+            ocNumber: updated.numeroOc || 'Sin número',
+            description: updated.descripcion || 'Sin descripción',
+            supportName: updated.support?.name || 'No especificado',
+            periodText: periodText.trim() || 'No especificado',
+            deliveryLink: updated.deliveryLink
+          });
+
+          await gmailMailerService.sendEmail(emailData);
+          
+          if (process.env.NODE_ENV === "development") {
+            console.log(`[OC] Correo enviado a ${recipientEmail} por cambio a ATENDIDO`);
+          }
+        } catch (emailErr: any) {
+          console.error("[OC] Error al enviar correo de notificación:", emailErr.message);
+          // No detener el proceso si falla el correo
+        }
+      }
 
       return updated;
     } catch (err: any) {

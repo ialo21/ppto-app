@@ -151,11 +151,23 @@ function StatCard({
  * Tarjeta individual de OC
  */
 function OcCard({ oc, onOpenTimeline }: { oc: any; onOpenTimeline: (ocId: number) => void }) {
-  const hasLink = oc.linkCotizacion && oc.linkCotizacion.trim();
+  const isAtendido = oc.estado === "ATENDIDO";
+  const hasDeliveryLink = oc.deliveryLink && oc.deliveryLink.trim();
+  
+  // Obtener primer documento adjunto (cotización)
+  const firstDocument = oc.documents && oc.documents.length > 0 ? oc.documents[0] : null;
+  const documentLink = firstDocument?.document?.driveFileId 
+    ? `https://drive.google.com/file/d/${firstDocument.document.driveFileId}/view`
+    : null;
+  
+  // Lógica: ATENDIDO usa deliveryLink, otros estados usan primer documento
+  const displayLink = isAtendido && hasDeliveryLink ? oc.deliveryLink : documentLink;
+  const hasDisplayLink = !!displayLink;
+  const isOcLink = isAtendido && hasDeliveryLink;
   
   const handleViewClick = () => {
-    if (hasLink) {
-      window.open(oc.linkCotizacion, '_blank', 'noopener,noreferrer');
+    if (displayLink) {
+      window.open(displayLink, '_blank', 'noopener,noreferrer');
     }
   };
   
@@ -261,14 +273,20 @@ function OcCard({ oc, onOpenTimeline }: { oc: any; onOpenTimeline: (ocId: number
           
           <Button
             size="sm"
-            variant={hasLink ? "primary" : "secondary"}
+            variant={hasDisplayLink ? "primary" : "secondary"}
             onClick={handleViewClick}
-            disabled={!hasLink}
-            className="flex items-center justify-center gap-2"
-            title={hasLink ? "Ver cotización" : "No hay cotización registrada"}
+            disabled={!hasDisplayLink}
+            className={`flex items-center justify-center gap-2 ${isOcLink ? 'bg-green-600 hover:bg-green-700' : ''}`}
+            title={
+              isOcLink
+                ? "Ver OC entregada" 
+                : documentLink 
+                  ? "Ver cotización" 
+                  : "No hay documento registrado"
+            }
           >
             <ExternalLink size={14} />
-            {hasLink ? "Ver" : "Sin Link"}
+            {isOcLink ? "Ver OC" : hasDisplayLink ? "Cotiz." : "Sin Doc"}
           </Button>
         </div>
       </CardContent>

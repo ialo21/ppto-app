@@ -340,7 +340,8 @@ export default function OcGestionPage() {
     articuloId: "",
     cecoId: "",  // DEPRECATED: mantener por compatibilidad
     costCenterIds: [] as number[],  // NUEVO: múltiples CECOs
-    linkCotizacion: ""
+    linkCotizacion: "",
+    deliveryLink: ""
   });
 
 
@@ -406,7 +407,8 @@ export default function OcGestionPage() {
       articuloId: "",
       cecoId: "",
       costCenterIds: [],
-      linkCotizacion: ""
+      linkCotizacion: "",
+      deliveryLink: ""
     });
     setEditingId(null);
     setShowForm(false);
@@ -475,12 +477,12 @@ export default function OcGestionPage() {
       errors.importeSinIgv = "Importe debe ser mayor o igual a 0";
     }
 
-    // URL de cotización (opcional pero si tiene valor debe ser válida)
-    if (form.linkCotizacion && form.linkCotizacion.trim()) {
+    // URL de OC entregada (opcional pero si tiene valor debe ser válida)
+    if (form.deliveryLink && form.deliveryLink.trim()) {
       try {
-        new URL(form.linkCotizacion);
+        new URL(form.deliveryLink);
       } catch {
-        errors.linkCotizacion = "URL inválida";
+        errors.deliveryLink = "URL inválida";
       }
     }
 
@@ -529,7 +531,8 @@ export default function OcGestionPage() {
         comentario: form.comentario.trim() || undefined,
         articuloId: form.articuloId ? Number(form.articuloId) : null,
         costCenterIds: form.costCenterIds,  // NUEVO: array de CECOs
-        linkCotizacion: form.linkCotizacion.trim() || undefined
+        linkCotizacion: form.linkCotizacion.trim() || undefined,
+        deliveryLink: form.deliveryLink.trim() || undefined
       };
 
       // Debug en desarrollo
@@ -709,7 +712,8 @@ export default function OcGestionPage() {
       articuloId: oc.articuloId?.toString() || "",
       cecoId: oc.cecoId?.toString() || "",
       costCenterIds: costCenterIds,
-      linkCotizacion: oc.linkCotizacion || ""
+      linkCotizacion: oc.linkCotizacion || "",
+      deliveryLink: oc.deliveryLink || ""
     });
     setEditingId(oc.id);
     setShowForm(true);
@@ -747,7 +751,8 @@ export default function OcGestionPage() {
       articuloId: "",  // Limpiar artículo en duplicación
       cecoId: oc.cecoId?.toString() || "",
       costCenterIds: costCenterIds,
-      linkCotizacion: oc.linkCotizacion || ""
+      linkCotizacion: oc.linkCotizacion || "",
+      deliveryLink: ""  // Limpiar deliveryLink en duplicación
     });
     setEditingId(null);  // Null = nueva OC
     setShowForm(true);
@@ -847,6 +852,15 @@ export default function OcGestionPage() {
           bValue = b.id;
       }
 
+      const isString = typeof aValue === "string" || typeof bValue === "string";
+      if (isString) {
+        const aStr = (aValue ?? "").toString().toLowerCase();
+        const bStr = (bValue ?? "").toString().toLowerCase();
+        const cmp = aStr.localeCompare(bStr, undefined, { numeric: true, sensitivity: "base" });
+        if (cmp !== 0) return sortConfig.direction === "asc" ? cmp : -cmp;
+        return 0;
+      }
+
       if (aValue < bValue) return sortConfig.direction === "asc" ? -1 : 1;
       if (aValue > bValue) return sortConfig.direction === "asc" ? 1 : -1;
       return 0;
@@ -910,7 +924,8 @@ export default function OcGestionPage() {
               articuloId: "",
               cecoId: "",
               costCenterIds: [],
-              linkCotizacion: ""
+              linkCotizacion: "",
+              deliveryLink: ""
             });
             setShowForm(true);
           }
@@ -1209,6 +1224,20 @@ export default function OcGestionPage() {
                     Los archivos se subirán automáticamente al guardar la OC
                   </p>
                 )}
+              </div>
+
+              <div className="md:col-span-3">
+                <label className="block text-sm font-medium mb-1">Link de OC Entregada</label>
+                <InputWithError 
+                  type="url"
+                  placeholder="https://drive.google.com/..." 
+                  value={form.deliveryLink} 
+                  onChange={(e: any) => setForm(f => ({ ...f, deliveryLink: e.target.value }))}
+                  error={fieldErrors.deliveryLink}
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  Link del documento final de la OC entregada por compras
+                </p>
               </div>
 
               <div className="md:col-span-3">

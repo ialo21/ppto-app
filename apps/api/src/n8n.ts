@@ -1,5 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { PrismaClient, Prisma, InvStatus, OcStatus } from "@prisma/client";
+import { broadcastOcStatusChange } from "./websocket";
+import { gmailMailerService } from "./gmail-mailer";
 import { z } from "zod";
 
 const prisma = new PrismaClient();
@@ -70,6 +72,13 @@ const updateOcStatusN8nSchema = z.object({
     "PENDIENTE", "PROCESAR", "EN_PROCESO", "PROCESADO",
     "APROBACION_VP", "ATENDER_COMPRAS", "ATENDIDO", "ANULADO"
   ]),
+  note: z.string().optional()
+});
+
+const deliverOcN8nSchema = z.object({
+  solicitudOc: z.string().min(1, "Número de solicitud es requerido"),
+  numeroOc: z.string().min(1, "Número de OC es requerido"),
+  deliveryLink: z.string().url("Link debe ser una URL válida"),
   note: z.string().optional()
 });
 
@@ -687,6 +696,146 @@ export async function registerN8nRoutes(app: FastifyInstance) {
     }
 
     return updated;
+  });
+
+  app.post("/n8n/ocs/delivery", { preHandler: requireN8nKey }, async (req, reply) => {
+    if (process.env.NODE_ENV === "development") {
+      console.log("[N8N] POST /n8n/ocs/delivery - Payload:", JSON.stringify(req.body, null, 2));
+    }
+
+    const parsed = deliverOcN8nSchema.safeParse(req.body);
+    if (!parsed.success) {
+      if (process.env.NODE_ENV === "development") {
+        console.error("[N8N] Validación fallida:", parsed.error.errors);
+      }
+      return reply.code(422).send({
+        error: "VALIDATION_ERROR",
+        issues: parsed.error.errors.map(err => ({
+          path: err.path,
+          message: err.message
+        }))
+      });
+    }
+
+    const { solicitudOc, numeroOc, deliveryLink, note } = parsed.data;
+
+    // Buscar OC por número de solicitud
+    const oc = await prisma.oC.findFirst({
+      where: { solicitudOc }
+    });
+
+    if (!oc) {
+      return reply.code(404).send({
+        error: "OC_NOT_FOUND",
+        message: `No se encontró OC con número de solicitud: ${solicitudOc}`
+      });
+    }
+
+    // Validar que el número de OC no esté ya tomado por otra OC
+    if (numeroOc) {
+      const existingOc = await prisma.oC.findFirst({
+        where: {
+          numeroOc,
+          id: { not: oc.id }
+        }
+      });
+
+      if (existingOc) {
+        return reply.code(422).send({
+          error: "VALIDATION_ERROR",
+          issues: [{
+            path: ["numeroOc"],
+            message: `El número de OC ${numeroOc} ya está asignado a otra orden`
+          }]
+        });
+      }
+    }
+
+    // Actualizar OC con los datos de entrega
+    const updated = await prisma.$transaction(async (tx) => {
+      const updatedOc = await tx.oC.update({
+        where: { id: oc.id },
+        data: {
+          numeroOc,
+          deliveryLink,
+          estado: "ATENDIDO"
+        },
+        include: {
+          support: { select: { id: true, code: true, name: true } },
+          budgetPeriodFrom: { select: { id: true, year: true, month: true, label: true } },
+          budgetPeriodTo: { select: { id: true, year: true, month: true, label: true } },
+          proveedorRef: { select: { id: true, razonSocial: true, ruc: true } },
+          solicitanteUser: { select: { id: true, email: true, name: true } },
+          costCenters: {
+            include: { costCenter: { select: { id: true, code: true, name: true } } }
+          }
+        }
+      });
+
+      // Registrar cambio de estado en historial
+      await tx.oCStatusHistory.create({
+        data: {
+          ocId: oc.id,
+          status: "ATENDIDO",
+          note: note || `OC entregada automáticamente desde n8n. Número: ${numeroOc}`
+        }
+      });
+
+      return updatedOc;
+    });
+
+    // Broadcast cambio de estado para que el frontend se actualice en vivo
+    try {
+      await broadcastOcStatusChange({
+        ocId: updated.id,
+        newStatus: "ATENDIDO",
+        timestamp: new Date().toISOString()
+      });
+    } catch (err) {
+      if (process.env.NODE_ENV === "development") {
+        console.warn("[N8N] No se pudo emitir broadcast de OC:", err);
+      }
+    }
+
+    // Enviar correo de notificación al solicitante
+    const recipientEmail = updated.solicitanteUser?.email || updated.correoSolicitante || "";
+    const recipientName = updated.solicitanteUser?.name || updated.nombreSolicitante || recipientEmail;
+
+    if (gmailMailerService.isEnabled() && recipientEmail) {
+      try {
+        const periodText = updated.periodoEnFechasText || 
+          `${updated.budgetPeriodFrom?.label || ''} - ${updated.budgetPeriodTo?.label || ''}`;
+        
+        const emailData = gmailMailerService.createOcDeliveryEmail({
+          recipientEmail,
+          recipientName,
+          ocNumber: numeroOc,
+          description: updated.descripcion || 'Sin descripción',
+          supportName: updated.support?.name || 'No especificado',
+          periodText: periodText.trim() || 'No especificado',
+          deliveryLink: deliveryLink
+        });
+
+        await gmailMailerService.sendEmail(emailData);
+        
+        if (process.env.NODE_ENV === "development") {
+          console.log(`[N8N] Correo enviado a ${recipientEmail}`);
+        }
+      } catch (emailErr: any) {
+        console.error("[N8N] Error al enviar correo de notificación:", emailErr.message);
+        // No detener el proceso si falla el correo
+      }
+    }
+
+    if (process.env.NODE_ENV === "development") {
+      console.log(`[N8N] OC ${oc.id} marcada como ATENDIDA con número ${numeroOc}`);
+    }
+
+    return {
+      success: true,
+      oc: updated,
+      message: `OC actualizada exitosamente con número ${numeroOc}`
+    };
   });
 
   app.get("/n8n/health", { preHandler: requireN8nKey }, async () => {

@@ -457,6 +457,7 @@ model OC {
   ceco                   CostCenter? @relation("LegacyOCCostCenter", fields: [cecoId], references: [id])
   
   linkCotizacion         String?
+  deliveryLink           String?   // Link de la OC entregada (documento final)
   
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt

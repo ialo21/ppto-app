@@ -751,79 +751,105 @@ export async function registerN8nRoutes(app: FastifyInstance) {
       }
     }
 
-    // Actualizar OC con los datos de entrega
-    const updated = await prisma.$transaction(async (tx) => {
-      const updatedOc = await tx.oC.update({
-        where: { id: oc.id },
-        data: {
-          numeroOc,
-          deliveryLink,
-          estado: "ATENDIDO"
-        },
-        include: {
-          support: { select: { id: true, code: true, name: true } },
-          budgetPeriodFrom: { select: { id: true, year: true, month: true, label: true } },
-          budgetPeriodTo: { select: { id: true, year: true, month: true, label: true } },
-          proveedorRef: { select: { id: true, razonSocial: true, ruc: true } },
-          solicitanteUser: { select: { id: true, email: true, name: true } },
-          costCenters: {
-            include: { costCenter: { select: { id: true, code: true, name: true } } }
-          }
-        }
-      });
+    // Idempotencia: si ya está ATENDIDO con mismo número y deliveryLink, no repetir acciones
+    const alreadyAttended = oc.estado === "ATENDIDO" && oc.numeroOc === numeroOc && oc.deliveryLink === deliveryLink;
 
-      // Registrar cambio de estado en historial
-      await tx.oCStatusHistory.create({
-        data: {
-          ocId: oc.id,
-          status: "ATENDIDO",
-          note: note || `OC entregada automáticamente desde n8n. Número: ${numeroOc}`
-        }
-      });
+    // Actualizar OC con los datos de entrega
+    const updated: any = await prisma.$transaction(async (tx) => {
+      let updatedOc: any = oc;
+
+      if (!alreadyAttended) {
+        updatedOc = await tx.oC.update({
+          where: { id: oc.id },
+          data: {
+            numeroOc,
+            deliveryLink,
+            estado: "ATENDIDO"
+          },
+          include: {
+            support: { select: { id: true, code: true, name: true } },
+            budgetPeriodFrom: { select: { id: true, year: true, month: true, label: true } },
+            budgetPeriodTo: { select: { id: true, year: true, month: true, label: true } },
+            proveedorRef: { select: { id: true, razonSocial: true, ruc: true } },
+            solicitanteUser: { select: { id: true, email: true, name: true } },
+            costCenters: {
+              include: { costCenter: { select: { id: true, code: true, name: true } } }
+            }
+          }
+        });
+
+        // Registrar cambio de estado en historial
+        await tx.oCStatusHistory.create({
+          data: {
+            ocId: oc.id,
+            status: "ATENDIDO",
+            note: note || `OC entregada automáticamente desde n8n. Número: ${numeroOc}`
+          }
+        });
+      } else {
+        // Aun así incluir relaciones para respuesta coherente
+        updatedOc = await tx.oC.findUnique({
+          where: { id: oc.id },
+          include: {
+            support: { select: { id: true, code: true, name: true } },
+            budgetPeriodFrom: { select: { id: true, year: true, month: true, label: true } },
+            budgetPeriodTo: { select: { id: true, year: true, month: true, label: true } },
+            proveedorRef: { select: { id: true, razonSocial: true, ruc: true } },
+            solicitanteUser: { select: { id: true, email: true, name: true } },
+            costCenters: {
+              include: { costCenter: { select: { id: true, code: true, name: true } } }
+            }
+          }
+        }) as any;
+      }
 
       return updatedOc;
     });
 
     // Broadcast cambio de estado para que el frontend se actualice en vivo
-    try {
-      await broadcastOcStatusChange({
-        ocId: updated.id,
-        newStatus: "ATENDIDO",
-        timestamp: new Date().toISOString()
-      });
-    } catch (err) {
-      if (process.env.NODE_ENV === "development") {
-        console.warn("[N8N] No se pudo emitir broadcast de OC:", err);
+    if (!alreadyAttended) {
+      try {
+        await broadcastOcStatusChange({
+          ocId: updated.id,
+          newStatus: "ATENDIDO",
+          timestamp: new Date().toISOString()
+        });
+      } catch (err) {
+        if (process.env.NODE_ENV === "development") {
+          console.warn("[N8N] No se pudo emitir broadcast de OC:", err);
+        }
       }
     }
 
-    // Enviar correo de notificación al solicitante
-    const recipientEmail = updated.solicitanteUser?.email || updated.correoSolicitante || "";
-    const recipientName = updated.solicitanteUser?.name || updated.nombreSolicitante || recipientEmail;
+    // Enviar correo de notificación al solicitante (solo si no estaba ya atendida con mismo payload)
+    if (!alreadyAttended) {
+      const recipientEmail = updated.solicitanteUser?.email || updated.correoSolicitante || "";
+      const recipientName = updated.solicitanteUser?.name || updated.nombreSolicitante || recipientEmail;
 
-    if (gmailMailerService.isEnabled() && recipientEmail) {
-      try {
-        const periodText = updated.periodoEnFechasText || 
-          `${updated.budgetPeriodFrom?.label || ''} - ${updated.budgetPeriodTo?.label || ''}`;
-        
-        const emailData = gmailMailerService.createOcDeliveryEmail({
-          recipientEmail,
-          recipientName,
-          ocNumber: numeroOc,
-          description: updated.descripcion || 'Sin descripción',
-          supportName: updated.support?.name || 'No especificado',
-          periodText: periodText.trim() || 'No especificado',
-          deliveryLink: deliveryLink
-        });
+      if (gmailMailerService.isEnabled() && recipientEmail) {
+        try {
+          const periodText = updated.periodoEnFechasText || 
+            `${updated.budgetPeriodFrom?.label || ''} - ${updated.budgetPeriodTo?.label || ''}`;
+          
+          const emailData = gmailMailerService.createOcDeliveryEmail({
+            recipientEmail,
+            recipientName,
+            ocNumber: numeroOc,
+            description: updated.descripcion || 'Sin descripción',
+            supportName: updated.support?.name || 'No especificado',
+            periodText: periodText.trim() || 'No especificado',
+            deliveryLink: deliveryLink
+          });
 
-        await gmailMailerService.sendEmail(emailData);
-        
-        if (process.env.NODE_ENV === "development") {
-          console.log(`[N8N] Correo enviado a ${recipientEmail}`);
+          await gmailMailerService.sendEmail(emailData);
+          
+          if (process.env.NODE_ENV === "development") {
+            console.log(`[N8N] Correo enviado a ${recipientEmail}`);
+          }
+        } catch (emailErr: any) {
+          console.error("[N8N] Error al enviar correo de notificación:", emailErr.message);
+          // No detener el proceso si falla el correo
         }
-      } catch (emailErr: any) {
-        console.error("[N8N] Error al enviar correo de notificación:", emailErr.message);
-        // No detener el proceso si falla el correo
       }
     }
 
@@ -834,7 +860,9 @@ export async function registerN8nRoutes(app: FastifyInstance) {
     return {
       success: true,
       oc: updated,
-      message: `OC actualizada exitosamente con número ${numeroOc}`
+      message: alreadyAttended
+        ? `OC ya estaba ATENDIDA con los mismos datos; no se repitió correo ni historial`
+        : `OC actualizada exitosamente con número ${numeroOc}`
     };
   });
 

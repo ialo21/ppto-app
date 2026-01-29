@@ -2,6 +2,7 @@ import { google } from "googleapis";
 
 interface EmailOptions {
   to: string;
+  cc?: string;
   subject: string;
   htmlBody: string;
 }
@@ -43,11 +44,12 @@ class GmailMailerService {
     return this.enabled;
   }
 
-  private createMessage(to: string, subject: string, htmlBody: string): string {
+  private createMessage(to: string, subject: string, htmlBody: string, cc?: string): string {
     const utf8Subject = `=?utf-8?B?${Buffer.from(subject).toString("base64")}?=`;
     const messageParts = [
       `From: Portal PPTO <${this.user}>`,
       `To: ${to}`,
+      ...(cc ? [`Cc: ${cc}`] : []),
       `Subject: ${utf8Subject}`,
       "MIME-Version: 1.0",
       "Content-Type: text/html; charset=utf-8",
@@ -63,14 +65,14 @@ class GmailMailerService {
       .replace(/=+$/, "");
   }
 
-  async sendEmail({ to, subject, htmlBody }: EmailOptions): Promise<void> {
+  async sendEmail({ to, cc, subject, htmlBody }: EmailOptions): Promise<void> {
     if (!this.enabled) {
       console.warn("[Gmail] Intento de envío con servicio deshabilitado");
       return;
     }
 
     try {
-      const encodedMessage = this.createMessage(to, subject, htmlBody);
+      const encodedMessage = this.createMessage(to, subject, htmlBody, cc);
       
       const res = await this.gmail.users.messages.send({
         userId: "me",
@@ -226,6 +228,7 @@ class GmailMailerService {
 
     return {
       to: recipientEmail,
+      cc: "sergio.torres@interseguro.com.pe",
       subject: `✅ Tu Orden de Compra #${ocNumber} está lista`,
       htmlBody
     };

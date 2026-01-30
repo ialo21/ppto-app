@@ -250,7 +250,8 @@ export async function registerOcRoutes(app: FastifyInstance) {
             comentario: data.comentario || null,
             articuloId: data.articuloId || null,
             cecoId: data.cecoId || null,  // DEPRECATED: mantener por compatibilidad
-            linkCotizacion: data.linkCotizacion || null
+            linkCotizacion: data.linkCotizacion || null,
+            deliveryLink: data.deliveryLink || null
           }
         });
 
@@ -410,6 +411,7 @@ export async function registerOcRoutes(app: FastifyInstance) {
       if (data.articuloId !== undefined) updateData.articuloId = data.articuloId;
       if (data.cecoId !== undefined) updateData.cecoId = data.cecoId;
       if (data.linkCotizacion !== undefined) updateData.linkCotizacion = data.linkCotizacion || null;
+      if (data.deliveryLink !== undefined) updateData.deliveryLink = data.deliveryLink || null;
 
       // Usar transacción para actualizar OC y sus CECOs
       const updated = await prisma.$transaction(async (tx) => {

@@ -427,17 +427,8 @@ export async function registerRpaRoutes(app: FastifyInstance) {
         }
       });
 
-      // Broadcast cambio de estado via WebSocket
+      // Post-procesamiento exitoso
       if (result.success) {
-        broadcastOcStatusChange({
-          ocId: id,
-          newStatus: "PROCESADO",
-          timestamp: new Date().toISOString()
-        });
-
-        // Notificar a N8N que la OC fue procesada
-        await notifyN8nOcProcesada(id, data.incidenteOc || null);
-
         // Reorganizar documentos si se generó incidenteOc y Drive está habilitado
         if (data.incidenteOc && googleDriveService.isEnabled()) {
           try {
@@ -468,6 +459,16 @@ export async function registerRpaRoutes(app: FastifyInstance) {
             console.error(`[RPA] Error reorganizando documentos para OC ${id}:`, driveErr);
           }
         }
+
+        // Notificar a N8N que la OC fue procesada (después de mover docs)
+        await notifyN8nOcProcesada(id, data.incidenteOc || null);
+
+        // Broadcast cambio de estado via WebSocket
+        broadcastOcStatusChange({
+          ocId: id,
+          newStatus: "PROCESADO",
+          timestamp: new Date().toISOString()
+        });
       } else {
         broadcastOcStatusChange({
           ocId: id,

@@ -205,7 +205,7 @@ export default function OcGestionPage() {
     proveedor: "",
     numeroOc: "",
     moneda: "",
-    selectedEstados: ESTADOS_OC.filter(e => e !== "ATENDIDO"),
+    selectedEstados: [] as string[],
     search: "",
     selectedProviders: [] as string[],
     selectedUsers: [] as string[],
@@ -1391,8 +1391,6 @@ export default function OcGestionPage() {
               statuses={ESTADOS_OC}
               selectedStatuses={filters.selectedEstados}
               onChange={(selected) => setFilters(f => ({ ...f, selectedEstados: selected }))}
-              excludeStatus="ATENDIDO"
-              excludeLabel="Todo menos ATENDIDO"
             />
           </div>
 

@@ -6,6 +6,54 @@ import { z } from "zod";
 
 const prisma = new PrismaClient();
 
+/**
+ * Envía notificación a N8N cuando una OC es procesada
+ */
+async function notifyN8nOcProcesada(ocId: number, incidenteOc: string | null) {
+  const webhookUrl = process.env.N8N_OC_PROCESADA_WEBHOOK_URL;
+  
+  if (!webhookUrl) {
+    if (process.env.NODE_ENV === "development") {
+      console.log("[N8N] N8N_OC_PROCESADA_WEBHOOK_URL no configurada, omitiendo notificación");
+    }
+    return;
+  }
+
+  try {
+    const incidentRaw = incidenteOc?.toString().trim();
+    const incidenteFormatted = incidentRaw
+      ? (incidentRaw.toUpperCase().startsWith("INC") ? incidentRaw : `INC ${incidentRaw}`)
+      : "";
+
+    const payload = {
+      incidente: incidenteFormatted,
+      ocId: ocId
+    };
+
+    if (process.env.NODE_ENV === "development") {
+      console.log(`[N8N] Enviando notificación a N8N: ${webhookUrl}`, payload);
+    }
+
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    if (process.env.NODE_ENV === "development") {
+      console.log(`[N8N] Notificación N8N enviada exitosamente para OC ${ocId}`);
+    }
+  } catch (error: any) {
+    console.error(`[N8N] Error al enviar notificación a N8N para OC ${ocId}:`, error.message);
+  }
+}
+
 export async function requireN8nKey(request: FastifyRequest, reply: FastifyReply) {
   const authHeader = request.headers.authorization;
   
@@ -693,6 +741,11 @@ export async function registerN8nRoutes(app: FastifyInstance) {
 
     if (process.env.NODE_ENV === "development") {
       console.log(`[N8N] Estado de OC ${id} actualizado a ${targetStatus}`);
+    }
+
+    // Si el estado cambió a PROCESADO, notificar al webhook de N8N
+    if (targetStatus === "PROCESADO") {
+      await notifyN8nOcProcesada(id, updated.incidenteOc);
     }
 
     return updated;

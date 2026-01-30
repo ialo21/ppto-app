@@ -54,7 +54,18 @@ import { ExternalLink, TrendingUp, Package, Users, DollarSign, Clock } from "luc
 const ESTADOS_OC = [
   "PENDIENTE", "PROCESAR", "EN_PROCESO", "PROCESADO", "APROBACION_VP",
   "ANULAR", "ANULADO", "ATENDER_COMPRAS", "ATENDIDO"
-];
+] as const;
+
+type FiltersState = {
+  search: string;
+  moneda: string;
+  selectedEstados: string[];
+  years: string[];
+  selectedUsers: string[];
+  selectedProviders: string[];
+  selectedSupports: string[];
+  selectedArticles: string[];
+};
 
 // Mapeo de colores para estados (mismo esquema que OcStatusChip)
 const getStatusColor = (estado: string): string => {
@@ -306,14 +317,15 @@ export default function OcListadoPage() {
   // Obtener usuario actual para filtro por defecto
   const { user: currentUser } = useAuth();
 
-  const [filters, setFilters] = useState({
+  const [filters, setFilters] = useState<FiltersState>({
     search: "",          // Búsqueda global
     moneda: "",
-    selectedEstados: ESTADOS_OC.filter(e => e !== "ATENDIDO"),  // Por defecto: todo menos ATENDIDO
+    selectedEstados: [] as string[],  // Sin filtro por defecto
     years: [] as string[],  // Multi-select de años
     selectedUsers: [] as string[],
     selectedProviders: [] as string[],
-    selectedSupports: [] as string[]  // Multi-select de sustentos
+    selectedSupports: [] as string[],  // Multi-select de sustentos
+    selectedArticles: [] as string[],
   });
 
 
@@ -750,11 +762,9 @@ export default function OcListadoPage() {
             <StatusMultiSelect
               label="Estado"
               placeholder="Todos los estados"
-              statuses={ESTADOS_OC}
+              statuses={[...ESTADOS_OC]}
               selectedStatuses={filters.selectedEstados}
               onChange={(selected) => setFilters(f => ({ ...f, selectedEstados: selected }))}
-              excludeStatus="ATENDIDO"
-              excludeLabel="Todo menos ATENDIDO"
             />
           </div>
           

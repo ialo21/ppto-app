@@ -22,6 +22,54 @@ const prisma = new PrismaClient();
    return `${fromText} a ${toText}`;
  }
 
+/**
+ * Envía notificación a N8N cuando una OC es procesada
+ */
+async function notifyN8nOcProcesada(ocId: number, incidenteOc: string | null) {
+  const webhookUrl = process.env.N8N_OC_PROCESADA_WEBHOOK_URL;
+  
+  if (!webhookUrl) {
+    if (process.env.NODE_ENV === "development") {
+      console.log("[RPA] N8N_OC_PROCESADA_WEBHOOK_URL no configurada, omitiendo notificación");
+    }
+    return;
+  }
+
+  try {
+    const incidentRaw = incidenteOc?.toString().trim();
+    const incidenteFormatted = incidentRaw
+      ? (incidentRaw.toUpperCase().startsWith("INC") ? incidentRaw : `INC ${incidentRaw}`)
+      : "";
+
+    const payload = {
+      incidente: incidenteFormatted,
+      ocId: ocId
+    };
+
+    if (process.env.NODE_ENV === "development") {
+      console.log(`[RPA] Enviando notificación a N8N: ${webhookUrl}`, payload);
+    }
+
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    if (process.env.NODE_ENV === "development") {
+      console.log(`[RPA] Notificación N8N enviada exitosamente para OC ${ocId}`);
+    }
+  } catch (error: any) {
+    console.error(`[RPA] Error al enviar notificación a N8N para OC ${ocId}:`, error.message);
+  }
+}
+
 export async function requireRpaKey(request: FastifyRequest, reply: FastifyReply) {
   const authHeader = request.headers.authorization;
   
@@ -386,6 +434,9 @@ export async function registerRpaRoutes(app: FastifyInstance) {
           newStatus: "PROCESADO",
           timestamp: new Date().toISOString()
         });
+
+        // Notificar a N8N que la OC fue procesada
+        await notifyN8nOcProcesada(id, data.incidenteOc || null);
 
         // Reorganizar documentos si se generó incidenteOc y Drive está habilitado
         if (data.incidenteOc && googleDriveService.isEnabled()) {

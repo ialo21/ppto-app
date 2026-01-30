@@ -743,6 +743,19 @@ export async function registerN8nRoutes(app: FastifyInstance) {
       console.log(`[N8N] Estado de OC ${id} actualizado a ${targetStatus}`);
     }
 
+    // Emitir broadcast para que el frontend se actualice en vivo
+    try {
+      await broadcastOcStatusChange({
+        ocId: id,
+        newStatus: targetStatus,
+        timestamp: new Date().toISOString()
+      });
+    } catch (err) {
+      if (process.env.NODE_ENV === "development") {
+        console.warn(`[N8N] No se pudo emitir broadcast de OC ${id}:`, err);
+      }
+    }
+
     // Si el estado cambió a PROCESADO, notificar al webhook de N8N
     if (targetStatus === "PROCESADO") {
       await notifyN8nOcProcesada(id, updated.incidenteOc);

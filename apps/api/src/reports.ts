@@ -401,6 +401,7 @@ export async function registerReportRoutes(app: FastifyInstance) {
         });
 
         // Calcular ejecutado distribuyendo el monto de cada factura entre sus períodos
+        // FACTURAS suman, NOTAS DE CREDITO restan
         executed = invoices.reduce((sum, inv) => {
           // Monto en PEN (usar montoPEN_tcReal si existe, sino montoPEN_tcEstandar, sino montoSinIgv si es PEN)
           let montoPEN = Number(inv.montoPEN_tcReal ?? inv.montoPEN_tcEstandar ?? 0);
@@ -415,7 +416,13 @@ export async function registerReportRoutes(app: FastifyInstance) {
           // Monto prorrateado a este período
           const amountThisPeriod = montoPEN / numPeriods;
           
-          return sum + amountThisPeriod;
+          // Aplicar signo según tipo de documento
+          if (inv.docType === "FACTURA") {
+            return sum + amountThisPeriod;
+          } else if (inv.docType === "NOTA_CREDITO") {
+            return sum - amountThisPeriod;
+          }
+          return sum;
         }, 0);
 
         // En modo Ejecución NO se consideran provisiones
@@ -449,13 +456,20 @@ export async function registerReportRoutes(app: FastifyInstance) {
           return true;
         });
 
+        // FACTURAS suman, NOTAS DE CREDITO restan
         executed = invoices.reduce((sum, inv) => {
           let montoPEN = Number(inv.montoPEN_tcReal ?? inv.montoPEN_tcEstandar ?? 0);
           // Si es PEN sin campos contables, usar montoSinIgv
           if (montoPEN === 0 && inv.currency === "PEN" && inv.montoSinIgv) {
             montoPEN = Number(inv.montoSinIgv);
           }
-          return sum + montoPEN;
+          // Aplicar signo según tipo de documento
+          if (inv.docType === "FACTURA") {
+            return sum + montoPEN;
+          } else if (inv.docType === "NOTA_CREDITO") {
+            return sum - montoPEN;
+          }
+          return sum;
         }, 0);
 
         // Provisiones desde tabla provisions
@@ -712,6 +726,7 @@ export async function registerReportRoutes(app: FastifyInstance) {
       });
 
       // Acumular ejecutado por sustento
+      // FACTURAS suman, NOTAS DE CREDITO restan
       invoices.forEach(inv => {
         const support = inv.oc?.support || inv.support;
         if (!support) return;
@@ -744,7 +759,12 @@ export async function registerReportRoutes(app: FastifyInstance) {
           });
         }
         const data = supportDataMap.get(sid)!;
-        data.executed += amountForRange;
+        // Aplicar signo según tipo de documento
+        if (inv.docType === "FACTURA") {
+          data.executed += amountForRange;
+        } else if (inv.docType === "NOTA_CREDITO") {
+          data.executed -= amountForRange;
+        }
       });
 
       // En modo Ejecución NO se consideran provisiones
@@ -790,6 +810,7 @@ export async function registerReportRoutes(app: FastifyInstance) {
       });
 
       // Acumular ejecutado contable por sustento
+      // FACTURAS suman, NOTAS DE CREDITO restan
       invoices.forEach(inv => {
         const support = inv.oc?.support || inv.support;
         if (!support) return;
@@ -814,7 +835,12 @@ export async function registerReportRoutes(app: FastifyInstance) {
           });
         }
         const data = supportDataMap.get(sid)!;
-        data.executed += montoPEN;
+        // Aplicar signo según tipo de documento
+        if (inv.docType === "FACTURA") {
+          data.executed += montoPEN;
+        } else if (inv.docType === "NOTA_CREDITO") {
+          data.executed -= montoPEN;
+        }
       });
 
       // Provisiones desde tabla provisions
@@ -1041,14 +1067,19 @@ export async function registerReportRoutes(app: FastifyInstance) {
         
         // Monto prorrateado
         const amountForRange = (montoPEN / numPeriods) * numRelevantPeriods;
-        totalAmount += amountForRange;
+        // Aplicar signo según tipo de documento
+        if (inv.docType === "FACTURA") {
+          totalAmount += amountForRange;
+        } else if (inv.docType === "NOTA_CREDITO") {
+          totalAmount -= amountForRange;
+        }
 
         return {
           id: inv.id,
           numeroFactura: inv.numberNorm || "Sin número",
           proveedor: proveedor?.razonSocial || inv.vendor?.legalName || "Sin proveedor",
           ruc: proveedor?.ruc || inv.vendor?.taxId || "",
-          ocNumero: inv.oc?.codigo || null,
+          ocNumero: inv.oc?.numeroOc || null,
           moneda: inv.currency,
           montoOriginal: Number(inv.montoSinIgv || 0),
           montoPEN: amountForRange,
@@ -1061,7 +1092,6 @@ export async function registerReportRoutes(app: FastifyInstance) {
           periodosRelevantes: numRelevantPeriods,
           status: inv.statusCurrent,
           mesContable: inv.mesContable,
-          fechaEmision: inv.issueDate,
           descripcion: inv.oc?.descripcion || "Sin descripción"
         };
       });
@@ -1104,20 +1134,24 @@ export async function registerReportRoutes(app: FastifyInstance) {
           montoPEN = Number(inv.montoSinIgv);
         }
         
-        totalAmount += montoPEN;
+        // Aplicar signo según tipo de documento
+        if (inv.docType === "FACTURA") {
+          totalAmount += montoPEN;
+        } else if (inv.docType === "NOTA_CREDITO") {
+          totalAmount -= montoPEN;
+        }
 
         return {
           id: inv.id,
           numeroFactura: inv.numberNorm || "Sin número",
           proveedor: proveedor?.razonSocial || inv.vendor?.legalName || "Sin proveedor",
           ruc: proveedor?.ruc || inv.vendor?.taxId || "",
-          ocNumero: inv.oc?.codigo || null,
+          ocNumero: inv.oc?.numeroOc || null,
           moneda: inv.currency,
           montoOriginal: Number(inv.montoSinIgv || 0),
           montoPEN: montoPEN,
           status: inv.statusCurrent,
           mesContable: inv.mesContable,
-          fechaEmision: inv.issueDate,
           descripcion: inv.oc?.descripcion || "Sin descripción"
         };
       });

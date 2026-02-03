@@ -1127,7 +1127,7 @@ export default function Dashboard() {
                       <Bar 
                         dataKey="executed" 
                         name="Ejecutado" 
-                        fill="#71B3FF" 
+                        fill="#1E63A9" 
                         radius={[4, 4, 0, 0]}
                         maxBarSize={60}
                       />

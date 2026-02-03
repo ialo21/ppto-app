@@ -40,14 +40,14 @@ export const tokens = {
     
     // Botones y acciones principales
     primary: {
-      main: '#71B3FF',
+      main: '#1E63A9',
       hover: '#E6398B',
       active: '#CC3279',
     },
     
     // === COLORES CORPORATIVOS POR COMPAÑÍA ===
     company: {
-      interseguro: '#71B3FF',
+      interseguro: '#1E63A9',
       crecerSeguros: '#CFAC98',
       laPositiva: '#FFE5A6',
       pacifico: '#A2F6FB',

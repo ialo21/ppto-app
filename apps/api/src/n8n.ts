@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { PrismaClient, Prisma, InvStatus, OcStatus } from "@prisma/client";
-import { broadcastOcStatusChange } from "./websocket";
+import { broadcastOcStatusChange, broadcastInvoiceStatusChange } from "./websocket";
 import { gmailMailerService } from "./gmail-mailer";
 import { z } from "zod";
 
@@ -691,6 +691,13 @@ export async function registerN8nRoutes(app: FastifyInstance) {
     if (process.env.NODE_ENV === "development") {
       console.log("[N8N] Factura creada exitosamente:", created.id);
     }
+
+    // Broadcast creación de factura via WebSocket
+    broadcastInvoiceStatusChange({
+      invoiceId: created.id,
+      newStatus: "INGRESADO",
+      timestamp: new Date().toISOString()
+    });
 
     return result;
   });

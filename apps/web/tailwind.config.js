@@ -10,7 +10,7 @@ export default {
         
         brand: {
           // Colores de Marca Principal
-          primary: '#71B3FF',        // Interseguro (primario)
+          primary: '#1E63A9',        // Interseguro (primario)
           action: '#FF429B',         // Botones de acción
           hover: '#E6398B',          // Hover/Active state
           
@@ -70,7 +70,7 @@ export default {
         // ──────────────────────────────────────────────────────────────────
         // ALIAS LEGACY (Para retrocompatibilidad - mantener temporalmente)
         // ──────────────────────────────────────────────────────────────────
-        'brand-primary': '#71B3FF',
+        'brand-primary': '#1E63A9',
         'brand-hover': '#E6398B',
         'brand-active': '#E6398B',
         'dashboard': '#F2F4F4',
@@ -84,7 +84,7 @@ export default {
         'status-error': '#F94666',
         'status-warning': '#FDCE5F',
         'status-success': '#31D785',
-        'company-interseguro': '#71B3FF',
+        'company-interseguro': '#1E63A9',
         'company-crecer': '#CFAC98',
         'company-positiva': '#FFE5A6',
         'company-pacifico': '#A2F6FB',

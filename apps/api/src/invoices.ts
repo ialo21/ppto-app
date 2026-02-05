@@ -42,8 +42,8 @@ const updateInvoiceSchema = z.object({
   montoSinIgv: z.number().nonnegative().optional(),
   periodIds: z.array(z.number().int().positive()).min(1).optional(),
   allocations: z.array(allocationSchema).min(1).optional(),
-  ultimusIncident: z.string().optional(),
-  detalle: z.string().optional(),
+  ultimusIncident: z.string().nullish(),  // IMPORTANTE: .nullish() permite borrar el incidente enviando null
+  detalle: z.string().nullish(),  // IMPORTANTE: .nullish() permite borrar el detalle enviando null
   supportId: z.number().int().positive().optional(),  // Sustento para facturas sin OC
   proveedorId: z.number().int().positive().optional(),
   proveedor: z.string().optional(),  // Legacy - mantener por compatibilidad

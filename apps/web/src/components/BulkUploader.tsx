@@ -331,15 +331,15 @@ export default function BulkUploader({
             {showBudgetTypeSelector && (
               <div className="space-y-2">
                 <label className="block text-sm font-medium">Tipo de Presupuesto</label>
-                <div className="inline-flex rounded-lg border border-slate-300 bg-white p-1">
+                <div className="inline-flex rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800/80 p-1">
                   <button
                     type="button"
                     onClick={() => setBudgetType('PPTO')}
                     className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
                       budgetType === 'PPTO'
                         ? 'bg-brand-primary text-white shadow-sm'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
+                        : 'text-slate-600 dark:text-gray-200 hover:text-slate-900 dark:hover:text-white'
+                      }`}
                   >
                     PPTO (Original)
                   </button>
@@ -349,13 +349,13 @@ export default function BulkUploader({
                     className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
                       budgetType === 'RPPTO'
                         ? 'bg-brand-primary text-white shadow-sm'
-                        : 'text-slate-600 hover:text-slate-900'
+                        : 'text-slate-600 dark:text-gray-200 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
                     RPPTO (Revisado)
                   </button>
                 </div>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-500 dark:text-gray-300">
                   Selecciona si deseas cargar presupuesto original (PPTO) o revisado (RPPTO)
                 </p>
               </div>

@@ -69,12 +69,12 @@ function StatCard({
   subtitle?: string;
 }) {
   return (
-    <div className={`${highlighted ? 'bg-purple-50 border-purple-400' : 'bg-white border-brand-border'} border rounded-xl p-4 xl:p-5 flex flex-col transition-all duration-200 hover:shadow-medium`}>
+    <div className={`${highlighted ? 'bg-purple-50 dark:bg-purple-900/30 border-purple-400' : 'bg-white dark:bg-slate-800 border-brand-border dark:border-slate-600'} border rounded-xl p-4 xl:p-5 flex flex-col transition-all duration-200 hover:shadow-medium`}>
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1">
           <p className="text-xs sm:text-sm text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">{title}</p>
         </div>
-        <div className={`p-2 rounded-lg ${highlighted ? 'bg-purple-200' : 'bg-brand-background'}`}>
+        <div className={`p-2 rounded-lg ${highlighted ? 'bg-purple-400/10' : 'bg-brand-background dark:bg-slate-700'}`}>
           <Icon size={18} className={`${highlighted ? 'text-purple-700' : 'text-brand-text-secondary'}`} strokeWidth={2} />
         </div>
       </div>
@@ -331,7 +331,7 @@ export default function AprobacionVPFacturasPage() {
           onChange={(e: any) => setSearch(e.target.value)}
           className="max-w-md"
         />
-        <div className="flex gap-2 border rounded-lg p-1">
+        <div className="flex gap-2 border border-gray-300 dark:border-slate-600 rounded-lg p-1 dark:bg-slate-800/50">
           <Button
             variant={viewMode === "cards" ? "primary" : "ghost"}
             size="sm"
@@ -388,17 +388,17 @@ export default function AprobacionVPFacturasPage() {
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b">
+                <thead className="bg-gray-50 dark:bg-slate-800 border-b dark:border-slate-600">
                   <tr>
-                    <th className="text-left p-3 font-semibold">Incidente</th>
-                    <th className="text-left p-3 font-semibold">Número</th>
-                    <th className="text-left p-3 font-semibold">Proveedor</th>
-                    <th className="text-left p-3 font-semibold">Monto sin IGV</th>
-                    <th className="text-left p-3 font-semibold">Períodos</th>
-                    <th className="text-left p-3 font-semibold">Sustento</th>
-                    <th className="text-left p-3 font-semibold">Detalle</th>
-                    <th className="text-left p-3 font-semibold">Tipo</th>
-                    <th className="text-right p-3 font-semibold">Acciones</th>
+                    <th className="text-center p-3 font-semibold">Incidente</th>
+                    <th className="text-center p-3 font-semibold">Número</th>
+                    <th className="text-center p-3 font-semibold">Proveedor</th>
+                    <th className="text-center p-3 font-semibold">Monto sin IGV</th>
+                    <th className="text-center p-3 font-semibold">Períodos</th>
+                    <th className="text-center p-3 font-semibold">Sustento</th>
+                    <th className="text-center p-3 font-semibold">Detalle</th>
+                    <th className="text-center p-3 font-semibold">Tipo</th>
+                    <th className="text-center p-3 font-semibold">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -407,23 +407,23 @@ export default function AprobacionVPFacturasPage() {
                     const sustento = invoice.oc?.support?.name || invoice.support?.name || "-";
                     const montoSinIgv = invoice.montoSinIgv ? Number(invoice.montoSinIgv) : 0;
                     return (
-                      <tr key={invoice.id} className="border-b hover:bg-gray-50">
-                        <td className="p-3">
+                      <tr key={invoice.id} className="border-b border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50">
+                        <td className="p-3 text-center">
                           <div className="font-medium">{invoice.ultimusIncident ? `INC ${invoice.ultimusIncident}` : "Sin incidente"}</div>
                           <div className="text-xs text-gray-500">{new Date(invoice.createdAt).toLocaleDateString('es-PE')}</div>
                         </td>
-                        <td className="p-3">
+                        <td className="p-3 text-center">
                           <div className="font-medium">{invoice.numberNorm || "Sin número"}</div>
                         </td>
-                        <td className="p-3">
+                        <td className="p-3 text-center">
                           <div className="font-medium truncate max-w-[200px]" title={proveedor}>{proveedor}</div>
                         </td>
-                        <td className="p-3 font-semibold">
+                        <td className="p-3 text-center font-semibold">
                           <div className="font-bold text-purple-700">
                             {invoice.currency} {formatNumber(montoSinIgv)}
                           </div>
                         </td>
-                        <td className="p-3">
+                        <td className="p-3 text-center">
                           <div className="text-sm">
                             {invoice.periods && invoice.periods.length > 0 
                               ? formatPeriodsRange(invoice.periods.map(p => p.period))
@@ -431,17 +431,17 @@ export default function AprobacionVPFacturasPage() {
                             }
                           </div>
                         </td>
-                        <td className="p-3">
+                        <td className="p-3 text-center">
                           <div className="text-sm" title={sustento}>
                             {sustento}
                           </div>
                         </td>
-                        <td className="p-3">
+                        <td className="p-3 text-center">
                           <div className="text-sm whitespace-pre-wrap" title={invoice.detalle || "-"}>
                             {invoice.detalle || "-"}
                           </div>
                         </td>
-                        <td className="p-3">
+                        <td className="p-3 text-center">
                           <span className={`text-xs px-2 py-1 rounded-full font-medium ${
                             invoice.docType === "NOTA_CREDITO" 
                               ? "bg-red-100 text-red-800" 
@@ -450,8 +450,8 @@ export default function AprobacionVPFacturasPage() {
                             {invoice.docType === "NOTA_CREDITO" ? "NC" : "FAC"}
                           </span>
                         </td>
-                        <td className="p-3">
-                          <div className="flex justify-end gap-2">
+                        <td className="p-3 text-center">
+                          <div className="flex justify-center gap-2">
                             <Button
                               variant="primary"
                               size="sm"

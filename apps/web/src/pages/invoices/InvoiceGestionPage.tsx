@@ -17,7 +17,8 @@ import SupportMultiSelect, { SupportOption } from "../../components/ui/SupportMu
 import { formatNumber } from "../../utils/numberFormat";
 import { formatPeriodLabel } from "../../utils/periodFormat";
 import ProveedorSelector from "../../components/ProveedorSelector";
-import { Pencil, Copy, Trash2 } from "lucide-react";
+import { Pencil, Copy, Trash2, LayoutGrid, CheckCircle2, Package, FileText } from "lucide-react";
+import Modal from "../../components/ui/Modal";
 
 type OC = {
   id: number;
@@ -27,7 +28,12 @@ type OC = {
   solicitanteUser?: { id: number; name: string | null; email: string } | null;
   moneda: string;
   importeSinIgv: number;
-  support: { id: number; name: string };
+  support: { 
+    id: number; 
+    name: string;
+    expensePackage?: { id: number; name: string } | null;
+    expenseConcept?: { id: number; name: string } | null;
+  };
   costCenters?: { id: number; costCenterId: number; costCenter: { id: number; code: string; name: string } }[];
   budgetPeriodFrom?: { id: number; year: number; month: number };
   budgetPeriodTo?: { id: number; year: number; month: number };
@@ -41,6 +47,8 @@ type Invoice = {
   support?: {
     id: number;
     name: string;
+    expensePackage?: { id: number; name: string } | null;
+    expenseConcept?: { id: number; name: string } | null;
   } | null;
   // Proveedor para facturas sin OC
   proveedorId?: number | null;
@@ -150,6 +158,7 @@ export default function InvoiceGestionPage() {
     selectedEstados: [] as string[],  // Multi-select de estados
     docType: "", 
     numeroOc: "",
+    numeroFactura: "",
     selectedProviders: [] as string[],
     selectedUsers: [] as string[],
     selectedSupports: [] as string[]  // Multi-select de sustentos
@@ -169,7 +178,16 @@ export default function InvoiceGestionPage() {
     }
 
     if (excludeFilter !== 'numeroOc' && filters.numeroOc) {
-      result = result.filter(inv => inv.oc?.numeroOc?.toLowerCase().includes(filters.numeroOc.toLowerCase()));
+      const search = filters.numeroOc.toLowerCase();
+      result = result.filter(inv => {
+        const ocNumber = inv.oc?.numeroOc?.toLowerCase();
+        return ocNumber ? ocNumber.includes(search) : false;
+      });
+    }
+
+    if (excludeFilter !== 'numeroFactura' && filters.numeroFactura) {
+      const search = filters.numeroFactura.toLowerCase();
+      result = result.filter(inv => inv.numberNorm?.toLowerCase().includes(search));
     }
 
     if (excludeFilter !== 'users' && filters.selectedUsers.length > 0) {
@@ -314,6 +332,11 @@ export default function InvoiceGestionPage() {
    */
   const [formMode, setFormMode] = useState<'create' | 'edit' | null>(null);
 
+  // Estado para modal de distribución
+  const [isDistributionModalOpen, setIsDistributionModalOpen] = useState(false);
+  const [distributionIncidents, setDistributionIncidents] = useState<Record<number, string>>({});
+  const [distributionSort, setDistributionSort] = useState<'asc' | 'desc'>('asc');
+
   // Query consumo de OC seleccionada
   const { data: consumoOC } = useQuery<ConsumoOC>({
     queryKey: ["invoices", "oc", form.ocId, "consumo"],
@@ -399,13 +422,46 @@ export default function InvoiceGestionPage() {
   }, [formMode, hasOC, selectedOC]);
 
   // Facturas filtradas y ordenadas
+  // Facturas INGRESADO para modal de distribución
+  const ingresadoInvoices = useMemo(() => {
+    if (!invoices) return [];
+    return invoices.filter(inv => inv.statusCurrent === "INGRESADO");
+  }, [invoices]);
+
+  const sortedIngresadoInvoices = useMemo(() => {
+    const list = [...ingresadoInvoices];
+    return list.sort((a, b) => {
+      const aNum = a.numberNorm || "";
+      const bNum = b.numberNorm || "";
+      return distributionSort === 'asc' ? aNum.localeCompare(bNum) : bNum.localeCompare(aNum);
+    });
+  }, [ingresadoInvoices, distributionSort]);
+
+  // Inicializar incidentes editables cuando se abre el modal
+  useEffect(() => {
+    if (isDistributionModalOpen && ingresadoInvoices.length > 0) {
+      const incidents: Record<number, string> = {};
+      ingresadoInvoices.forEach(inv => {
+        incidents[inv.id] = inv.ultimusIncident || "";
+      });
+      setDistributionIncidents(incidents);
+    }
+  }, [isDistributionModalOpen, ingresadoInvoices]);
+
   const filteredInvoices = useMemo(() => {
     if (!invoices) return [];
 
     let filtered = invoices.filter(inv => {
       if (filters.selectedEstados.length > 0 && !filters.selectedEstados.includes(inv.statusCurrent)) return false;
       if (filters.docType && inv.docType !== filters.docType) return false;
-      if (filters.numeroOc && inv.oc?.numeroOc?.toLowerCase().includes(filters.numeroOc.toLowerCase()) === false) return false;
+      if (filters.numeroOc) {
+        const ocNumber = inv.oc?.numeroOc?.toLowerCase();
+        if (!ocNumber || !ocNumber.includes(filters.numeroOc.toLowerCase())) return false;
+      }
+      if (filters.numeroFactura) {
+        const num = inv.numberNorm?.toLowerCase();
+        if (!num || !num.includes(filters.numeroFactura.toLowerCase())) return false;
+      }
       if (filters.selectedUsers.length > 0) {
         // Verificar tanto createdByUser como oc.solicitanteUser
         const createdByEmail = inv.createdByUser?.email;
@@ -732,8 +788,9 @@ export default function InvoiceGestionPage() {
         exchangeRateOverride: form.exchangeRateOverride ? Number(form.exchangeRateOverride) : undefined,
         periodIds,
         allocations: allocationsWithAmount,
-        ultimusIncident: form.ultimusIncident.trim() || undefined,
-        detalle: form.detalle.trim() || undefined,
+        // IMPORTANTE: Si el campo está vacío, enviar null explícitamente para borrar el valor en BD
+        ultimusIncident: form.ultimusIncident.trim() ? form.ultimusIncident.trim() : null,
+        detalle: form.detalle.trim() ? form.detalle.trim() : null,
         // Campos contables
         // IMPORTANTE: mesContable se envía explícitamente como null si se borró
         mesContable: mesContableStr,
@@ -895,6 +952,41 @@ export default function InvoiceGestionPage() {
       }]);
     }
   }, [availableCostCenters, allocations.length, formMode]);
+
+  // Mutation para actualizar incidente y estado juntos
+  const approveInvoiceMutation = useMutation({
+    mutationFn: async ({ id, ultimusIncident }: { id: number; ultimusIncident: string }) => {
+      // Primero actualizar el incidente si cambió
+      const invoice = invoices?.find(inv => inv.id === id);
+      if (invoice && ultimusIncident !== (invoice.ultimusIncident || "")) {
+        await api.patch(`/invoices/${id}`, { ultimusIncident: ultimusIncident.trim() || undefined });
+      }
+      // Luego cambiar el estado a EN_APROBACION
+      return await api.patch(`/invoices/${id}/status`, { status: "EN_APROBACION" });
+    },
+    onSuccess: (data, variables) => {
+      toast.success(`Factura aprobada y enviada a EN_APROBACION`);
+      queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      // Remover de la lista local
+      setDistributionIncidents(prev => {
+        const newIncidents = { ...prev };
+        delete newIncidents[variables.id];
+        return newIncidents;
+      });
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || "Error al aprobar la factura");
+    }
+  });
+
+  const handleApproveInvoice = (invoiceId: number) => {
+    const incident = distributionIncidents[invoiceId] || "";
+    if (!incident.trim()) {
+      toast.error("El incidente Ultimus es requerido para aprobar");
+      return;
+    }
+    approveInvoiceMutation.mutate({ id: invoiceId, ultimusIncident: incident });
+  };
 
   return (
     <div className="space-y-4">
@@ -1128,8 +1220,8 @@ export default function InvoiceGestionPage() {
             </div>
 
             {/* Separador */}
-            <div className="col-span-full border-t border-slate-200 pt-4">
-              <h3 className="text-md font-semibold text-slate-700 mb-3">📅 Periodos y Distribución</h3>
+            <div className="col-span-full border-t border-slate-200 dark:border-slate-700 pt-4">
+              <h3 className="text-md font-semibold text-slate-700 dark:text-gray-200 mb-3">📅 Periodos y Distribución</h3>
             </div>
 
             {/* Periodos (rango desde/hasta) */}
@@ -1186,8 +1278,8 @@ export default function InvoiceGestionPage() {
             </div>
 
             {/* Separador */}
-            <div className="col-span-full border-t border-slate-200 pt-4">
-              <h3 className="text-md font-semibold text-slate-700 mb-3">📊 Datos Contables</h3>
+            <div className="col-span-full border-t border-slate-200 dark:border-slate-700 pt-4">
+              <h3 className="text-md font-semibold text-slate-700 dark:text-gray-200 mb-3">📊 Datos Contables</h3>
             </div>
 
             {/* Mes Contable */}
@@ -1270,12 +1362,12 @@ export default function InvoiceGestionPage() {
               </div>
             ) : availableCostCenters.length === 1 ? (
               // Solo 1 CECO → 100% automático bloqueado
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-md">
+              <div className="p-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">
+                  <span className="text-sm font-medium dark:text-gray-200">
                     {availableCostCenters[0].code} - {availableCostCenters[0].name}
                   </span>
-                  <span className="text-sm font-bold text-brand-600">
+                  <span className="text-sm font-bold text-brand-600 dark:text-blue-400">
                     100%
                   </span>
                 </div>
@@ -1357,36 +1449,32 @@ export default function InvoiceGestionPage() {
           </div>
 
           {/* Información de OC (Read-only) */}
-          {selectedOC && (
-            <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
-              <h3 className="font-medium text-sm text-slate-900">Información de la OC</h3>
+          {selectedOC && consumoOC && (
+            <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg space-y-2">
+              <h3 className="font-medium text-sm text-slate-900 dark:text-gray-100">Información de la OC</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
                 <div>
-                  <span className="text-slate-600">Proveedor:</span>
-                  <p className="font-medium text-slate-900">{selectedOC.proveedorRef?.razonSocial || selectedOC.proveedor || "Sin proveedor"}</p>
+                  <span className="text-slate-600 dark:text-gray-300">Proveedor:</span>
+                  <p className="font-medium text-slate-900 dark:text-gray-100">{selectedOC.proveedorRef?.razonSocial || selectedOC.proveedor || ""}</p>
                 </div>
                 <div>
-                  <span className="text-slate-600">Moneda:</span>
-                  <p className="font-medium text-slate-900">{selectedOC.moneda}</p>
+                  <span className="text-slate-600 dark:text-gray-300">Moneda:</span>
+                  <p className="font-medium text-slate-900 dark:text-gray-100">{selectedOC.moneda}</p>
                 </div>
-                {consumoOC && (
-                  <>
-                    <div>
-                      <span className="text-slate-600">Importe Total:</span>
-                      <p className="font-medium text-slate-900">{consumoOC.moneda} {formatNumber(consumoOC.importeTotal)}</p>
-                    </div>
-                    <div>
-                      <span className="text-slate-600">Consumido:</span>
-                      <p className="font-medium text-slate-900">{consumoOC.moneda} {formatNumber(consumoOC.consumido)}</p>
-                    </div>
-                    <div className="md:col-span-2">
-                      <span className="text-slate-600">Saldo Disponible:</span>
-                      <p className={`font-medium ${consumoOC.saldoDisponible < 0 ? "text-red-600" : "text-green-600"}`}>
-                        {consumoOC.moneda} {formatNumber(consumoOC.saldoDisponible)}
-                      </p>
-                    </div>
-                  </>
-                )}
+                <div>
+                  <span className="text-slate-600 dark:text-gray-300">Importe Total:</span>
+                  <p className="font-medium text-slate-900 dark:text-gray-100">{selectedOC.moneda} {formatNumber(selectedOC.importeSinIgv)}</p>
+                </div>
+                <div>
+                  <span className="text-slate-600 dark:text-gray-300">Consumido:</span>
+                  <p className="font-medium text-slate-900 dark:text-gray-100">{consumoOC.moneda} {formatNumber(consumoOC.consumido)}</p>
+                </div>
+                <div className="md:col-span-2">
+                  <span className="text-slate-600 dark:text-gray-300">Saldo Disponible:</span>
+                  <p className={`font-medium ${consumoOC.saldoDisponible < 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
+                    {consumoOC.moneda} {formatNumber(consumoOC.saldoDisponible)}
+                  </p>
+                </div>
               </div>
             </div>
           )}
@@ -1408,7 +1496,7 @@ export default function InvoiceGestionPage() {
         </CardHeader>
         <CardContent>
           {/* Primera fila de filtros */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             <UserMultiSelect
               label="Responsable"
               users={availableUsers}
@@ -1448,6 +1536,21 @@ export default function InvoiceGestionPage() {
               searchable={false}
               className="w-full"
             />
+          </div>
+
+          {/* Segunda fila de filtros */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 mt-3">
+            <div>
+              <label className="block text-xs text-brand-text-secondary font-medium mb-1">Número de Factura</label>
+              <Input
+                placeholder="Buscar por número de factura"
+                value={filters.numeroFactura}
+                onChange={e => {
+                  setFilters(f => ({ ...f, numeroFactura: e.target.value }));
+                  setSortConfig(DEFAULT_SORT);
+                }}
+              />
+            </div>
 
             <div>
               <label className="block text-xs text-brand-text-secondary font-medium mb-1">Número OC</label>
@@ -1460,10 +1563,7 @@ export default function InvoiceGestionPage() {
                 }}
               />
             </div>
-          </div>
-          
-          {/* Segunda fila de filtros */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 mt-3">
+
             <StatusMultiSelect
               label="Estado"
               placeholder="Todos los estados"
@@ -1498,19 +1598,37 @@ export default function InvoiceGestionPage() {
                 <span>Sustentos: {filters.selectedSupports.length}</span>
               )}
             </div>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                const p = new URLSearchParams();
-                if (filters.selectedEstados.length > 0) p.set("status", filters.selectedEstados.join(","));
-                if (filters.docType) p.set("docType", filters.docType);
-                window.open(`http://localhost:3001/invoices/export/csv?${p.toString()}`, "_blank");
-              }}
-              size="sm"
-            >
-              Exportar CSV
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => setIsDistributionModalOpen(true)}
+                size="sm"
+                className="flex items-center gap-2"
+              >
+                <LayoutGrid size={16} />
+                Distribución
+                {ingresadoInvoices.length > 0 && (
+                  <span className="ml-1 inline-flex items-center justify-center min-w-[22px] h-5 px-2 text-xs font-semibold leading-none rounded-full bg-blue-600 text-white shadow-sm border border-blue-600">
+                    {ingresadoInvoices.length}
+                  </span>
+                )}
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  const p = new URLSearchParams();
+                  if (filters.selectedEstados.length > 0) p.set("status", filters.selectedEstados.join(","));
+                  if (filters.docType) p.set("docType", filters.docType);
+                  window.open(`http://localhost:3001/invoices/export/csv?${p.toString()}`, "_blank");
+                }}
+                size="sm"
+              >
+                Exportar CSV
+              </Button>
+            </div>
           </div>
+
+          <div className="mt-4" />
 
           {isLoading ? (
             <p>Cargando...</p>
@@ -1519,30 +1637,30 @@ export default function InvoiceGestionPage() {
               <Table>
                 <thead>
                   <tr>
-                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("numberNorm")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 text-center" onClick={() => handleSort("numberNorm")}>
                       Número {sortConfig.key === "numberNorm" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("docType")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 text-center" onClick={() => handleSort("docType")}>
                       Tipo {sortConfig.key === "docType" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("numeroOc")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 text-center" onClick={() => handleSort("numeroOc")}>
                       OC {sortConfig.key === "numeroOc" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("proveedor")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 text-center" onClick={() => handleSort("proveedor")}>
                       Proveedor {sortConfig.key === "proveedor" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("currency")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 text-center" onClick={() => handleSort("currency")}>
                       Moneda {sortConfig.key === "currency" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("montoSinIgv")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 text-center" onClick={() => handleSort("montoSinIgv")}>
                       Monto sin IGV {sortConfig.key === "montoSinIgv" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
                     <Th className="text-center">Periodos</Th>
                     <Th className="text-center">CECOs</Th>
-                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("ultimusIncident")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 text-center" onClick={() => handleSort("ultimusIncident")}>
                       Incidente {sortConfig.key === "ultimusIncident" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("statusCurrent")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 text-center" onClick={() => handleSort("statusCurrent")}>
                       Estado {sortConfig.key === "statusCurrent" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
                     <Th className="text-center">Acciones</Th>
@@ -1581,7 +1699,7 @@ export default function InvoiceGestionPage() {
                             {inv.costCenters.map((cc: any) => (
                               <span
                                 key={cc.id}
-                                className="inline-block px-1.5 py-0.5 text-xs rounded bg-slate-100"
+                                className="inline-block px-1.5 py-0.5 text-xs rounded bg-slate-100 dark:bg-slate-700/80 dark:text-gray-200 dark:border dark:border-slate-600"
                               >
                                 {cc.costCenter.code}
                               </span>
@@ -1644,6 +1762,211 @@ export default function InvoiceGestionPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Modal de Distribución */}
+      <Modal
+        isOpen={isDistributionModalOpen}
+        onClose={() => setIsDistributionModalOpen(false)}
+        title="Distribución de Facturas"
+        size="2xl"
+      >
+        <div className="p-6">
+          {/* Header con información */}
+          <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-slate-700 rounded-xl border border-blue-100 dark:border-slate-600">
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-white dark:bg-slate-600 rounded-lg shadow-sm">
+                <FileText className="text-brand-600 dark:text-blue-400" size={24} />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-brand-text-primary dark:text-white mb-1">
+                  Facturas pendientes de aprobación
+                </h3>
+                <p className="text-sm text-brand-text-secondary dark:text-gray-300">
+                  Revisa y completa la información de las facturas en estado <span className="font-semibold">INGRESADO</span> antes de enviarlas a aprobación.
+                </p>
+                <div className="mt-3 flex items-center gap-4 text-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-brand-600"></div>
+                    <span className="text-brand-text-secondary dark:text-gray-300">
+                      <span className="font-semibold text-brand-text-primary dark:text-white">{ingresadoInvoices.length}</span> factura{ingresadoInvoices.length !== 1 ? 's' : ''} pendiente{ingresadoInvoices.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Tabla de distribución */}
+          {ingresadoInvoices.length === 0 ? (
+            <div className="py-12 text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-700 mb-4">
+                <CheckCircle2 className="text-slate-400 dark:text-slate-500" size={32} />
+              </div>
+              <h3 className="text-lg font-medium text-brand-text-primary dark:text-white mb-2">
+                No hay facturas pendientes
+              </h3>
+              <p className="text-sm text-brand-text-secondary dark:text-gray-400">
+                Todas las facturas han sido procesadas o no hay facturas en estado INGRESADO.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-700 border-b-2 border-slate-200 dark:border-slate-600">
+                    <th
+                      className="px-3 py-3 text-left text-xs font-semibold text-brand-text-primary dark:text-white uppercase tracking-wider w-[12%] cursor-pointer select-none"
+                      onClick={() => setDistributionSort(prev => prev === 'asc' ? 'desc' : 'asc')}
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        N° Factura
+                        <span className="text-[10px] text-brand-text-secondary dark:text-gray-400">
+                          {distributionSort === 'asc' ? '↑' : '↓'}
+                        </span>
+                      </span>
+                    </th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-brand-text-primary dark:text-white uppercase tracking-wider w-[18%]">
+                      <div className="flex items-center gap-1">
+                        <Package size={14} />
+                        Paquete
+                      </div>
+                    </th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-brand-text-primary dark:text-white uppercase tracking-wider w-[18%]">
+                      Concepto
+                    </th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-brand-text-primary dark:text-white uppercase tracking-wider w-[15%]">
+                      CECOs
+                    </th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-brand-text-primary dark:text-white uppercase tracking-wider w-[25%]">
+                      Incidente Ultimus
+                    </th>
+                    <th className="px-3 py-3 text-center text-xs font-semibold text-brand-text-primary dark:text-white uppercase tracking-wider w-[12%]">
+                      pase Aprobación
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                  {sortedIngresadoInvoices.map((invoice) => {
+                    const support = invoice.oc?.support || invoice.support;
+                    const hasFixedIncident = !!invoice.ultimusIncident;
+                    const currentIncident = distributionIncidents[invoice.id] || "";
+                    
+                    return (
+                      <tr
+                        key={invoice.id}
+                        className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors duration-150"
+                      >
+                        {/* Número de Factura */}
+                        <td className="px-3 py-3">
+                          <div className="flex flex-col">
+                            <span className="font-medium text-sm text-brand-text-primary dark:text-white">
+                              {invoice.numberNorm || "-"}
+                            </span>
+                            <span className="text-xs text-brand-text-secondary dark:text-gray-400">
+                              {invoice.oc?.numeroOc ? `OC: ${invoice.oc.numeroOc}` : "Sin OC"}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Paquete de Gasto */}
+                        <td className="px-3 py-3">
+                          {support?.expensePackage ? (
+                            <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">
+                              <Package size={12} className="text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                              <span className="text-xs font-medium text-blue-900 dark:text-blue-300 truncate">
+                                {support.expensePackage.name}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400 dark:text-slate-500 italic">Sin paquete</span>
+                          )}
+                        </td>
+
+                        {/* Concepto de Gasto */}
+                        <td className="px-3 py-3">
+                          {support?.expenseConcept ? (
+                            <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800">
+                              <span className="text-xs font-medium text-purple-900 dark:text-purple-300 truncate">
+                                {support.expenseConcept.name}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400 dark:text-slate-500 italic">Sin concepto</span>
+                          )}
+                        </td>
+
+                        {/* CECOs */}
+                        <td className="px-3 py-3">
+                          {invoice.costCenters && invoice.costCenters.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {invoice.costCenters.map((cc) => (
+                                <div
+                                  key={cc.id}
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600"
+                                >
+                                  <span className="text-xs font-mono font-semibold text-brand-text-primary dark:text-white">
+                                    {cc.costCenter.code}
+                                  </span>
+                                  {cc.percentage && (
+                                    <span className="text-xs text-brand-text-secondary dark:text-gray-400">
+                                      ({cc.percentage}%)
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400 dark:text-slate-500 italic">Sin CECOs</span>
+                          )}
+                        </td>
+
+                        {/* Incidente Ultimus */}
+                        <td className="px-3 py-3">
+                          {hasFixedIncident ? (
+                            <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800">
+                              <CheckCircle2 size={12} className="text-green-600 dark:text-green-400 flex-shrink-0" />
+                              <span className="text-xs font-medium text-green-900 dark:text-green-300 truncate">
+                                {invoice.ultimusIncident}
+                              </span>
+                            </div>
+                          ) : (
+                            <Input
+                              placeholder="Ingresar incidente..."
+                              value={currentIncident}
+                              onChange={(e) => {
+                                setDistributionIncidents(prev => ({
+                                  ...prev,
+                                  [invoice.id]: e.target.value
+                                }));
+                              }}
+                              className="text-xs h-8"
+                            />
+                          )}
+                        </td>
+
+                        {/* Acción */}
+                        <td className="px-3 py-3 text-center">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => handleApproveInvoice(invoice.id)}
+                            disabled={!currentIncident.trim() || approveInvoiceMutation.isPending}
+                            className="flex items-center justify-center mx-auto h-9 w-9 rounded-full bg-green-500 text-white hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-green-400"
+                            title="Aprobar"
+                          >
+                            <CheckCircle2 size={16} />
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -278,9 +278,6 @@ export default function SustentoInvoicesModal({
                                   OC: {invoice.ocNumero}
                                 </div>
                               )}
-                              <div className="text-xs text-brand-text-disabled mt-1">
-                                {formatDate(invoice.fechaEmision)}
-                              </div>
                             </div>
                           </td>
                           <td className="p-3 border-b border-brand-border-light">

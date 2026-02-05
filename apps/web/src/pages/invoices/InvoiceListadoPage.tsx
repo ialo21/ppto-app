@@ -143,7 +143,7 @@ function StatCard({
   return (
     <div 
       className={`
-        ${highlighted ? 'bg-table-total border-brand-primary' : 'bg-white border-brand-border'}
+        ${highlighted ? 'bg-table-total dark:bg-blue-900/30 border-brand-primary' : 'bg-white dark:bg-slate-800 border-brand-border dark:border-slate-600'}
         border rounded-xl p-4 xl:p-5 flex flex-col
         transition-all duration-200 hover:shadow-medium hover:scale-[1.02]
       `}
@@ -154,7 +154,7 @@ function StatCard({
             {title}
           </p>
         </div>
-        <div className={`p-2 rounded-lg ${highlighted ? 'bg-brand-primary/10' : 'bg-brand-background'}`}>
+        <div className={`p-2 rounded-lg ${highlighted ? 'bg-brand-primary/10' : 'bg-brand-background dark:bg-slate-700'}`}>
           <Icon 
             size={18} 
             className={`${highlighted ? 'text-brand-primary' : 'text-brand-text-secondary'}`} 
@@ -239,9 +239,9 @@ function InvoiceCard({
         </div>
         
         {/* Importe */}
-        <div className="mb-3 p-3 bg-brand-background rounded-lg">
-          <p className="text-xs text-brand-text-secondary mb-1">Importe sin IGV</p>
-          <p className="text-xl font-bold text-brand-primary">
+        <div className="mb-3 p-3 bg-brand-background dark:bg-slate-900/80 border border-transparent dark:border-slate-700 rounded-lg">
+          <p className="text-xs text-brand-text-secondary dark:text-gray-200 mb-1">Importe sin IGV</p>
+          <p className="text-xl font-bold text-brand-primary dark:text-blue-200">
             {invoice.currency} {formatNumber(invoice.montoSinIgv || 0)}
           </p>
         </div>

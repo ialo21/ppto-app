@@ -10,6 +10,10 @@
   color-scheme: light;
 }
 
+.dark {
+  color-scheme: dark;
+}
+
 /* Prevent horizontal scroll on the page */
 html,
 body {
@@ -25,8 +29,12 @@ body {
  */
 body { 
   @apply bg-dashboard text-text-primary;
-  /* O usando la nueva nomenclatura semántica: */
-  /* @apply bg-brand-background text-brand-text-primary; */
+}
+
+.dark body,
+html.dark body {
+  background-color: #0f172a;
+  color: #e2e8f0;
 }
 
 /* Layout principal - prevenir overflow */
@@ -58,6 +66,22 @@ body {
   transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1), 
               transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
               box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Sidebar dark mode */
+.dark .sidebar-fixed {
+  /* Mantener el gradiente corporativo también en modo oscuro */
+  background: linear-gradient(180deg, #1E63A9 0%, #165086 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Mejoras de contraste para textos en dark mode */
+.dark .text-brand-text-primary {
+  color: #e2e8f0 !important;
+}
+
+.dark .text-brand-text-secondary {
+  color: #94a3b8 !important;
 }
 
 /* Sidebar colapsado (solo en desktop) */

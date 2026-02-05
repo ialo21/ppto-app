@@ -101,7 +101,7 @@ export default function UserMultiSelect({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="h-9 w-full px-3 text-left border border-brand-border rounded-xl bg-white text-xs sm:text-sm flex items-center justify-between gap-2 transition-all duration-200 hover:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
+        className="h-9 w-full px-3 text-left border border-brand-border dark:border-slate-600 rounded-xl bg-white dark:bg-slate-800 text-xs sm:text-sm dark:text-gray-200 flex items-center justify-between gap-2 transition-all duration-200 hover:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
       >
         <span className={selectedUsers.length === 0 ? "text-brand-text-disabled" : "text-brand-text-primary"}>
           {getSelectedLabel()}
@@ -118,15 +118,15 @@ export default function UserMultiSelect({
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-brand-border rounded-xl shadow-lg max-h-72 overflow-hidden">
+        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-600 rounded-xl shadow-lg max-h-72 overflow-hidden">
           {/* Acciones rápidas */}
-          <div className="sticky top-0 bg-white border-b border-brand-border p-2 flex flex-col gap-2">
+          <div className="sticky top-0 bg-white dark:bg-slate-800 border-b border-brand-border dark:border-slate-700 p-2 flex flex-col gap-2">
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar por nombre o correo"
-              className="h-9 w-full px-3 text-sm border border-brand-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
+              className="w-full px-3 py-1.5 border border-brand-border dark:border-slate-600 dark:bg-slate-700 dark:text-gray-200 dark:placeholder-gray-500 rounded-lg text-xs placeholder:text-brand-text-disabled focus:outline-none focus:ring-2 focus:ring-brand-primary"
             />
             <div className="flex gap-2">
             <button
@@ -161,14 +161,14 @@ export default function UserMultiSelect({
                     type="button"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => toggleUser(user.email)}
-                    className="w-full text-left flex items-center gap-2 px-3 py-2 hover:bg-brand-background cursor-pointer"
+                    className="w-full text-left flex items-center gap-2 px-3 py-2 hover:bg-brand-background dark:hover:bg-slate-700 cursor-pointer"
                   >
                     <div
                       className={`
                         w-4 h-4 border rounded flex items-center justify-center flex-shrink-0
                         ${isSelected
                           ? 'bg-brand-primary border-brand-primary'
-                          : 'border-brand-border bg-white'
+                          : 'border-brand-border dark:border-slate-600 bg-white dark:bg-slate-700'
                         }
                       `}
                     >

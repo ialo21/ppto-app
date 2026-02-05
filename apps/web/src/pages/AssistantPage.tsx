@@ -143,7 +143,7 @@ export default function AssistantPage() {
             <button
               key={idx}
               onClick={() => setInputMessage(example)}
-              className="w-full text-left px-4 py-2.5 bg-white border border-brand-border rounded-lg hover:border-brand-primary hover:bg-brand-background transition-all text-xs text-brand-text-secondary"
+              className="w-full text-left px-4 py-2.5 bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-600 rounded-lg hover:border-brand-primary hover:bg-brand-background dark:hover:bg-slate-700 transition-all text-xs text-brand-text-secondary dark:text-gray-300"
             >
               "{example}"
             </button>
@@ -174,7 +174,7 @@ export default function AssistantPage() {
       </div>
 
       {/* Chat Container */}
-      <div className="flex-1 flex flex-col bg-white border border-brand-border rounded-xl overflow-hidden">
+      <div className="flex-1 flex flex-col bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-600 rounded-xl overflow-hidden">
         {/* Messages Area */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {welcomeMessage}
@@ -188,9 +188,11 @@ export default function AssistantPage() {
             >
               {message.role === "assistant" && (
                 <div className="flex-shrink-0">
-                  <div className={`p-2 rounded-lg ${
-                    message.error ? 'bg-status-error/10' : 'bg-brand-primary/10'
-                  }`}>
+                  <div
+                    className={`p-2 rounded-lg ${
+                      message.error ? "bg-status-error/10" : "bg-brand-primary/10"
+                    }`}
+                  >
                     {message.error ? (
                       <AlertCircle size={20} className="text-status-error" />
                     ) : (
@@ -206,7 +208,7 @@ export default function AssistantPage() {
                     ? "bg-brand-primary text-white"
                     : message.error
                     ? "bg-status-error/10 border border-status-error/20 text-brand-text-primary"
-                    : "bg-brand-background text-brand-text-primary border border-brand-border"
+                    : "bg-brand-background dark:bg-slate-700 border border-brand-border dark:border-slate-600 text-brand-text-primary dark:text-gray-200"
                 }`}
               >
                 {message.role === "assistant" ? (
@@ -222,9 +224,7 @@ export default function AssistantPage() {
                 )}
                 <p
                   className={`text-[10px] mt-2 ${
-                    message.role === "user"
-                      ? "text-white/70"
-                      : "text-brand-text-disabled"
+                    message.role === "user" ? "text-white/70" : "text-brand-text-disabled dark:text-gray-400"
                   }`}
                 >
                   {message.timestamp.toLocaleTimeString("es-PE", {
@@ -252,14 +252,14 @@ export default function AssistantPage() {
                   <Bot size={20} className="text-brand-primary" />
                 </div>
               </div>
-              <div className="bg-brand-background border border-brand-border rounded-xl px-4 py-3">
+              <div className="bg-brand-background dark:bg-slate-700 border border-brand-border dark:border-slate-600 rounded-xl px-4 py-3">
                 <div className="flex items-center gap-2">
                   <div className="flex gap-1">
                     <div className="w-2 h-2 bg-brand-primary rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
                     <div className="w-2 h-2 bg-brand-primary rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
                     <div className="w-2 h-2 bg-brand-primary rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
                   </div>
-                  <span className="text-xs text-brand-text-secondary">
+                  <span className="text-xs text-brand-text-secondary dark:text-gray-400">
                     Pensando...
                   </span>
                 </div>
@@ -271,7 +271,7 @@ export default function AssistantPage() {
         </div>
 
         {/* Input Area */}
-        <div className="border-t border-brand-border p-4 bg-brand-background">
+        <div className="border-t border-brand-border dark:border-slate-700 p-4 bg-brand-background dark:bg-slate-800">
           <div className="flex gap-3 items-end">
             <div className="flex-1 relative">
               <textarea
@@ -282,12 +282,12 @@ export default function AssistantPage() {
                 placeholder="Escribe tu pregunta sobre presupuesto... (Enter para enviar, Shift+Enter para nueva línea)"
                 disabled={isLoading}
                 rows={1}
-                className="w-full resize-none px-4 py-3 pr-12 border border-brand-border rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent text-sm disabled:opacity-50 disabled:cursor-not-allowed bg-white"
+                className="w-full resize-none px-4 py-3 pr-12 border border-brand-border dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent text-sm dark:text-gray-200 dark:bg-slate-700 dark:placeholder-gray-500 disabled:opacity-50 disabled:cursor-not-allowed bg-white"
                 style={{ maxHeight: "150px" }}
               />
               {inputMessage.trim() && !isLoading && (
                 <div className="absolute right-2 bottom-2">
-                  <MessageSquare size={16} className="text-brand-text-disabled" />
+                  <MessageSquare size={16} className="text-brand-text-disabled dark:text-gray-500" />
                 </div>
               )}
             </div>
@@ -300,7 +300,7 @@ export default function AssistantPage() {
               <Send size={18} />
             </Button>
           </div>
-          <p className="text-[10px] text-brand-text-disabled mt-2 text-center">
+          <p className="text-[10px] text-brand-text-disabled dark:text-gray-400 mt-2 text-center">
             El asistente usa Gemini 2.5 Flash para responder basándose únicamente en datos reales de la base de datos
           </p>
         </div>

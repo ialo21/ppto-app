@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import Button from "../../components/ui/Button";
 import { Table, Th, Td } from "../../components/ui/Table";
+import FilterSelect from "../../components/ui/FilterSelect";
 import { formatNumber } from "../../utils/numberFormat";
 import { ArrowLeft, Calendar, DollarSign, FileText, ExternalLink, Package, Building2, Users } from "lucide-react";
 
@@ -574,19 +575,25 @@ export default function RecursoTercerizadoDetallePage() {
           {showAsociarOC && (
             <div className="mb-4 p-4 bg-brand-background rounded-lg">
               <h3 className="text-sm font-semibold mb-3">Asociar Nueva OC</h3>
-              <div className="flex gap-3">
-                <select 
-                  className="flex-1 px-3 py-2 text-sm rounded-lg border border-brand-border"
-                  value={selectedOcId}
-                  onChange={e => setSelectedOcId(e.target.value)}
-                >
-                  <option value="">Seleccionar OC...</option>
-                  {ocsDisponibles?.map((oc: any) => (
-                    <option key={oc.id} value={oc.id}>
-                      {oc.numeroOc || `OC #${oc.id}`} - {oc.moneda} {formatNumber(oc.importeSinIgv)}
-                    </option>
-                  ))}
-                </select>
+              <div className="flex gap-3 items-center">
+                <div className="flex-1">
+                  <FilterSelect
+                    placeholder="Buscar OC por número o incidente..."
+                    value={selectedOcId}
+                    onChange={(value: string) => setSelectedOcId(value)}
+                    options={
+                      ocsDisponibles?.map((oc: any) => {
+                        const numero = oc.numeroOc || (oc.incidenteOc ? `Incidente ${oc.incidenteOc}` : `OC #${oc.id}`);
+                        const label = `${numero} - ${oc.moneda} ${formatNumber(oc.importeSinIgv)}`;
+                        return {
+                          value: oc.id.toString(),
+                          label,
+                          searchText: `${numero} ${oc.incidenteOc || ""} ${oc.support?.name || ""}`
+                        };
+                      }) || []
+                    }
+                  />
+                </div>
                 <Button 
                   size="sm" 
                   onClick={() => asociarOCMutation.mutate(Number(selectedOcId))} 
@@ -673,7 +680,7 @@ export default function RecursoTercerizadoDetallePage() {
                 <thead>
                   <tr>
                     <Th>Número Factura</Th>
-                    <Th>Fecha Emisión</Th>
+                    <Th>Periodo</Th>
                     <Th>OC Asociada</Th>
                     <Th>Sustento</Th>
                     <Th>Monto Total</Th>
@@ -683,11 +690,11 @@ export default function RecursoTercerizadoDetallePage() {
                 <tbody>
                   {facturas.map((f: any) => (
                     <tr key={f.id}>
-                      <Td>{f.numeroFactura}</Td>
-                      <Td>{formatDate(f.fechaEmision)}</Td>
+                      <Td>{f.numberNorm || "-"}</Td>
+                      <Td>{f.periods?.map((p: any) => p.period.label).join(", ") || "-"}</Td>
                       <Td>{f.oc ? f.oc.numeroOc || `OC #${f.oc.id}` : "-"}</Td>
-                      <Td>{f.support.name}</Td>
-                      <Td>PEN {formatNumber(f.montoTotal)}</Td>
+                      <Td>{f.support?.name || f.oc?.support?.name || "-"}</Td>
+                      <Td>{f.currency} {formatNumber(f.montoSinIgv)}</Td>
                       <Td>
                         <span className="text-xs px-2 py-1 rounded-full bg-purple-100 text-purple-800">
                           {f.statusCurrent}

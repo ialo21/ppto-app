@@ -104,6 +104,11 @@ export default function OcSolicitudPage() {
     queryFn: async () => (await api.get("/managements")).data
   });
 
+  const { data: recursosTercerizados } = useQuery({
+    queryKey: ["recursos-tercerizados", { status: "ACTIVO" }],
+    queryFn: async () => (await api.get("/recursos-tercerizados", { params: { status: "ACTIVO" } })).data
+  });
+
   const [form, setForm] = useState({
     budgetPeriodFromId: "",
     budgetPeriodToId: "",
@@ -116,8 +121,12 @@ export default function OcSolicitudPage() {
     proveedorRuc: "",     // Para mostrar en resumen
     moneda: "PEN" as "PEN" | "USD",
     importeSinIgv: "",
-    costCenterIds: [] as number[]
+    costCenterIds: [] as number[],
+    // NUEVO: recursoTercId para asociación con recursos tercerizados
+    recursoTercId: null as number | null
   });
+
+  const [esRecursoTercerizado, setEsRecursoTercerizado] = useState(false);
 
   // Hook para manejar archivos pendientes (se suben después de crear la OC)
   const { pendingFiles, setPendingFiles, uploadPendingFiles, hasPendingFiles } = useOcPendingFiles();
@@ -211,7 +220,8 @@ export default function OcSolicitudPage() {
         moneda: form.moneda,
         importeSinIgv: parseFloat(form.importeSinIgv),
         estado: "PENDIENTE",
-        costCenterIds: form.costCenterIds
+        costCenterIds: form.costCenterIds,
+        recursoTercId: form.recursoTercId  // NUEVO: asociación con recurso tercerizado
       };
 
       const ocResponse = await api.post("/ocs", payload);
@@ -245,9 +255,11 @@ export default function OcSolicitudPage() {
         proveedorRuc: "",
         moneda: "PEN",
         importeSinIgv: "",
-        costCenterIds: []
+        costCenterIds: [],
+        recursoTercId: null
       });
       setPendingFiles([]);
+      setEsRecursoTercerizado(false);
       setFieldErrors({});
       setCurrentStep(1);
       
@@ -409,9 +421,9 @@ export default function OcSolicitudPage() {
 
   const renderStep2 = () => (
     <div className="space-y-4">
-      <div className="bg-brand-50 border border-brand-200 rounded-lg p-4 mb-4">
-        <p className="text-sm text-brand-700">
-          <strong>Instrucción:</strong> Selecciona la línea de presupuesto/sustento y los centros de costo asociados.
+      <div className="bg-brand-50 dark:bg-slate-800 border border-brand-200 dark:border-slate-600 rounded-lg p-4 mb-4">
+        <p className="text-sm text-brand-700 dark:text-gray-200">
+          <strong className="text-brand-800 dark:text-gray-100">Instrucción:</strong> Selecciona la línea de presupuesto/sustento y los centros de costo asociados.
         </p>
       </div>
 
@@ -434,9 +446,10 @@ export default function OcSolicitudPage() {
             searchText: m.name
           })) || []}
           error={fieldErrors.managementId}
+          className="dark:bg-slate-800 dark:border-slate-600 dark:text-gray-100"
         />
         {form.managementId && (
-          <p className="text-xs text-brand-text-disabled mt-1">
+          <p className="text-xs text-brand-text-disabled dark:text-gray-400 mt-1">
             Mostrando solo sustentos de la gerencia seleccionada
           </p>
         )}
@@ -459,10 +472,11 @@ export default function OcSolicitudPage() {
           }}
           options={filteredSupports?.map((s: any) => ({
             value: String(s.id),
-            label: `${s.code || ''} - ${s.name}`,
-            searchText: `${s.code || ''} ${s.name}`
+            label: s.name,
+            searchText: s.name
           })) || []}
           error={fieldErrors.supportId}
+          className="dark:bg-slate-800 dark:border-slate-600 dark:text-gray-100"
         />
       </div>
 
@@ -471,7 +485,7 @@ export default function OcSolicitudPage() {
           Centros de Costo (CECO) *
         </label>
         {!form.supportId ? (
-          <div className="text-sm text-brand-text-disabled italic py-2 px-3 bg-slate-50 rounded-lg">
+          <div className="text-sm text-brand-text-disabled dark:text-gray-300 italic py-2 px-3 bg-slate-50 dark:bg-slate-800 rounded-lg border border-transparent dark:border-slate-700">
             Selecciona primero una línea de presupuesto
           </div>
         ) : (
@@ -489,8 +503,8 @@ export default function OcSolicitudPage() {
                 ?.filter((cc: any) => !form.costCenterIds.includes(cc.id))
                 .map((cc: any) => ({
                   value: String(cc.id),
-                  label: `${cc.code} - ${cc.name || ''}`,
-                  searchText: `${cc.code} ${cc.name || ''}`
+                  label: cc.code,
+                  searchText: cc.code
                 })) || []}
               className={fieldErrors.costCenterIds ? "border-red-500" : ""}
             />
@@ -502,7 +516,7 @@ export default function OcSolicitudPage() {
                   return (
                     <span
                       key={cecoId}
-                      className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md bg-brand-100 text-brand-800"
+                      className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md bg-brand-200 text-brand-800 dark:bg-slate-700/80 dark:text-gray-200 dark:border dark:border-slate-600"
                     >
                       {ceco.code}
                       <button
@@ -550,6 +564,60 @@ export default function OcSolicitudPage() {
           {wordCount} / 20 palabras
         </p>
       </div>
+
+      {/* Checkbox: Asociar con Recurso Tercerizado */}
+      <div>
+        <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+          <input 
+            type="checkbox" 
+            checked={esRecursoTercerizado}
+            onChange={(e) => {
+              setEsRecursoTercerizado(e.target.checked);
+              if (!e.target.checked) {
+                setForm(f => ({ ...f, recursoTercId: null }));
+              }
+            }}
+            className="w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+          />
+          Esta OC es para un recurso tercerizado
+        </label>
+        <p className="text-xs text-brand-text-secondary mt-1">
+          Si esta OC corresponde a un contrato de personal tercerizado registrado anteriormente, selecciona el recurso de la lista. Si no lo encuentras, desmarca esta casilla.
+        </p>
+      </div>
+
+      {/* Selector de Recurso Tercerizado (solo si checkbox está marcado) */}
+      {esRecursoTercerizado && (
+        <div>
+          <label className="block text-sm font-medium text-brand-text-primary mb-1">
+            Recurso Tercerizado *
+          </label>
+          <FilterSelectWithError
+            placeholder="Seleccionar recurso..."
+            value={form.recursoTercId?.toString() || ""}
+            onChange={(value: string) => setForm(f => ({ ...f, recursoTercId: value ? Number(value) : null }))}
+            options={
+              recursosTercerizados
+                ?.map((r: any) => ({
+                  value: r.id.toString(),
+                  label: `${r.nombreCompleto} - ${r.cargo} (${r.proveedor.razonSocial})`,
+                  searchText: `${r.nombreCompleto} ${r.cargo} ${r.proveedor.razonSocial} ${r.management?.name || ''}`
+                })) || []
+            }
+            error={fieldErrors.recursoTercId}
+          />
+          {form.recursoTercId && recursosTercerizados && (
+            <p className="text-xs text-green-600 mt-1">
+              ✓ Esta OC se asociará automáticamente al recurso seleccionado
+            </p>
+          )}
+          {esRecursoTercerizado && (!recursosTercerizados || recursosTercerizados.length === 0) && (
+            <p className="text-xs text-orange-600 mt-1">
+              No hay recursos tercerizados activos disponibles
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 
@@ -899,11 +967,13 @@ export default function OcSolicitudPage() {
                         proveedorRuc: "",
                         moneda: "PEN",
                         importeSinIgv: "",
-                        costCenterIds: []
+                        costCenterIds: [],
+                        recursoTercId: null
                       });
                       setPendingFiles([]);
                       setFieldErrors({});
                       setCurrentStep(1);
+                      setEsRecursoTercerizado(false);
                     }
                   }}
                 >

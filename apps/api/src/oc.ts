@@ -100,7 +100,9 @@ const createOcSchema = z.object({
   cecoId: z.number().int().positive().nullable().optional(),  // DEPRECATED: usar costCenterIds
   costCenterIds: z.array(z.number().int().positive()).min(1, "Debe seleccionar al menos un CECO").optional(),
   linkCotizacion: z.string().url().optional().or(z.literal("")),
-  deliveryLink: z.string().url().optional().or(z.literal(""))
+  deliveryLink: z.string().url().optional().or(z.literal("")),
+  // NUEVO: recursoTercId para asociación automática con recursos tercerizados
+  recursoTercId: z.number().int().positive().nullable().optional()
 });
 
 const updateOcSchema = createOcSchema.partial();
@@ -237,6 +239,44 @@ export async function registerOcRoutes(app: FastifyInstance) {
       });
     }
 
+    // VALIDACIÓN: Si se asocia un recurso tercerizado, validar coherencia
+    if (data.recursoTercId) {
+      const recurso = await prisma.recursoTercerizado.findUnique({
+        where: { id: data.recursoTercId },
+        include: {
+          support: { select: { managementId: true } }
+        }
+      });
+
+      if (!recurso) {
+        return reply.code(422).send({
+          error: "VALIDATION_ERROR",
+          issues: [{ path: ["recursoTercId"], message: "Recurso tercerizado no encontrado" }]
+        });
+      }
+
+      // Validar que el proveedor de la OC coincida con el del recurso
+      if (data.proveedorId && data.proveedorId !== recurso.proveedorId) {
+        return reply.code(422).send({
+          error: "VALIDATION_ERROR",
+          issues: [{ path: ["recursoTercId"], message: "El proveedor de la OC no coincide con el del recurso tercerizado" }]
+        });
+      }
+
+      // Validar que el support de la OC pertenezca a la misma gerencia del recurso
+      const support = await prisma.support.findUnique({
+        where: { id: data.supportId },
+        select: { managementId: true }
+      });
+
+      if (support && support.managementId !== recurso.managementId) {
+        return reply.code(422).send({
+          error: "VALIDATION_ERROR",
+          issues: [{ path: ["recursoTercId"], message: "El sustento debe pertenecer a la misma gerencia del recurso tercerizado" }]
+        });
+      }
+    }
+
     // Determinar CECOs a validar (nuevo array o legacy cecoId único)
     const cecoIdsToValidate = data.costCenterIds || (data.cecoId ? [data.cecoId] : []);
 
@@ -323,6 +363,16 @@ export async function registerOcRoutes(app: FastifyInstance) {
           }
         });
 
+        // NUEVO: Crear relación con recurso tercerizado si se proporcionó
+        if (data.recursoTercId) {
+          await tx.recursoTercOC.create({
+            data: {
+              recursoTercId: data.recursoTercId,
+              ocId: oc.id
+            }
+          });
+        }
+
         // Retornar OC con relaciones incluidas
         return await tx.oC.findUnique({
           where: { id: oc.id },
@@ -376,6 +426,46 @@ export async function registerOcRoutes(app: FastifyInstance) {
       include: { costCenters: true }
     });
     if (!existing) return reply.code(404).send({ error: "OC no encontrada" });
+
+    // VALIDACIÓN: Si se actualiza recursoTercId, validar coherencia
+    if (data.recursoTercId !== undefined && data.recursoTercId !== null) {
+      const recurso = await prisma.recursoTercerizado.findUnique({
+        where: { id: data.recursoTercId },
+        include: {
+          support: { select: { managementId: true } }
+        }
+      });
+
+      if (!recurso) {
+        return reply.code(422).send({
+          error: "VALIDATION_ERROR",
+          issues: [{ path: ["recursoTercId"], message: "Recurso tercerizado no encontrado" }]
+        });
+      }
+
+      // Validar proveedor (usar el proveedorId actual de la OC si no se está actualizando)
+      const finalProveedorId = data.proveedorId !== undefined ? data.proveedorId : existing.proveedorId;
+      if (finalProveedorId && finalProveedorId !== recurso.proveedorId) {
+        return reply.code(422).send({
+          error: "VALIDATION_ERROR",
+          issues: [{ path: ["recursoTercId"], message: "El proveedor de la OC no coincide con el del recurso tercerizado" }]
+        });
+      }
+
+      // Validar gerencia (usar el supportId actual si no se está actualizando)
+      const finalSupportId = data.supportId !== undefined ? data.supportId : existing.supportId;
+      const support = await prisma.support.findUnique({
+        where: { id: finalSupportId },
+        select: { managementId: true }
+      });
+
+      if (support && support.managementId !== recurso.managementId) {
+        return reply.code(422).send({
+          error: "VALIDATION_ERROR",
+          issues: [{ path: ["recursoTercId"], message: "El sustento debe pertenecer a la misma gerencia del recurso tercerizado" }]
+        });
+      }
+    }
 
     // VALIDACIÓN DE NEGOCIO: No permitir cambiar a PROCESAR sin artículo
     if (data.estado === "PROCESAR") {
@@ -481,6 +571,22 @@ export async function registerOcRoutes(app: FastifyInstance) {
                 costCenterId: cecoId
               })),
               skipDuplicates: true
+            });
+          }
+        }
+
+        // NUEVO: Gestionar relación con recurso tercerizado
+        if (data.recursoTercId !== undefined) {
+          // Eliminar asociación existente (si hay)
+          await tx.recursoTercOC.deleteMany({ where: { ocId: id } });
+          
+          // Crear nueva asociación si recursoTercId no es null
+          if (data.recursoTercId !== null) {
+            await tx.recursoTercOC.create({
+              data: {
+                recursoTercId: data.recursoTercId,
+                ocId: id
+              }
             });
           }
         }

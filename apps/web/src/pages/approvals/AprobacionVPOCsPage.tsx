@@ -71,11 +71,11 @@ function StatCard({
   color?: "brand" | "orange" | "green";
 }) {
   const colors = {
-    brand: { bg: "bg-table-total border-brand-primary", icon: "bg-brand-primary/10 text-brand-primary" },
-    orange: { bg: "bg-orange-50 border-orange-400", icon: "bg-orange-200 text-orange-700" },
-    green: { bg: "bg-green-50 border-green-400", icon: "bg-green-200 text-green-700" }
+    brand: { bg: "bg-table-total dark:bg-blue-900/30 border-brand-primary", icon: "bg-brand-primary/10 text-brand-primary" },
+    orange: { bg: "bg-orange-50 dark:bg-orange-900/30 border-orange-400", icon: "bg-orange-200 text-orange-700" },
+    green: { bg: "bg-green-50 dark:bg-green-900/30 border-green-400", icon: "bg-green-200 text-green-700" }
   };
-  const c = highlighted ? colors[color] : { bg: "bg-white border-brand-border", icon: "bg-brand-background text-brand-text-secondary" };
+  const c = highlighted ? colors[color] : { bg: "bg-white dark:bg-slate-800 border-brand-border dark:border-slate-600", icon: "bg-brand-background dark:bg-slate-700 text-brand-text-secondary" };
   
   return (
     <div className={`${c.bg} border rounded-xl p-4 xl:p-5 flex flex-col transition-all duration-200 hover:shadow-medium`}>
@@ -182,7 +182,7 @@ function OCCard({
           {oc.descripcion && (
             <div className="mb-4">
               <p className="text-brand-text-disabled text-xs uppercase tracking-wide mb-1">Descripción</p>
-              <p className="text-sm p-2 bg-gray-50 rounded-lg leading-relaxed line-clamp-3">{oc.descripcion}</p>
+              <p className="text-sm p-2 bg-gray-50 dark:bg-slate-900/80 border border-transparent dark:border-slate-600 rounded-lg leading-relaxed line-clamp-3 dark:text-gray-50 shadow-inner dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">{oc.descripcion}</p>
             </div>
           )}
 
@@ -443,7 +443,7 @@ export default function AprobacionVPOCsPage() {
           </Button>
         </div>
         </div>
-        <div className="flex gap-2 border rounded-lg p-1">
+        <div className="flex gap-2 border border-gray-300 dark:border-slate-600 rounded-lg p-1 dark:bg-slate-800/50">
           <Button
             variant={viewMode === "cards" ? "primary" : "ghost"}
             size="sm"
@@ -500,16 +500,16 @@ export default function AprobacionVPOCsPage() {
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b">
+                <thead className="bg-gray-50 dark:bg-slate-800 border-b dark:border-slate-600">
                   <tr>
-                    <th className="text-left p-3 font-semibold">INC</th>
-                    <th className="text-left p-3 font-semibold">Proveedor</th>
-                    <th className="text-left p-3 font-semibold">Solicitante</th>
-                    <th className="text-left p-3 font-semibold">Monto sin IGV</th>
-                    <th className="text-left p-3 font-semibold">Sustento</th>
-                    <th className="text-left p-3 font-semibold">Detalle</th>
-                    <th className="text-left p-3 font-semibold">Acción</th>
-                    <th className="text-right p-3 font-semibold">Acciones</th>
+                    <th className="text-center p-3 font-semibold">INC</th>
+                    <th className="text-center p-3 font-semibold">Proveedor</th>
+                    <th className="text-center p-3 font-semibold">Solicitante</th>
+                    <th className="text-center p-3 font-semibold">Monto sin IGV</th>
+                    <th className="text-center p-3 font-semibold">Sustento</th>
+                    <th className="text-center p-3 font-semibold">Detalle</th>
+                    <th className="text-center p-3 font-semibold">Acción</th>
+                    <th className="text-center p-3 font-semibold">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -517,44 +517,44 @@ export default function AprobacionVPOCsPage() {
                     const isAnularRequest = oc.estado === "ANULAR";
                     const montoSinIgv = oc.importeSinIgv ? Number(oc.importeSinIgv) : 0;
                     return (
-                      <tr key={oc.id} className="border-b hover:bg-gray-50">
-                        <td className="p-3">
+                      <tr key={oc.id} className="border-b border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50">
+                        <td className="p-3 text-center">
                           <div className="font-medium">{oc.incidenteOc || "Sin INC"}</div>
                           <div className="text-xs text-gray-500">{new Date(oc.fechaRegistro).toLocaleDateString('es-PE')}</div>
                         </td>
-                        <td className="p-3">
+                        <td className="p-3 text-center">
                           <div className="font-medium truncate max-w-[200px]" title={oc.proveedorRef?.razonSocial || oc.proveedor}>
                             {oc.proveedorRef?.razonSocial || oc.proveedor || "Sin proveedor"}
                           </div>
                           <div className="text-xs text-gray-500">{oc.proveedorRef?.ruc || oc.ruc || "-"}</div>
                         </td>
-                        <td className="p-3">
+                        <td className="p-3 text-center">
                           <div className="text-sm">{oc.solicitanteUser?.name || oc.nombreSolicitante || "Sin solicitante"}</div>
                         </td>
-                        <td className="p-3 font-semibold">
+                        <td className="p-3 text-center font-semibold">
                           <div className="font-bold text-green-700">
                             {oc.moneda === "PEN" ? "S/" : "$"} {formatNumber(montoSinIgv)}
                           </div>
                         </td>
-                        <td className="p-3">
+                        <td className="p-3 text-center">
                           <div className="text-sm" title={oc.support?.name}>
                             {oc.support?.name || "-"}
                           </div>
                         </td>
-                        <td className="p-3">
+                        <td className="p-3 text-center">
                           <div className="text-sm whitespace-pre-wrap" title={oc.descripcion || "-"}>
                             {oc.descripcion || "-"}
                           </div>
                         </td>
-                        <td className="p-3">
+                        <td className="p-3 text-center">
                           <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
                             isAnularRequest ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
                           }`}>
                             {isAnularRequest ? "Anular" : "Aprobar"}
                           </span>
                         </td>
-                        <td className="p-3">
-                          <div className="flex justify-end gap-2">
+                        <td className="p-3 text-center">
+                          <div className="flex justify-center gap-2">
                             {isAnularRequest ? (
                               <>
                                 <Button

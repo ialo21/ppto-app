@@ -201,6 +201,11 @@ export default function OcGestionPage() {
     queryFn: async () => (await api.get("/cost-centers")).data
   });
 
+  const { data: recursosTercerizados } = useQuery({
+    queryKey: ["recursos-tercerizados", { status: "ACTIVO" }],
+    queryFn: async () => (await api.get("/recursos-tercerizados", { params: { status: "ACTIVO" } })).data
+  });
+
   const [filters, setFilters] = useState({
     proveedor: "",
     numeroOc: "",
@@ -341,8 +346,12 @@ export default function OcGestionPage() {
     cecoId: "",  // DEPRECATED: mantener por compatibilidad
     costCenterIds: [] as number[],  // NUEVO: múltiples CECOs
     linkCotizacion: "",
-    deliveryLink: ""
+    deliveryLink: "",
+    // NUEVO: recursoTercId para asociación con recursos tercerizados
+    recursoTercId: null as number | null
   });
+
+  const [esRecursoTercerizado, setEsRecursoTercerizado] = useState(false);
 
 
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" | null }>({
@@ -408,11 +417,13 @@ export default function OcGestionPage() {
       cecoId: "",
       costCenterIds: [],
       linkCotizacion: "",
-      deliveryLink: ""
+      deliveryLink: "",
+      recursoTercId: null
     });
     setEditingId(null);
     setShowForm(false);
     setFieldErrors({});
+    setEsRecursoTercerizado(false);
   };
 
   // Validación frontend
@@ -532,7 +543,8 @@ export default function OcGestionPage() {
         articuloId: form.articuloId ? Number(form.articuloId) : null,
         costCenterIds: form.costCenterIds,  // NUEVO: array de CECOs
         linkCotizacion: form.linkCotizacion.trim() || undefined,
-        deliveryLink: form.deliveryLink.trim() || undefined
+        deliveryLink: form.deliveryLink.trim() || undefined,
+        recursoTercId: form.recursoTercId  // NUEVO: asociación con recurso tercerizado
       };
 
       // Debug en desarrollo
@@ -713,7 +725,8 @@ export default function OcGestionPage() {
       cecoId: oc.cecoId?.toString() || "",
       costCenterIds: costCenterIds,
       linkCotizacion: oc.linkCotizacion || "",
-      deliveryLink: oc.deliveryLink || ""
+      deliveryLink: oc.deliveryLink || "",
+      recursoTercId: null  // TODO: cargar si existe asociación
     });
     setEditingId(oc.id);
     setShowForm(true);
@@ -752,7 +765,8 @@ export default function OcGestionPage() {
       cecoId: oc.cecoId?.toString() || "",
       costCenterIds: costCenterIds,
       linkCotizacion: oc.linkCotizacion || "",
-      deliveryLink: ""  // Limpiar deliveryLink en duplicación
+      deliveryLink: "",  // Limpiar deliveryLink en duplicación
+      recursoTercId: null  // No duplicar asociación de recurso
     });
     setEditingId(null);  // Null = nueva OC
     setShowForm(true);
@@ -925,8 +939,10 @@ export default function OcGestionPage() {
               cecoId: "",
               costCenterIds: [],
               linkCotizacion: "",
-              deliveryLink: ""
+              deliveryLink: "",
+              recursoTercId: null
             });
+            setEsRecursoTercerizado(false);
             setShowForm(true);
           }
         }}>
@@ -1022,8 +1038,8 @@ export default function OcGestionPage() {
                   onChange={(value: string) => setForm(f => ({ ...f, supportId: value }))}
                   options={supports?.map((s: any) => ({
                     value: String(s.id),
-                    label: `${s.code} - ${s.name}`,
-                    searchText: `${s.code} ${s.name}`
+                    label: s.name,
+                    searchText: s.name
                   })) || []}
                   error={fieldErrors.supportId}
                 />
@@ -1168,8 +1184,8 @@ export default function OcGestionPage() {
                         ?.filter((cc: any) => !form.costCenterIds.includes(cc.id))
                         .map((cc: any) => ({
                           value: String(cc.id),
-                          label: `${cc.code} - ${cc.name || ''}`,
-                          searchText: `${cc.code} ${cc.name || ''}`
+                          label: cc.code,
+                          searchText: cc.code
                         })) || []}
                       className={fieldErrors.costCenterIds ? "border-red-500" : ""}
                     />
@@ -1230,16 +1246,16 @@ export default function OcGestionPage() {
                 <label className="block text-sm font-medium mb-1">Link de OC Entregada</label>
                 {form.deliveryLink && form.deliveryLink.trim() ? (
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200">
+                    <div className="flex items-center justify-between gap-2 p-2 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-600">
                       <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <svg className="w-5 h-5 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-slate-700 truncate" title={form.deliveryLink}>
+                          <p className="text-sm font-medium text-slate-700 dark:text-gray-100 truncate" title={form.deliveryLink}>
                             OC Entregada (Drive)
                           </p>
-                          <p className="text-xs text-slate-400 truncate">{form.deliveryLink}</p>
+                          <p className="text-xs text-slate-400 dark:text-gray-300 truncate">{form.deliveryLink}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
@@ -1304,6 +1320,59 @@ export default function OcGestionPage() {
                   error={fieldErrors.comentario}
                 />
               </div>
+
+              {/* Checkbox: Asociar con Recurso Tercerizado */}
+              <div className="md:col-span-3">
+                <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    checked={esRecursoTercerizado}
+                    onChange={(e) => {
+                      setEsRecursoTercerizado(e.target.checked);
+                      if (!e.target.checked) {
+                        setForm(f => ({ ...f, recursoTercId: null }));
+                      }
+                    }}
+                    className="w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                  />
+                  Esta OC es para un recurso tercerizado
+                </label>
+                <p className="text-xs text-slate-500 mt-1">
+                  Si esta OC corresponde a un contrato de personal tercerizado, márquela para asociarla automáticamente
+                </p>
+              </div>
+
+              {/* Selector de Recurso Tercerizado (solo si checkbox está marcado) */}
+              {esRecursoTercerizado && (
+                <div className="md:col-span-3">
+                  <label className="block text-sm font-medium mb-1">Recurso Tercerizado *</label>
+                  <FilterSelectWithError
+                    placeholder="Seleccionar recurso..."
+                    value={form.recursoTercId?.toString() || ""}
+                    onChange={(value: string) => setForm(f => ({ ...f, recursoTercId: value ? Number(value) : null }))}
+                    options={
+                      recursosTercerizados
+                        ?.map((r: any) => ({
+                          value: r.id.toString(),
+                          label: `${r.nombreCompleto} - ${r.cargo} (${r.proveedor.razonSocial})`,
+                          // Agregar info de coincidencia para ayuda visual
+                          searchText: `${r.nombreCompleto} ${r.cargo} ${r.proveedor.razonSocial} ${r.management?.name || ''}`
+                        })) || []
+                    }
+                    error={fieldErrors.recursoTercId}
+                  />
+                  {form.recursoTercId && recursosTercerizados && (
+                    <p className="text-xs text-green-600 mt-1">
+                      ✓ Esta OC se asociará automáticamente al recurso seleccionado
+                    </p>
+                  )}
+                  {esRecursoTercerizado && (!recursosTercerizados || recursosTercerizados.length === 0) && (
+                    <p className="text-xs text-orange-600 mt-1">
+                      No hay recursos tercerizados activos disponibles
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div className="md:col-span-3 flex gap-2">
                 <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending}>
@@ -1418,29 +1487,29 @@ export default function OcGestionPage() {
               <Table>
                 <thead>
                   <tr>
-                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("numeroOc")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 text-center" onClick={() => handleSort("numeroOc")}>
                       Número OC {sortConfig.key === "numeroOc" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("incidenteOc")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 text-center" onClick={() => handleSort("incidenteOc")}>
                       Incidente {sortConfig.key === "incidenteOc" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("proveedor")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 text-center" onClick={() => handleSort("proveedor")}>
                       Proveedor {sortConfig.key === "proveedor" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("support")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 text-center" onClick={() => handleSort("support")}>
                       Sustento {sortConfig.key === "support" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("periodo")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 text-center" onClick={() => handleSort("periodo")}>
                       Periodos {sortConfig.key === "periodo" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
                     <Th className="text-center">CECOs</Th>
-                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("moneda")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 text-center" onClick={() => handleSort("moneda")}>
                       Moneda {sortConfig.key === "moneda" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("importeSinIgv")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 text-center" onClick={() => handleSort("importeSinIgv")}>
                       Importe sin IGV {sortConfig.key === "importeSinIgv" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
-                    <Th className="cursor-pointer hover:bg-slate-100 text-center" onClick={() => handleSort("estado")}>
+                    <Th className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 text-center" onClick={() => handleSort("estado")}>
                       Estado {sortConfig.key === "estado" && (sortConfig.direction === "asc" ? "↑" : "↓")}
                     </Th>
                     <Th className="text-center">Acciones</Th>
@@ -1467,7 +1536,7 @@ export default function OcGestionPage() {
                             {oc.costCenters.map((cc: any) => (
                               <span
                                 key={cc.id}
-                                className="inline-block px-1.5 py-0.5 text-xs rounded bg-slate-100"
+                                className="inline-block px-1.5 py-0.5 text-xs rounded bg-slate-100 dark:bg-slate-700/80 dark:text-gray-200 dark:border dark:border-slate-600"
                               >
                                 {cc.costCenter.code}
                               </span>

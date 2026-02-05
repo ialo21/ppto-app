@@ -133,6 +133,7 @@ export default function OcStatusChip({
           ${currentStatusConfig.color}
           ${(disabled || isLoading) ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-80'}
           focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500
+          dark:border dark:border-slate-600
           relative
         `}
       >
@@ -152,7 +153,7 @@ export default function OcStatusChip({
       {isOpen && !isLoading && createPortal(
         <div 
           ref={dropdownRef}
-          className="fixed z-50 w-56 rounded-lg shadow-medium bg-surface border border-border-default py-1"
+          className="fixed z-50 w-56 rounded-lg shadow-medium bg-surface dark:bg-slate-800 border border-border-default dark:border-slate-600 py-1"
           style={{ 
             top: `${position.top}px`, 
             left: `${position.left}px` 
@@ -164,11 +165,11 @@ export default function OcStatusChip({
               type="button"
               onClick={() => handleStatusSelect(status.value)}
               className={`
-                w-full px-4 py-2 text-left text-sm text-text-primary
-                hover:bg-surface-hover
+                w-full px-4 py-2 text-left text-sm text-text-primary dark:text-gray-200
+                hover:bg-surface-hover dark:hover:bg-slate-700
                 transition-colors duration-150
                 flex items-center justify-between
-                ${status.value === currentStatus ? 'bg-surface-active' : ''}
+                ${status.value === currentStatus ? 'bg-surface-active dark:bg-slate-700/80' : ''}
               `}
             >
               <span className={`px-2 py-0.5 text-xs rounded-full ${status.color}`}>

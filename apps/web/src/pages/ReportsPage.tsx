@@ -84,7 +84,7 @@ function ReportModeToggle({
   onChange: (mode: ReportMode) => void;
 }) {
   return (
-    <div className="inline-flex rounded-lg border border-brand-border bg-white p-1">
+    <div className="inline-flex rounded-lg border border-brand-border dark:border-slate-600 bg-white dark:bg-slate-800 p-1">
       <button
         onClick={() => onChange("presupuestal")}
         className={`
@@ -136,7 +136,7 @@ function BudgetTypeToggle({
   onChange: (type: 'PPTO' | 'RPPTO') => void;
 }) {
   return (
-    <div className="inline-flex rounded-lg border border-brand-border bg-white p-1">
+    <div className="inline-flex rounded-lg border border-brand-border dark:border-slate-600 bg-white dark:bg-slate-800 p-1">
       <button
         onClick={() => onChange('PPTO')}
         className={`
@@ -1109,8 +1109,8 @@ export default function ReportsPage() {
                 onChange={setSupportIds}
                 options={(supports || []).map((s: any) => ({
                   value: String(s.id),
-                  label: s.code ? `${s.code} - ${s.name}` : s.name,
-                  searchText: `${s.code || ''} ${s.name}`
+                  label: s.name,
+                  searchText: s.name
                 }))}
               />
 
@@ -1121,8 +1121,8 @@ export default function ReportsPage() {
                 onChange={setCostCenterIds}
                 options={(costCenters || []).map((cc: any) => ({
                   value: String(cc.id),
-                  label: `${cc.code} - ${cc.name || ''}`,
-                  searchText: `${cc.code} ${cc.name || ''}`
+                  label: cc.code,
+                  searchText: cc.code
                 }))}
               />
 
@@ -1209,7 +1209,7 @@ export default function ReportsPage() {
                   <>
                     {filteredData.map(row => (
                       <React.Fragment key={row.periodId}>
-                        <tr className="hover:bg-slate-50">
+                        <tr className="hover:bg-slate-50 dark:hover:bg-slate-700">
                           <Td>
                             <button
                               onClick={() => toggleRow(row.periodId)}
@@ -1262,9 +1262,9 @@ export default function ReportsPage() {
                         {/* Fila expandida - Detalle jerárquico multinivel */}
                         {expandedRows.has(row.periodId) && mode === 'presupuestal' && (
                           <tr>
-                            <Td colSpan={7} className="bg-slate-50 p-4">
+                            <Td colSpan={7} className="bg-slate-50 dark:bg-slate-800 p-4">
                               <div className="text-sm">
-                                <p className="font-medium mb-3 text-slate-700">Detalle por Paquete → Gerencia → Sustento → Facturas:</p>
+                                <p className="font-medium mb-3 text-slate-700 dark:text-slate-200">Detalle por Paquete → Gerencia → Sustento → Facturas:</p>
                                 {(() => {
                                   const packages = hierarchicalDetailsByPeriod.get(row.periodId) || [];
                                   if (packages.length === 0) {
@@ -1279,15 +1279,15 @@ export default function ReportsPage() {
                                         const isPkgExpanded = expandedPackages.has(pkgKey);
                                         
                                         return (
-                                          <div key={pkgKey} className="border border-slate-300 rounded-lg">
+                                          <div key={pkgKey} className="border border-slate-300 dark:border-slate-700 rounded-lg">
                                             {/* NIVEL 1: Paquete */}
                                             <div 
-                                              className="bg-blue-50 px-3 py-2 flex items-center justify-between cursor-pointer hover:bg-blue-100 transition-colors"
+                                              className="bg-blue-50 dark:bg-slate-700 px-3 py-2 flex items-center justify-between cursor-pointer hover:bg-blue-100 dark:hover:bg-slate-600 transition-colors"
                                               onClick={() => togglePackage(pkgKey)}
                                             >
                                               <div className="flex items-center gap-2">
-                                                <span className="text-blue-700">{isPkgExpanded ? '▼' : '▶'}</span>
-                                                <span className="font-semibold text-blue-900">📦 {pkg.packageName}</span>
+                                                <span className="text-blue-700 dark:text-slate-100">{isPkgExpanded ? '▼' : '▶'}</span>
+                                                <span className="font-semibold text-blue-900 dark:text-slate-100">📦 {pkg.packageName}</span>
                                               </div>
                                               <div className="flex gap-6 text-xs">
                                                 <span>PPTO: {currency} {formatNumber(pkg.ppto)}</span>
@@ -1303,7 +1303,7 @@ export default function ReportsPage() {
                                             
                                             {/* NIVEL 2: Gerencias */}
                                             {isPkgExpanded && (
-                                              <div className="p-2 space-y-2">
+                                              <div className="p-2 space-y-2 bg-white/40 dark:bg-slate-800/60">
                                                 {pkg.managements.map((mgmt) => {
                                                   const mgmtKey = `${pkgKey}-mgmt-${mgmt.managementId}`;
                                                   const mgmtDisponible = mgmt.ppto - mgmt.ejecutadoReal;
@@ -1311,14 +1311,14 @@ export default function ReportsPage() {
                                                   const isMgmtExpanded = expandedManagements.has(mgmtKey);
                                                   
                                                   return (
-                                                    <div key={mgmtKey} className="border border-slate-200 rounded">
+                                                    <div key={mgmtKey} className="border border-slate-200 dark:border-slate-700 rounded">
                                                       <div 
-                                                        className="bg-green-50 px-3 py-2 flex items-center justify-between cursor-pointer hover:bg-green-100 transition-colors"
+                                                        className="bg-green-50 dark:bg-slate-700 px-3 py-2 flex items-center justify-between cursor-pointer hover:bg-green-100 dark:hover:bg-slate-600 transition-colors"
                                                         onClick={() => toggleManagement(mgmtKey)}
                                                       >
                                                         <div className="flex items-center gap-2">
-                                                          <span className="text-green-700 ml-4">{isMgmtExpanded ? '▼' : '▶'}</span>
-                                                          <span className="font-medium text-green-900">🏢 {mgmt.managementName}</span>
+                                                          <span className="text-green-700 dark:text-slate-100 ml-4">{isMgmtExpanded ? '▼' : '▶'}</span>
+                                                          <span className="font-medium text-green-900 dark:text-slate-100">🏢 {mgmt.managementName}</span>
                                                         </div>
                                                         <div className="flex gap-4 text-xs">
                                                           <span>PPTO: {currency} {formatNumber(mgmt.ppto)}</span>
@@ -1334,7 +1334,7 @@ export default function ReportsPage() {
                                                       
                                                       {/* NIVEL 3: Sustentos */}
                                                       {isMgmtExpanded && (
-                                                        <div className="p-2 space-y-1">
+                                                        <div className="p-2 space-y-2 bg-white/20 dark:bg-slate-800/80">
                                                           {mgmt.supports.map((support) => {
                                                             const supportKey = `${mgmtKey}-support-${support.supportId}`;
                                                             const supportDisponible = support.ppto - support.ejecutadoReal;
@@ -1342,16 +1342,16 @@ export default function ReportsPage() {
                                                             const isSupportExpanded = expandedSupports.has(supportKey);
                                                             
                                                             return (
-                                                              <div key={supportKey} className="border border-slate-100 rounded">
+                                                              <div key={supportKey} className="border border-slate-100 dark:border-slate-700 rounded">
                                                                 <div 
-                                                                  className="bg-amber-50 px-3 py-1.5 flex items-center justify-between cursor-pointer hover:bg-amber-100 transition-colors"
+                                                                  className="bg-yellow-50 dark:bg-slate-700 px-3 py-2 flex items-center justify-between cursor-pointer hover:bg-yellow-100 dark:hover:bg-slate-600 transition-colors"
                                                                   onClick={() => toggleSupport(supportKey)}
                                                                 >
                                                                   <div className="flex items-center gap-2">
-                                                                    <span className="text-amber-700 ml-8">{isSupportExpanded ? '▼' : '▶'}</span>
-                                                                    <span className="text-amber-900">📝 {support.supportCode} - {support.supportName}</span>
+                                                                    <span className="text-yellow-700 dark:text-slate-100 ml-6">{isSupportExpanded ? '▼' : '▶'}</span>
+                                                                    <span className="font-medium text-yellow-900 dark:text-slate-100">📄 {support.supportName}</span>
                                                                   </div>
-                                                                  <div className="flex gap-3 text-xs">
+                                                                  <div className="flex gap-4 text-xs">
                                                                     <span>PPTO: {currency} {formatNumber(support.ppto)}</span>
                                                                     <span>Ejecutado: {currency} {formatNumber(support.ejecutadoReal)}</span>
                                                                     <span className={supportDisponible < 0 ? 'text-red-600 font-semibold' : ''}>
@@ -1365,9 +1365,9 @@ export default function ReportsPage() {
                                                                 
                                                                 {/* NIVEL 4: Facturas */}
                                                                 {isSupportExpanded && support.invoices.length > 0 && (
-                                                                  <div className="p-2">
+                                                                  <div className="p-2 space-y-2 bg-white/10 dark:bg-slate-800/90">
                                                                     <table className="w-full text-xs">
-                                                                      <thead className="bg-slate-100">
+                                                                      <thead className="bg-slate-100 dark:bg-slate-800">
                                                                         <tr>
                                                                           <th className="text-left px-2 py-1">Serie-Nº</th>
                                                                           <th className="text-left px-2 py-1">Fecha</th>
@@ -1437,7 +1437,7 @@ export default function ReportsPage() {
                       </React.Fragment>
                     ))}
                     {/* Fila de totales */}
-                    <tr className="border-t-2 border-slate-300 font-bold bg-slate-100">
+                    <tr className="border-t-2 border-slate-300 dark:border-slate-600 font-bold bg-slate-100 dark:bg-slate-800">
                       <Td></Td>
                       {mode === 'presupuestal' && (
                         <>

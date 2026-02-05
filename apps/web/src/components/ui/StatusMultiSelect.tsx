@@ -105,7 +105,7 @@ export default function StatusMultiSelect({
         ref={buttonRef}
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="h-9 w-full flex items-center justify-between gap-2 px-3 text-left border border-brand-border rounded-xl bg-white text-xs sm:text-sm transition-all duration-200 hover:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
+        className="h-9 w-full flex items-center justify-between gap-2 px-3 text-left border border-brand-border dark:border-slate-600 rounded-xl bg-white dark:bg-slate-800 text-xs sm:text-sm dark:text-gray-200 transition-all duration-200 hover:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
       >
         <div className="flex-1 min-w-0">
           <span className={`block truncate ${selectedStatuses.length === 0 ? "text-brand-text-disabled" : "text-brand-text-primary"}`}>
@@ -126,10 +126,10 @@ export default function StatusMultiSelect({
       {isOpen && (
         <div
           ref={dropdownRef}
-          className="absolute z-50 w-full mt-1 bg-white border border-brand-border rounded-xl shadow-lg max-h-80 overflow-hidden"
+          className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-600 rounded-xl shadow-lg max-h-80 overflow-hidden"
         >
           {/* Acciones rápidas */}
-          <div className="p-2 border-b border-brand-border flex flex-col gap-2">
+          <div className="p-2 border-b border-brand-border dark:border-slate-700 flex flex-col gap-2">
             <div className="flex gap-2">
               <button
                 type="button"
@@ -158,24 +158,30 @@ export default function StatusMultiSelect({
           </div>
 
           {/* Lista de estados */}
-          <div className="p-1 overflow-y-auto max-h-60">
+          <div className="max-h-60 overflow-y-auto pb-3 pr-1">
             {statuses.map((status) => {
               const isSelected = selectedStatuses.includes(status);
               return (
                 <button
                   key={status}
                   type="button"
+                  onMouseDown={(e) => e.preventDefault()}
                   onClick={() => handleToggle(status)}
-                  className="w-full px-3 py-2 text-sm text-left hover:bg-brand-background flex items-center gap-2 rounded"
+                  className="w-full text-left flex items-center gap-2 px-3 py-2 hover:bg-brand-background dark:hover:bg-slate-700 cursor-pointer"
                 >
-                  <div className={`w-4 h-4 border rounded flex items-center justify-center flex-shrink-0 ${
-                    isSelected 
-                      ? "bg-brand-primary border-brand-primary" 
-                      : "border-brand-border"
-                  }`}>
-                    {isSelected && <Check size={12} className="text-white" />}
+                  <div
+                    className={`
+                      w-4 h-4 border rounded flex items-center justify-center flex-shrink-0
+                      ${isSelected ? 'bg-brand-primary border-brand-primary' : 'border-brand-border dark:border-slate-600 bg-white dark:bg-slate-700'}
+                    `}
+                  >
+                    {isSelected && <Check size={12} className="text-white" strokeWidth={3} />}
                   </div>
-                  <span className="flex-1 truncate">{status}</span>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm text-brand-text-primary dark:text-gray-200 font-medium block truncate">
+                      {status}
+                    </span>
+                  </div>
                 </button>
               );
             })}

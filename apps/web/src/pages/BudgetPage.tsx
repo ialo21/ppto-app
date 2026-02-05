@@ -1068,14 +1068,14 @@ export default function BudgetPage() {
                   <div className="mb-6">
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                       {/* Total PPTO */}
-                      <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
+                      <div className="bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-600 rounded-xl p-4 hover:shadow-md transition-shadow">
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex-1">
                             <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
                               Total PPTO {budgetData.period && `(${formatPeriodLabel(budgetData.period)})`}
                             </p>
                           </div>
-                          <div className="p-2 rounded-lg bg-brand-background">
+                          <div className="p-2 rounded-lg bg-brand-background dark:bg-slate-700">
                             <Wallet size={18} className="text-brand-primary" strokeWidth={2} />
                           </div>
                         </div>
@@ -1085,14 +1085,14 @@ export default function BudgetPage() {
                       </div>
 
                       {/* Total Sustentos */}
-                      <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
+                      <div className="bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-600 rounded-xl p-4 hover:shadow-md transition-shadow">
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex-1">
                             <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
                               Sustentos con PPTO
                             </p>
                           </div>
-                          <div className="p-2 rounded-lg bg-brand-background">
+                          <div className="p-2 rounded-lg bg-brand-background dark:bg-slate-700">
                             <FileText size={18} className="text-blue-600" strokeWidth={2} />
                           </div>
                         </div>
@@ -1102,14 +1102,14 @@ export default function BudgetPage() {
                       </div>
 
                       {/* Total Filas */}
-                      <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
+                      <div className="bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-600 rounded-xl p-4 hover:shadow-md transition-shadow">
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex-1">
                             <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
                               Total de Filas
                             </p>
                           </div>
-                          <div className="p-2 rounded-lg bg-brand-background">
+                          <div className="p-2 rounded-lg bg-brand-background dark:bg-slate-700">
                             <TrendingUp size={18} className="text-green-600" strokeWidth={2} />
                           </div>
                         </div>
@@ -1119,14 +1119,14 @@ export default function BudgetPage() {
                       </div>
 
                       {/* Promedio por Fila */}
-                      <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
+                      <div className="bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-600 rounded-xl p-4 hover:shadow-md transition-shadow">
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex-1">
                             <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
                               Promedio por Fila
                             </p>
                           </div>
-                          <div className="p-2 rounded-lg bg-brand-background">
+                          <div className="p-2 rounded-lg bg-brand-background dark:bg-slate-700">
                             <Calendar size={18} className="text-purple-600" strokeWidth={2} />
                           </div>
                         </div>
@@ -1285,13 +1285,13 @@ export default function BudgetPage() {
                 {/* Toggle PPTO/RPPTO - Solo si ambos existen */}
                 {budgetSummary?.ppto?.exists && budgetSummary?.rppto?.exists && (
                   <div className="flex justify-center">
-                    <div className="inline-flex rounded-lg border border-brand-border bg-white p-1">
+                    <div className="inline-flex rounded-lg border border-brand-border dark:border-slate-600 bg-white dark:bg-slate-800 p-1">
                       <button
                         onClick={() => setSelectedBudgetType('PPTO')}
                         className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
                           selectedBudgetType === 'PPTO'
                             ? 'bg-brand-primary text-white shadow-sm'
-                            : 'text-slate-600 hover:text-slate-900'
+                            : 'text-slate-600 dark:text-gray-200 hover:text-slate-900 dark:hover:text-white'
                         }`}
                       >
                         Ver PPTO
@@ -1301,7 +1301,7 @@ export default function BudgetPage() {
                         className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
                           selectedBudgetType === 'RPPTO'
                             ? 'bg-brand-primary text-white shadow-sm'
-                            : 'text-slate-600 hover:text-slate-900'
+                            : 'text-slate-600 dark:text-gray-200 hover:text-slate-900 dark:hover:text-white'
                         }`}
                       >
                         Ver RPPTO
@@ -1321,14 +1321,14 @@ export default function BudgetPage() {
                     </h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                       {/* Card 1: Total PPTO */}
-                      <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
+                      <div className="bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-600 rounded-xl p-4 hover:shadow-md transition-shadow">
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex-1">
                             <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
                               Total PPTO {selectedYear}
                             </p>
                           </div>
-                          <div className="p-2 rounded-lg bg-brand-background">
+                          <div className="p-2 rounded-lg bg-brand-background dark:bg-slate-700">
                             <Wallet size={18} className="text-brand-primary" strokeWidth={2} />
                           </div>
                         </div>
@@ -1338,14 +1338,14 @@ export default function BudgetPage() {
                       </div>
 
                       {/* Card 2: Sustentos con PPTO */}
-                      <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
+                      <div className="bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-600 rounded-xl p-4 hover:shadow-md transition-shadow">
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex-1">
                             <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
                               Sustentos con PPTO
                             </p>
                           </div>
-                          <div className="p-2 rounded-lg bg-brand-background">
+                          <div className="p-2 rounded-lg bg-brand-background dark:bg-slate-700">
                             <FileText size={18} className="text-blue-600" strokeWidth={2} />
                           </div>
                         </div>
@@ -1355,14 +1355,14 @@ export default function BudgetPage() {
                       </div>
 
                       {/* Card 3: Promedio Mensual PPTO */}
-                      <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
+                      <div className="bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-600 rounded-xl p-4 hover:shadow-md transition-shadow">
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex-1">
                             <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
                               Promedio Mensual
                             </p>
                           </div>
-                          <div className="p-2 rounded-lg bg-brand-background">
+                          <div className="p-2 rounded-lg bg-brand-background dark:bg-slate-700">
                             <TrendingUp size={18} className="text-green-600" strokeWidth={2} />
                           </div>
                         </div>
@@ -1372,14 +1372,14 @@ export default function BudgetPage() {
                       </div>
 
                       {/* Card 4: Meses con PPTO */}
-                      <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
+                      <div className="bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-600 rounded-xl p-4 hover:shadow-md transition-shadow">
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex-1">
                             <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
                               Meses con PPTO
                             </p>
                           </div>
-                          <div className="p-2 rounded-lg bg-brand-background">
+                          <div className="p-2 rounded-lg bg-brand-background dark:bg-slate-700">
                             <Calendar size={18} className="text-purple-600" strokeWidth={2} />
                           </div>
                         </div>
@@ -1402,14 +1402,14 @@ export default function BudgetPage() {
                     </h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                       {/* Card 1: Total RPPTO */}
-                      <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
+                      <div className="bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-600 rounded-xl p-4 hover:shadow-md transition-shadow">
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex-1">
                             <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
                               Total RPPTO {selectedYear}
                             </p>
                           </div>
-                          <div className="p-2 rounded-lg bg-brand-background">
+                          <div className="p-2 rounded-lg bg-brand-background dark:bg-slate-700">
                             <Wallet size={18} className="text-brand-primary" strokeWidth={2} />
                           </div>
                         </div>
@@ -1419,14 +1419,14 @@ export default function BudgetPage() {
                       </div>
 
                       {/* Card 2: Sustentos con RPPTO */}
-                      <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
+                      <div className="bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-600 rounded-xl p-4 hover:shadow-md transition-shadow">
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex-1">
                             <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
                               Sustentos con RPPTO
                             </p>
                           </div>
-                          <div className="p-2 rounded-lg bg-brand-background">
+                          <div className="p-2 rounded-lg bg-brand-background dark:bg-slate-700">
                             <FileText size={18} className="text-blue-600" strokeWidth={2} />
                           </div>
                         </div>
@@ -1436,14 +1436,14 @@ export default function BudgetPage() {
                       </div>
 
                       {/* Card 3: Promedio Mensual RPPTO */}
-                      <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
+                      <div className="bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-600 rounded-xl p-4 hover:shadow-md transition-shadow">
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex-1">
                             <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
                               Promedio Mensual
                             </p>
                           </div>
-                          <div className="p-2 rounded-lg bg-brand-background">
+                          <div className="p-2 rounded-lg bg-brand-background dark:bg-slate-700">
                             <TrendingUp size={18} className="text-green-600" strokeWidth={2} />
                           </div>
                         </div>
@@ -1453,14 +1453,14 @@ export default function BudgetPage() {
                       </div>
 
                       {/* Card 4: Meses con RPPTO */}
-                      <div className="bg-white border border-brand-border rounded-xl p-4 hover:shadow-md transition-shadow">
+                      <div className="bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-600 rounded-xl p-4 hover:shadow-md transition-shadow">
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex-1">
                             <p className="text-xs text-brand-text-secondary uppercase tracking-wide font-semibold mb-1">
                               Meses con RPPTO
                             </p>
                           </div>
-                          <div className="p-2 rounded-lg bg-brand-background">
+                          <div className="p-2 rounded-lg bg-brand-background dark:bg-slate-700">
                             <Calendar size={18} className="text-purple-600" strokeWidth={2} />
                           </div>
                         </div>

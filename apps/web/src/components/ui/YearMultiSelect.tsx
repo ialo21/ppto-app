@@ -84,7 +84,7 @@ export default function YearMultiSelect({
         ref={buttonRef}
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="h-9 w-full flex items-center justify-between gap-2 px-3 text-left border border-brand-border rounded-xl bg-white text-xs sm:text-sm transition-all duration-200 hover:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
+        className="h-9 w-full flex items-center justify-between gap-2 px-3 text-left border border-brand-border dark:border-slate-600 rounded-xl bg-white dark:bg-slate-800 text-xs sm:text-sm dark:text-gray-200 transition-all duration-200 hover:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
       >
         <span className={`block truncate ${selectedYears.length === 0 ? "text-brand-text-disabled" : "text-brand-text-primary"}`}>
           {displayText()}
@@ -102,9 +102,9 @@ export default function YearMultiSelect({
       {isOpen && (
         <div
           ref={dropdownRef}
-          className="absolute z-50 w-full mt-1 bg-white border border-brand-border rounded-xl shadow-lg max-h-80 overflow-hidden"
+          className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-600 rounded-xl shadow-lg max-h-80 overflow-hidden"
         >
-          <div className="p-2 border-b border-brand-border flex gap-2">
+          <div className="p-2 border-b border-brand-border dark:border-slate-700 flex gap-2">
             <button
               type="button"
               onClick={handleSelectAll}
@@ -131,7 +131,7 @@ export default function YearMultiSelect({
                     key={option.value}
                     type="button"
                     onClick={() => handleToggle(option.value)}
-                    className="w-full px-3 py-2 text-sm text-left hover:bg-brand-background flex items-center gap-2 rounded"
+                    className="w-full text-left flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors text-slate-900 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-primary"
                   >
                     <div
                       className={`w-4 h-4 border rounded flex items-center justify-center flex-shrink-0 ${

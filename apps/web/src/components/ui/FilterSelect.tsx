@@ -157,17 +157,17 @@ export default function FilterSelect({
         onClick={() => !disabled && setIsOpen(!isOpen)}
         disabled={disabled}
         className={cn(
-          "h-9 w-full rounded-xl border bg-white px-3 text-left",
+          "h-9 w-full rounded-xl border bg-white dark:bg-slate-800 px-3 text-left",
           "flex items-center justify-between gap-2",
           "transition-all duration-200",
-          "text-xs sm:text-sm",
+          "text-xs sm:text-sm dark:text-gray-200",
           disabled
-            ? "opacity-50 cursor-not-allowed bg-gray-50"
+            ? "opacity-50 cursor-not-allowed bg-gray-50 dark:bg-slate-900"
             : "hover:border-brand-primary focus:ring-2 focus:ring-brand-primary focus:border-brand-primary",
           isOpen
             ? "border-brand-primary ring-2 ring-brand-primary"
-            : "border-brand-border",
-          !selectedOption && "text-brand-text-disabled"
+            : "border-brand-border dark:border-slate-600",
+          !selectedOption && "text-brand-text-disabled dark:text-gray-500"
         )}
       >
         <span className="truncate flex-1">{displayText}</span>
@@ -195,7 +195,7 @@ export default function FilterSelect({
           ref={dropdownRef}
           className={cn(
             "fixed z-[9999]",
-            "bg-white rounded-xl border border-brand-border shadow-lg",
+            "bg-white dark:bg-slate-800 rounded-xl border border-brand-border dark:border-slate-600 shadow-lg",
             "overflow-hidden"
           )}
           style={{
@@ -207,11 +207,11 @@ export default function FilterSelect({
         >
           {/* Search Input */}
           {searchable && options.length > 5 && (
-            <div className="p-2 border-b border-brand-border-light">
+            <div className="p-2 border-b border-brand-border-light dark:border-slate-700">
               <div className="relative">
                 <Search
                   size={14}
-                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-brand-text-disabled"
+                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-brand-text-disabled dark:text-gray-500"
                 />
                 <input
                   ref={searchInputRef}
@@ -219,7 +219,7 @@ export default function FilterSelect({
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Buscar..."
-                  className="w-full h-8 pl-8 pr-3 text-xs rounded-lg border border-brand-border-light focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none transition-colors"
+                  className="w-full h-8 pl-8 pr-3 text-xs rounded-lg border border-brand-border-light dark:border-slate-600 dark:bg-slate-700 dark:text-gray-200 dark:placeholder-gray-500 focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none transition-colors"
                 />
               </div>
             </div>
@@ -228,7 +228,7 @@ export default function FilterSelect({
           {/* Options List */}
           <div className="max-h-60 overflow-y-auto">
             {filteredOptions.length === 0 ? (
-              <div className="px-3 py-6 text-center text-xs text-brand-text-disabled">
+              <div className="px-3 py-6 text-center text-xs text-brand-text-disabled dark:text-gray-500">
                 {searchTerm ? "No se encontraron resultados" : emptyText}
               </div>
             ) : (
@@ -239,9 +239,9 @@ export default function FilterSelect({
                     type="button"
                     onClick={() => handleSelect("")}
                     className={cn(
-                      "w-full px-3 py-2 text-left text-xs sm:text-sm",
-                      "hover:bg-brand-background transition-colors",
-                      "border-b border-brand-border-light",
+                      "w-full px-3 py-2 text-left text-xs sm:text-sm dark:text-gray-200",
+                      "hover:bg-brand-background dark:hover:bg-slate-700 transition-colors",
+                      "border-b border-brand-border-light dark:border-slate-700",
                       !value && "bg-brand-primary/5 text-brand-primary font-medium"
                     )}
                   >
@@ -255,9 +255,9 @@ export default function FilterSelect({
                     type="button"
                     onClick={() => handleSelect(option.value)}
                     className={cn(
-                      "w-full px-3 py-2 text-left text-xs sm:text-sm",
-                      "hover:bg-brand-background transition-colors",
-                      "border-b border-brand-border-light last:border-b-0",
+                      "w-full px-3 py-2 text-left text-xs sm:text-sm dark:text-gray-200",
+                      "hover:bg-brand-background dark:hover:bg-slate-700 transition-colors",
+                      "border-b border-brand-border-light dark:border-slate-700 last:border-b-0",
                       value === option.value &&
                         "bg-brand-primary/5 text-brand-primary font-medium"
                     )}

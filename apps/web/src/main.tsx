@@ -4,10 +4,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createBrowserRouter, RouterProvider, NavLink, Outlet, Navigate, useNavigate } from "react-router-dom";
 import "./index.css";
 import { Toaster } from "sonner";
-import { Home, Wallet, FileText, BarChart3, Archive, ShoppingCart, Calendar, Menu, X, Sparkles, Shield, LogOut, User, ClipboardCheck, FileText as Contratos } from "lucide-react";
+import { Home, Wallet, FileText, BarChart3, Archive, ShoppingCart, Calendar, Menu, X, Sparkles, Shield, LogOut, User, ClipboardCheck, FileText as Contratos, Moon, Sun } from "lucide-react";
 import Button from "./components/ui/Button";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { WebSocketProvider } from "./contexts/WebSocketContext";
+import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
 
 const qc = new QueryClient({
   defaultOptions: {
@@ -291,6 +292,7 @@ function Sidebar({
 
 function Topbar({ onToggleSidebar, isSidebarCollapsed, showMenuButton }: { onToggleSidebar: () => void; isSidebarCollapsed: boolean; showMenuButton: boolean }){
   const { user, logout, hasPermission } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
   
@@ -301,27 +303,27 @@ function Topbar({ onToggleSidebar, isSidebarCollapsed, showMenuButton }: { onTog
   }
   
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between border-b border-border-default bg-white shadow-sm px-4 py-3">
+    <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between border-b border-border-default bg-white dark:bg-slate-900 dark:border-slate-700 shadow-sm px-4 py-3">
       <div className="flex items-center gap-4">
         {showMenuButton && (
           <button
             onClick={onToggleSidebar}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
             aria-label={isSidebarCollapsed ? "Abrir menú" : "Cerrar menú"}
           >
-            {isSidebarCollapsed ? <Menu size={20} className="text-gray-700" /> : <X size={20} className="text-gray-700" />}
+            {isSidebarCollapsed ? <Menu size={20} className="text-gray-700 dark:text-gray-300" /> : <X size={20} className="text-gray-700 dark:text-gray-300" />}
           </button>
         )}
-        <div className="font-semibold text-lg text-gray-800">PORTAL PPTO</div>
+        <div className="font-semibold text-lg text-gray-800 dark:text-white">PORTAL PPTO</div>
       </div>
       
       <div className="relative">
         <button
           onClick={() => setShowUserMenu(!showUserMenu)}
-          className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 rounded-lg transition-colors"
+          className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
         >
-          <User size={18} className="text-gray-700" />
-          <span className="text-sm text-gray-700">{user?.name || user?.email}</span>
+          <User size={18} className="text-gray-700 dark:text-gray-300" />
+          <span className="text-sm text-gray-700 dark:text-gray-300">{user?.name || user?.email}</span>
         </button>
         
         {showUserMenu && (
@@ -330,11 +332,22 @@ function Topbar({ onToggleSidebar, isSidebarCollapsed, showMenuButton }: { onTog
               className="fixed inset-0 z-40" 
               onClick={() => setShowUserMenu(false)}
             />
-            <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
-              <div className="px-4 py-2 border-b border-gray-200">
-                <p className="text-sm font-medium text-gray-800">{user?.name || "Usuario"}</p>
-                <p className="text-xs text-gray-500">{user?.email}</p>
+            <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 py-1 z-50">
+              <div className="px-4 py-2 border-b border-gray-200 dark:border-slate-700">
+                <p className="text-sm font-medium text-gray-800 dark:text-white">{user?.name || "Usuario"}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{user?.email}</p>
               </div>
+              
+              <button
+                onClick={() => {
+                  toggleTheme();
+                  setShowUserMenu(false);
+                }}
+                className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2"
+              >
+                {theme === "light" ? <Moon size={16} /> : <Sun size={16} />}
+                {theme === "light" ? "Modo Oscuro" : "Modo Claro"}
+              </button>
               
               {hasPermission("manage_roles") && (
                 <button
@@ -342,7 +355,7 @@ function Topbar({ onToggleSidebar, isSidebarCollapsed, showMenuButton }: { onTog
                     setShowUserMenu(false);
                     navigate("/roles");
                   }}
-                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-2"
                 >
                   <Shield size={16} />
                   Administrar Roles
@@ -351,7 +364,7 @@ function Topbar({ onToggleSidebar, isSidebarCollapsed, showMenuButton }: { onTog
               
               <button
                 onClick={handleLogout}
-                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
               >
                 <LogOut size={16} />
                 Cerrar Sesión
@@ -370,10 +383,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-brand-background">
+      <div className="min-h-screen flex items-center justify-center bg-brand-background dark:bg-slate-950">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Cargando...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-primary mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-300">Cargando...</p>
         </div>
       </div>
     );
@@ -480,12 +493,12 @@ function AppLayout(){
           />
           
           {/* Contenido principal con margen izquierdo dinámico */}
-          <main className={`flex-1 w-full bg-brand-background transition-all duration-300 ease-in-out ${
+          <main className={`flex-1 w-full bg-brand-background dark:bg-slate-950 transition-all duration-300 ease-in-out ${
             getMainMargin()
           }`}> 
             <div className="container-page">
               <Outlet />
-              <div className="mt-6 text-center text-[11px] text-slate-400">
+              <div className="mt-6 text-center text-[11px] text-slate-400 dark:text-slate-500">
                 © Iago López — IT Governance & Budget
               </div>
             </div>
@@ -558,10 +571,12 @@ const router = createBrowserRouter([
 
 createRoot(document.getElementById("root")!).render(
   <QueryClientProvider client={qc}>
-    <AuthProvider>
-      <WebSocketProvider>
-        <RouterProvider router={router} />
-      </WebSocketProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <WebSocketProvider>
+          <RouterProvider router={router} />
+        </WebSocketProvider>
+      </AuthProvider>
+    </ThemeProvider>
   </QueryClientProvider>
 );

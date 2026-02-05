@@ -135,10 +135,10 @@ function StatCard({ title, value, icon: Icon, highlighted = false, subtitle }: {
   subtitle?: string;
 }) {
   return (
-    <div className={`${highlighted ? 'bg-table-total border-brand-primary' : 'bg-white border-brand-border'} border rounded-xl p-4 flex flex-col transition-all duration-200 hover:shadow-medium`}>
+    <div className={`${highlighted ? 'bg-table-total dark:bg-blue-900/30 border-brand-primary' : 'bg-white dark:bg-slate-800 border-brand-border dark:border-slate-600'} border rounded-xl p-4 flex flex-col transition-all duration-200 hover:shadow-medium`}>
       <div className="flex items-start justify-between mb-2">
         <p className="text-xs sm:text-sm text-brand-text-secondary uppercase tracking-wide font-semibold">{title}</p>
-        <div className={`p-2 rounded-lg ${highlighted ? 'bg-brand-primary/10' : 'bg-brand-background'}`}>
+        <div className={`p-2 rounded-lg ${highlighted ? 'bg-brand-primary/10' : 'bg-brand-background dark:bg-slate-700'}`}>
           <Icon size={18} className={`${highlighted ? 'text-brand-primary' : 'text-brand-text-secondary'}`} strokeWidth={2} />
         </div>
       </div>
@@ -481,11 +481,11 @@ export default function RecursosTercerizadosPage() {
                 <ProveedorSelector label="Proveedor *" placeholder="Buscar o crear proveedor..." value={form.proveedorId} onChange={(proveedorId) => { setForm(f => ({ ...f, proveedorId })); if (proveedorId) setFieldErrors(e => ({ ...e, proveedorId: "" })); }} error={fieldErrors.proveedorId} allowCreate={true} />
               </div>
               <div className="md:col-span-3">
-                <FilterSelectWithError label="Sustento (Opcional)" placeholder="Seleccionar sustento" value={form.supportId} onChange={(value: string) => setForm(f => ({ ...f, supportId: value }))} options={supports?.map((s: any) => ({ value: String(s.id), label: `${s.code} - ${s.name}`, searchText: `${s.code} ${s.name}` })) || []} error={fieldErrors.supportId} />
+                <FilterSelectWithError label="Sustento (Opcional)" placeholder="Seleccionar sustento" value={form.supportId} onChange={(value: string) => setForm(f => ({ ...f, supportId: value }))} options={supports?.map((s: any) => ({ value: String(s.id), label: s.name, searchText: s.name })) || []} error={fieldErrors.supportId} />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Fecha Inicio *</label>
-                <div className={`border rounded-xl px-2 py-1 bg-white focus-within:ring-2 ${fieldErrors.fechaInicio ? 'border-red-500 focus-within:ring-red-500' : 'border-brand-border focus-within:ring-brand-primary'}`}>
+                <div className={`border rounded-xl px-2 py-1 bg-white dark:bg-slate-800 focus-within:ring-2 ${fieldErrors.fechaInicio ? 'border-red-500 focus-within:ring-red-500' : 'border-brand-border dark:border-slate-600 focus-within:ring-brand-primary'}`}>
                   <ReactDatePicker
                     selected={form.fechaInicio ? new Date(form.fechaInicio + 'T00:00:00') : null}
                     onChange={(date: Date | null) => {
@@ -508,7 +508,7 @@ export default function RecursosTercerizadosPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Fecha Fin *</label>
-                <div className={`border rounded-xl px-2 py-1 bg-white focus-within:ring-2 ${fieldErrors.fechaFin ? 'border-red-500 focus-within:ring-red-500' : 'border-brand-border focus-within:ring-brand-primary'}`}>
+                <div className={`border rounded-xl px-2 py-1 bg-white dark:bg-slate-800 focus-within:ring-2 ${fieldErrors.fechaFin ? 'border-red-500 focus-within:ring-red-500' : 'border-brand-border dark:border-slate-600 focus-within:ring-brand-primary'}`}>
                   <ReactDatePicker
                     selected={form.fechaFin ? new Date(form.fechaFin + 'T00:00:00') : null}
                     onChange={(date: Date | null) => {
@@ -629,9 +629,9 @@ export default function RecursosTercerizadosPage() {
                               })()}
                             </div>
                           </div>
-                          <div className="mb-3 p-3 bg-brand-background rounded-lg">
-                            <p className="text-xs text-brand-text-secondary mb-1">Monto Mensual</p>
-                            <p className="text-xl font-bold text-brand-primary">PEN {formatNumber(recurso.montoMensual)}</p>
+                          <div className="mb-3 p-3 bg-brand-background dark:bg-slate-900/80 border border-transparent dark:border-slate-700 rounded-lg">
+                            <p className="text-xs text-brand-text-secondary dark:text-gray-200 mb-1">Monto Mensual</p>
+                            <p className="text-xl font-bold text-brand-primary dark:text-blue-100">PEN {formatNumber(recurso.montoMensual)}</p>
                           </div>
                           <div className="mb-2">
                             <p className="text-xs text-brand-text-secondary">Responsable</p>
@@ -663,7 +663,7 @@ export default function RecursosTercerizadosPage() {
                           </div>
                           <div className="grid grid-cols-3 gap-2">
                             <Button size="sm" variant="primary" onClick={() => window.location.href = `/contratos/recursos-tercerizados/${recurso.id}`} title="Ver Detalle">
-                              Ver Detalle
+                              Detalle
                             </Button>
                             <Button size="sm" variant="secondary" onClick={() => recurso.linkContrato && window.open(recurso.linkContrato, '_blank')} disabled={!recurso.linkContrato} title="Ver Contrato">
                               <ExternalLink size={14} />

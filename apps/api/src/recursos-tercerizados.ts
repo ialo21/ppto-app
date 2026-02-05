@@ -219,6 +219,9 @@ export async function registerRecursosTercerizadosRoutes(app: FastifyInstance) {
       // Recalcular estado en tiempo real
       const estadoCalculado = calcularEstado(recurso.fechaInicio, recurso.fechaFin);
       
+      // IDs de OCs directamente asociadas al recurso (relación M:N)
+      const ocIdsAsociadas = recurso.ocs.map(ocRel => ocRel.ocId);
+
       // Obtener OCs asociadas al proveedor y management del recurso
       const ocsRelacionadas = await prisma.oC.findMany({
         where: {
@@ -236,11 +239,11 @@ export async function registerRecursosTercerizadosRoutes(app: FastifyInstance) {
         }
       });
 
-      // Obtener facturas relacionadas a través de las OCs
+      // Obtener facturas relacionadas priorizando las OCs asociadas explícitamente
       const facturasRelacionadas = await prisma.invoice.findMany({
         where: {
           OR: [
-            { ocId: { in: ocsRelacionadas.map(oc => oc.id) } },
+            { ocId: { in: [...ocIdsAsociadas, ...ocsRelacionadas.map(oc => oc.id)] } },
             { 
               AND: [
                 { proveedorId: recurso.proveedorId },
@@ -252,8 +255,20 @@ export async function registerRecursosTercerizadosRoutes(app: FastifyInstance) {
         orderBy: { createdAt: "desc" },
         take: 10,
         include: {
-          oc: { select: { id: true, numeroOc: true } },
-          support: { select: { id: true, name: true } }
+          oc: { 
+            select: { 
+              id: true, 
+              numeroOc: true,
+              support: { select: { id: true, name: true } }
+            } 
+          },
+          support: { select: { id: true, name: true } },
+          periods: {
+            include: {
+              period: { select: { id: true, year: true, month: true, label: true } }
+            },
+            orderBy: { period: { year: 'asc' } }
+          }
         }
       });
 

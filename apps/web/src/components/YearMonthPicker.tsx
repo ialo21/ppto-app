@@ -275,7 +275,7 @@ export default function YearMonthPicker({
     return createPortal(
       <div
         ref={dropdownRef}
-        className="fixed z-[9999] bg-white border border-slate-300 rounded-lg shadow-xl min-w-[320px]"
+        className="fixed z-[9999] bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg shadow-xl min-w-[320px]"
         style={{
           top: `${dropdownPosition.top}px`,
           left: `${dropdownPosition.left}px`,
@@ -284,34 +284,34 @@ export default function YearMonthPicker({
         role="listbox"
       >
         {/* Header con navegación de años */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-slate-200 bg-slate-50">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
           <button
             type="button"
             onClick={handlePrevYear}
             disabled={!selectedYear || availableYears.indexOf(selectedYear) >= availableYears.length - 1}
-            className="p-1 rounded hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             aria-label="Año anterior"
           >
-            <ChevronLeft className="h-4 w-4 text-slate-700" />
+            <ChevronLeft className="h-4 w-4 text-slate-700 dark:text-slate-200" />
           </button>
-          <div className="text-sm font-semibold text-slate-900">
+          <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
             {selectedYear || "Seleccione año"}
           </div>
           <button
             type="button"
             onClick={handleNextYear}
             disabled={!selectedYear || availableYears.indexOf(selectedYear) <= 0}
-            className="p-1 rounded hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             aria-label="Año siguiente"
           >
-            <ChevronRight className="h-4 w-4 text-slate-700" />
+            <ChevronRight className="h-4 w-4 text-slate-700 dark:text-slate-200" />
           </button>
         </div>
 
         {/* Grid de meses 3x4 */}
         <div className="p-3">
           {yearPeriods.length === 0 ? (
-            <div className="py-6 text-center text-sm text-slate-500">
+            <div className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">
               No hay períodos disponibles para {selectedYear}
             </div>
           ) : (
@@ -334,8 +334,8 @@ export default function YearMonthPicker({
                       "px-3 py-2.5 rounded-md text-sm font-medium transition-all",
                       "focus:outline-none focus:ring-2 focus:ring-brand-primary",
                       isSelected && "bg-brand-primary text-white shadow-md",
-                      !isSelected && !isDisabled && "bg-slate-100 text-slate-900 hover:bg-slate-200 hover:shadow-sm",
-                      isDisabled && "bg-slate-50 text-slate-400 cursor-not-allowed opacity-50",
+                      !isSelected && !isDisabled && "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-600 hover:shadow-sm",
+                      isDisabled && "bg-slate-50 dark:bg-slate-900/40 text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-50",
                       isCurrent && !isSelected && "ring-1 ring-brand-primary/50"
                     )}
                     role="option"
@@ -344,7 +344,7 @@ export default function YearMonthPicker({
                   >
                     <div className="capitalize">{monthAbbrev}</div>
                     {isCurrent && !isSelected && (
-                      <div className="text-[10px] mt-0.5 text-slate-600">actual</div>
+                      <div className="text-[10px] mt-0.5 text-slate-600 dark:text-slate-300">actual</div>
                     )}
                   </button>
                 );
@@ -362,9 +362,9 @@ export default function YearMonthPicker({
       {/* Input trigger */}
       <div
         className={cn(
-          "relative flex items-center h-9 w-full rounded-xl border bg-white px-3 cursor-text",
-          "outline-none transition-colors",
-          disabled && "opacity-50 cursor-not-allowed bg-slate-50",
+          "relative flex items-center h-9 w-full rounded-xl border bg-white dark:bg-slate-800 px-3 cursor-text",
+          "outline-none transition-colors dark:text-gray-200",
+          disabled && "opacity-50 cursor-not-allowed bg-slate-50 dark:bg-slate-900",
           error 
             ? "border-red-500 focus-within:ring-2 focus-within:ring-red-500" 
             : "border-slate-300 focus-within:ring-2 focus-within:ring-brand-500"

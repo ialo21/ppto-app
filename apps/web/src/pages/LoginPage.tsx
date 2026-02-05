@@ -32,17 +32,17 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-brand-background p-4">
+    <div className="min-h-screen flex items-center justify-center bg-brand-background dark:bg-slate-950 p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
           <div className="text-center mb-6">
-            <h1 className="text-3xl font-bold text-gray-800">PORTAL PPTO</h1>
-            <p className="text-sm text-gray-600 mt-2">Sistema de Gestión de Presupuesto</p>
+            <h1 className="text-3xl font-bold text-gray-800 dark:text-white">PORTAL PPTO</h1>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">Sistema de Gestión de Presupuesto</p>
           </div>
           <div className="space-y-4">
             <div>
-              <h2 className="text-xl font-semibold text-gray-800 mb-2">Iniciar Sesión</h2>
-              <p className="text-sm text-gray-600">
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-2">Iniciar Sesión</h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
                 Ingresa con tu correo corporativo de Interseguro
               </p>
             </div>

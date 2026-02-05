@@ -207,8 +207,8 @@ export default function OcFileUploader({ ocId, disabled = false, onFilesChange }
         onClick={() => !isDisabled && fileInputRef.current?.click()}
         className={`
           border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors
-          ${dragOver ? "border-brand-500 bg-brand-50" : "border-slate-300 hover:border-brand-400"}
-          ${isDisabled ? "opacity-50 cursor-not-allowed bg-slate-50" : "hover:bg-slate-50"}
+          ${dragOver ? "border-brand-500 bg-brand-50 dark:bg-brand-900/20" : "border-slate-300 dark:border-slate-600 hover:border-brand-400"}
+          ${isDisabled ? "opacity-50 cursor-not-allowed bg-slate-50 dark:bg-slate-800" : "hover:bg-slate-50 dark:hover:bg-slate-800"}
         `}
       >
         <input
@@ -221,7 +221,7 @@ export default function OcFileUploader({ ocId, disabled = false, onFilesChange }
           disabled={isDisabled}
         />
         <Upload className={`mx-auto mb-2 ${dragOver ? "text-brand-500" : "text-slate-400"}`} size={24} />
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-slate-600 dark:text-gray-300">
           {isUploading ? (
             "Subiendo archivos..."
           ) : (
@@ -230,7 +230,7 @@ export default function OcFileUploader({ ocId, disabled = false, onFilesChange }
             </>
           )}
         </p>
-        <p className="text-xs text-slate-400 mt-1">
+        <p className="text-xs text-slate-400 dark:text-gray-400 mt-1">
           Solo PDF, máximo {config?.maxFileSizeMB || 10}MB por archivo
         </p>
       </div>
@@ -238,18 +238,18 @@ export default function OcFileUploader({ ocId, disabled = false, onFilesChange }
       {/* Lista de documentos existentes (OC guardada) */}
       {ocId && documents.length > 0 && (
         <div className="space-y-2">
-          <p className="text-sm font-medium text-slate-700">Documentos adjuntos ({documents.length})</p>
+          <p className="text-sm font-medium text-slate-700 dark:text-gray-200">Documentos adjuntos ({documents.length})</p>
           <div className="space-y-1">
             {documents.map((doc) => (
               <div
                 key={doc.id}
-                className="flex items-center justify-between gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200"
+                className="flex items-center justify-between gap-2 p-2 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-600"
               >
                 <div className="flex items-center gap-2 min-w-0 flex-1">
                   <FileText size={18} className="text-red-500 flex-shrink-0" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-slate-700 truncate">{doc.filename}</p>
-                    <p className="text-xs text-slate-400">{formatFileSize(doc.sizeBytes)}</p>
+                    <p className="text-sm font-medium text-slate-700 dark:text-gray-200 truncate">{doc.filename}</p>
+                    <p className="text-xs text-slate-400 dark:text-gray-400">{formatFileSize(doc.sizeBytes)}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
@@ -282,10 +282,10 @@ export default function OcFileUploader({ ocId, disabled = false, onFilesChange }
       {/* Lista de archivos pendientes (OC nueva) */}
       {!ocId && pendingFiles.length > 0 && (
         <div className="space-y-2">
-          <p className="text-sm font-medium text-slate-700">
+          <p className="text-sm font-medium text-slate-700 dark:text-gray-200">
             Archivos seleccionados ({pendingFiles.length})
           </p>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-slate-500 dark:text-gray-400">
             Se subirán automáticamente al guardar la OC
           </p>
           <div className="space-y-1">

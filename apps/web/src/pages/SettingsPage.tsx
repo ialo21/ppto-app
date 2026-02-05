@@ -1239,8 +1239,8 @@ export default function CatalogsPage() {
                   }))}
                   options={(costCentersQuery.data || []).map(cc => ({
                     value: String(cc.id),
-                    label: `${cc.code} — ${cc.name || "—"}`,
-                    searchText: `${cc.code} ${cc.name || ""}`
+                    label: cc.code,
+                    searchText: cc.code
                   }))}
                   className={supportErrors.costCenterIds ? "border-red-500" : ""}
                 />
@@ -1633,10 +1633,10 @@ export default function CatalogsPage() {
       )}
 
       {section === "approvalThresholds" && (
-        <Card>
+        <Card className="dark:bg-slate-900/60">
           <CardHeader>
             <h2 className="text-xl font-semibold">Umbrales de Aprobación</h2>
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-slate-600 dark:text-gray-200">
               Configura los umbrales monetarios para determinar qué facturas requieren aprobación VP.
               <br />
               <strong>Regla:</strong> Si el monto total con IGV de una factura supera el umbral, pasa a Aprobación VP después de Head.
@@ -1652,7 +1652,7 @@ export default function CatalogsPage() {
             {approvalThresholdsQuery.data && approvalThresholdsQuery.data.length > 0 && (
               <div className="space-y-4">
                 {approvalThresholdsQuery.data.map((threshold: ApprovalThreshold) => (
-                  <div key={threshold.id} className="border rounded-lg p-4 bg-slate-50">
+                  <div key={threshold.id} className="border border-brand-border dark:border-slate-700 rounded-xl p-4 shadow-sm bg-white dark:bg-slate-800/80">
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                       <div className="flex-1">
                         <h3 className="font-semibold text-lg">
@@ -1660,18 +1660,21 @@ export default function CatalogsPage() {
                             ? "Umbral VP para Facturas" 
                             : threshold.key}
                         </h3>
-                        <p className="text-sm text-slate-600 mt-1">
+                        <p className="text-sm text-slate-600 dark:text-gray-200 mt-1">
                           {threshold.description || "Monto con IGV a partir del cual se requiere aprobación VP"}
                         </p>
                         <div className="flex items-center gap-2 mt-2">
                           <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${
-                            threshold.active ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                            threshold.active ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-700"
                           }`}>
                             {threshold.active ? "Activo" : "Inactivo"}
                           </span>
+                          <span className="text-xs text-slate-500">
+                            Última actualización: {new Date((threshold as any)?.updatedAt ?? Date.now()).toLocaleDateString("es-PE")}
+                          </span>
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center gap-3">
                         {approvalThresholdForm.id === threshold.id.toString() ? (
                           <>
@@ -1717,10 +1720,10 @@ export default function CatalogsPage() {
                         ) : (
                           <>
                             <div className="text-right">
-                              <div className="text-2xl font-bold text-brand-primary">
+                              <div className="text-2xl font-bold text-brand-primary dark:text-blue-100">
                                 S/ {Number(threshold.amountPEN).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                               </div>
-                              <div className="text-xs text-slate-500">con IGV</div>
+                              <div className="text-xs text-slate-500 dark:text-gray-300">con IGV</div>
                             </div>
                             <Button
                               variant="secondary"
@@ -1739,12 +1742,12 @@ export default function CatalogsPage() {
                   </div>
                 ))}
                 
-                <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                  <h4 className="font-semibold text-blue-800 mb-2">💡 Ejemplo de funcionamiento</h4>
-                  <p className="text-sm text-blue-700">
+                <div className="mt-6 p-4 bg-blue-50 dark:bg-slate-800/70 rounded-lg border border-blue-200 dark:border-slate-700">
+                  <h4 className="font-semibold text-blue-800 dark:text-blue-200 mb-2">💡 Ejemplo de funcionamiento</h4>
+                  <p className="text-sm text-blue-700 dark:text-blue-200">
                     Si el umbral es <strong>S/ 10,000</strong> y una factura tiene un monto total con IGV de:
                   </p>
-                  <ul className="text-sm text-blue-700 mt-2 space-y-1">
+                  <ul className="text-sm text-blue-700 dark:text-blue-200 mt-2 space-y-1">
                     <li>• <strong>S/ 8,500</strong> → Aprobado por Head → pasa directo a Contabilidad</li>
                     <li>• <strong>S/ 12,000</strong> → Aprobado por Head → pasa a Aprobación VP → VP aprueba → Contabilidad</li>
                   </ul>

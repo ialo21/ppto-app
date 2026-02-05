@@ -197,7 +197,7 @@ function KpiCard({
   return (
     <div 
       className={`
-        ${highlighted ? 'bg-table-total border-brand-primary' : 'bg-white border-brand-border'}
+        ${highlighted ? 'bg-table-total dark:bg-blue-900/30 border-brand-primary' : 'bg-white dark:bg-slate-800 border-brand-border dark:border-slate-600'}
         border rounded-xl p-4 xl:p-5 flex flex-col
         transition-all duration-200 hover:shadow-medium hover:scale-[1.02]
         ${onClick ? 'cursor-pointer active:scale-[0.98]' : ''}
@@ -241,7 +241,7 @@ function ModeToggle({
   onChange: (mode: DashboardMode) => void;
 }) {
   return (
-    <div className="inline-flex rounded-lg border border-brand-border bg-white p-1">
+    <div className="inline-flex rounded-lg border border-brand-border dark:border-slate-600 bg-white dark:bg-slate-800 p-1">
       <button
         onClick={() => onChange("execution")}
         className={`
@@ -292,7 +292,7 @@ function QuarterSelector({
   ];
 
   return (
-    <div className="w-full bg-white border border-brand-border rounded-xl p-3.5">
+    <div className="w-full bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-600 rounded-xl p-3.5">
       <div className="flex items-center justify-between mb-2.5">
         <div className="flex items-center gap-2">
           <Calendar size={16} className="text-brand-text-secondary" />
@@ -328,7 +328,7 @@ function QuarterSelector({
               p-2.5 rounded-lg border-2 transition-all duration-200
               ${selectedQuarter === quarter.q
                 ? 'border-brand-primary bg-brand-primary/5'
-                : 'border-brand-border bg-white hover:border-brand-primary/30 hover:bg-brand-background'
+                : 'border-brand-border dark:border-slate-600 bg-white dark:bg-slate-800 hover:border-brand-primary/30 hover:bg-brand-background dark:hover:bg-slate-700'
               }
             `}
           >
@@ -434,7 +434,7 @@ function CustomTooltip({ active, payload, label }: any) {
   };
 
   return (
-    <div className="bg-white border border-brand-border rounded-lg shadow-medium p-3 min-w-[180px]">
+    <div className="bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-600 rounded-lg shadow-medium p-3 min-w-[180px]">
       <div className="text-xs font-semibold text-brand-text-primary mb-2 border-b border-brand-border-light pb-1">
         {label}
       </div>
@@ -816,7 +816,7 @@ export default function Dashboard() {
                 flex items-center gap-2 px-4 py-2 rounded-lg border text-[11px] font-medium transition-all
                 ${hasActiveFilters 
                   ? 'border-brand-primary bg-brand-primary/10 text-brand-primary' 
-                  : 'border-brand-border bg-white text-brand-text-secondary hover:bg-brand-background'
+                  : 'border-brand-border dark:border-slate-600 bg-white dark:bg-slate-800 text-brand-text-secondary dark:text-gray-300 hover:bg-brand-background dark:hover:bg-slate-700'
                 }
               `}
             >
@@ -835,7 +835,7 @@ export default function Dashboard() {
               PANEL DE FILTROS (Colapsable)
               ══════════════════════════════════════════════════════════════ */}
           {showFilters && (
-            <div className="bg-white border border-brand-border rounded-xl p-4 space-y-4">
+            <div className="bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-600 rounded-xl p-4 space-y-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold text-brand-text-primary uppercase tracking-wide">
                   Filtros Avanzados
@@ -858,8 +858,8 @@ export default function Dashboard() {
                   onChange={setSupportIds}
                   options={supports.map((s: any) => ({
                     value: String(s.id),
-                    label: `${s.code} - ${s.name}`,
-                    searchText: `${s.code} ${s.name}`
+                    label: s.name,
+                    searchText: s.name
                   }))}
                 />
 
@@ -871,8 +871,8 @@ export default function Dashboard() {
                   onChange={setCostCenterIds}
                   options={costCenters.map((c: any) => ({
                     value: String(c.id),
-                    label: `${c.code} - ${c.name || ''}`,
-                    searchText: `${c.code} ${c.name || ''}`
+                    label: c.code,
+                    searchText: c.code
                   }))}
                 />
 
@@ -939,7 +939,7 @@ export default function Dashboard() {
           />
           
           {/* Selectores de Mes Desde/Hasta */}
-          <div className="w-full bg-white border border-brand-border rounded-xl p-4">
+          <div className="w-full bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-600 rounded-xl p-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Mes Desde */}
               <div>
@@ -989,14 +989,14 @@ export default function Dashboard() {
             CONTENIDO PRINCIPAL
             ══════════════════════════════════════════════════════════════ */}
         {isLoading ? (
-          <div className="bg-white border border-brand-border rounded-xl p-8 flex items-center justify-center">
+          <div className="bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-600 rounded-xl p-8 flex items-center justify-center">
             <div className="flex flex-col items-center gap-3">
               <div className="w-8 h-8 border-3 border-brand-primary border-t-transparent rounded-full animate-spin" />
               <span className="text-sm text-brand-text-secondary">Cargando datos del dashboard...</span>
             </div>
           </div>
         ) : isError || !data ? (
-          <div className="bg-white border border-status-error rounded-xl p-8 flex items-center justify-center">
+          <div className="bg-white dark:bg-slate-800 border border-status-error rounded-xl p-8 flex items-center justify-center">
             <div className="text-center">
               <BarChart3 className="w-12 h-12 text-status-error mx-auto mb-3" />
               <span className="text-sm text-status-error font-medium">Error al cargar los datos del dashboard</span>
@@ -1062,7 +1062,7 @@ export default function Dashboard() {
                 ══════════════════════════════════════════════════════════════ */}
             <div className="w-full grid grid-cols-1 xl:grid-cols-[2fr_1fr] gap-4">
               {/* GRÁFICO DE EVOLUCIÓN MENSUAL (2/3) */}
-              <div className="bg-white border border-brand-border rounded-xl p-4 xl:p-5">
+              <div className="bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-600 rounded-xl p-4 xl:p-5">
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h3 className="text-[14px] lg:text-[15px] font-semibold text-brand-text-primary uppercase tracking-wide">
@@ -1171,7 +1171,7 @@ export default function Dashboard() {
               </div>
 
               {/* CARD LATERAL: TOP 3 MESES (1/3) */}
-              <div className="bg-white border border-brand-border rounded-xl p-4 xl:p-5">
+              <div className="bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-600 rounded-xl p-4 xl:p-5">
                 <div className="flex items-center gap-2 mb-4">
                   <TrendingUp size={16} className="text-brand-primary" />
                   <h3 className="text-[13px] lg:text-[14px] font-semibold text-brand-text-primary uppercase tracking-wide">
@@ -1194,7 +1194,7 @@ export default function Dashboard() {
                     };
 
                     return (
-                      <div key={idx} className="flex items-center justify-between p-3 bg-brand-background rounded-lg">
+                      <div key={idx} className="flex items-center justify-between p-3 bg-brand-background dark:bg-slate-700/50 rounded-lg">
                         <div className="flex items-center gap-3">
                           <div className={`
                             flex items-center justify-center w-8 h-8 rounded-full text-[12px] font-bold
@@ -1204,11 +1204,11 @@ export default function Dashboard() {
                           `}>
                             {idx + 1}
                           </div>
-                          <span className="text-[13px] font-medium text-brand-text-primary">
+                          <span className="text-[13px] font-medium text-brand-text-primary dark:text-gray-200">
                             {month.label}
                           </span>
                         </div>
-                        <span className="text-[12px] xl:text-[13px] font-semibold text-brand-text-secondary">
+                        <span className="text-[12px] xl:text-[13px] font-semibold text-brand-text-secondary dark:text-gray-300">
                           {formatCurrency(month.executed)}
                         </span>
                       </div>
@@ -1229,7 +1229,7 @@ export default function Dashboard() {
                 ══════════════════════════════════════════════════════════════ */}
             <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Ratio de Ejecución */}
-              <div className="bg-white border border-brand-border rounded-xl p-4 xl:p-5">
+              <div className="bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-600 rounded-xl p-4 xl:p-5">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <Percent size={16} className="text-brand-primary" />
@@ -1254,7 +1254,7 @@ export default function Dashboard() {
 
               {/* Ratio de Provisiones */}
               {mode === "contable" && (
-                <div className="bg-white border border-brand-border rounded-xl p-4 xl:p-5">
+                <div className="bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-600 rounded-xl p-4 xl:p-5">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <PieChart size={16} className="text-brand-action" />
@@ -1279,7 +1279,7 @@ export default function Dashboard() {
               )}
 
               {/* Ratio de Disponible */}
-              <div className="bg-white border border-brand-border rounded-xl p-4 xl:p-5">
+              <div className="bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-600 rounded-xl p-4 xl:p-5">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <TrendingDown size={16} className="text-status-success" />
@@ -1328,11 +1328,11 @@ export default function Dashboard() {
                     return (
                       <div 
                         key={group.managementName}
-                        className="bg-white border border-brand-border rounded-lg p-4 hover:shadow-md transition-shadow"
+                        className="bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-600 rounded-lg p-4 hover:shadow-md transition-shadow"
                       >
                         {/* Header */}
                         <div className="flex items-start gap-2 mb-3">
-                          <div className="p-2 bg-brand-background rounded-lg">
+                          <div className="p-2 bg-brand-background dark:bg-slate-700 rounded-lg">
                             <Users size={16} className="text-brand-primary" />
                           </div>
                           <div className="flex-1 min-w-0">
@@ -1356,7 +1356,7 @@ export default function Dashboard() {
                               {executionRate.toFixed(1)}%
                             </span>
                           </div>
-                          <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                          <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
                             <div 
                               className={`h-full rounded-full transition-all ${
                                 executionRate >= 90 ? 'bg-green-500' :
@@ -1385,14 +1385,14 @@ export default function Dashboard() {
 
                         {/* Diferencia */}
                         <div className={`p-2 rounded-lg ${
-                          isOverBudget ? 'bg-red-50' : 'bg-green-50'
+                          isOverBudget ? 'bg-red-50 dark:bg-red-900/20' : 'bg-green-50 dark:bg-green-900/20'
                         }`}>
                           <div className="flex items-center justify-between">
                             <span className="text-xs text-brand-text-secondary">
                               {isOverBudget ? 'Sobre presupuesto' : 'Disponible'}
                             </span>
                             <span className={`text-sm font-bold ${
-                              isOverBudget ? 'text-red-600' : 'text-green-600'
+                              isOverBudget ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'
                             }`}>
                               {new Intl.NumberFormat("es-PE", {
                                 style: "currency",
@@ -1404,7 +1404,7 @@ export default function Dashboard() {
                             </span>
                           </div>
                           {!isOverBudget && (
-                            <p className="text-xs text-green-700 mt-1">
+                            <p className="text-xs text-green-700 dark:text-green-400 mt-1">
                               {((Math.abs(group.subtotal.diferencia) / group.subtotal.budget) * 100).toFixed(1)}% del presupuesto
                             </p>
                           )}
@@ -1420,8 +1420,8 @@ export default function Dashboard() {
                 SECCIÓN 4: TABLA DE DETALLES POR SUSTENTO
                 ══════════════════════════════════════════════════════════════ */}
             {detailData && detailData.rows.length > 0 && (
-              <div className="bg-white border border-brand-border rounded-xl overflow-hidden">
-                <div className="p-4 xl:p-5 border-b border-brand-border-light">
+              <div className="bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-600 rounded-xl overflow-hidden">
+                <div className="p-4 xl:p-5 border-b border-brand-border-light dark:border-slate-700">
                   <div className="flex items-center gap-2">
                     <BarChart3 size={18} className="text-brand-primary" />
                     <h3 className="text-[14px] lg:text-[15px] font-semibold text-brand-text-primary uppercase tracking-wide">
@@ -1447,7 +1447,7 @@ export default function Dashboard() {
                         <col className="w-[20%]" />
                       </colgroup>
                       {/* Header sticky */}
-                      <thead className="bg-brand-background sticky top-0 z-10 shadow-sm">
+                      <thead className="bg-brand-background dark:bg-slate-900 sticky top-0 z-10 shadow-sm">
                         <tr>
                           <th className="text-left text-[10px] sm:text-xs font-semibold text-brand-text-secondary uppercase tracking-wide p-3 border-b border-brand-border-light">
                             Gerencia
@@ -1500,8 +1500,8 @@ export default function Dashboard() {
                                 <tr 
                                   key={row.supportId}
                                   className={`
-                                    ${idx % 2 === 0 ? 'bg-white' : 'bg-brand-background/30'}
-                                    hover:bg-blue-50 transition-colors cursor-pointer
+                                    ${idx % 2 === 0 ? 'bg-white dark:bg-slate-800' : 'bg-brand-background/30 dark:bg-slate-700/30'}
+                                    hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors cursor-pointer
                                   `}
                                   onClick={() => handleSustentoClick(row.supportId, row.supportName)}
                                   title="Click para ver desglose de facturas"
@@ -1510,12 +1510,12 @@ export default function Dashboard() {
                                   {idx === 0 ? (
                                     <td 
                                       rowSpan={group.rows.length} 
-                                      className="p-3 text-xs text-brand-text-secondary font-semibold border-b border-brand-border-light align-top bg-brand-background/50"
+                                      className="p-3 text-xs text-brand-text-secondary dark:text-gray-300 font-semibold border-b border-brand-border-light dark:border-slate-700 align-top bg-brand-background/50 dark:bg-slate-700/50"
                                     >
                                       {group.managementName}
                                     </td>
                                   ) : null}
-                                  <td className="p-3 text-xs text-brand-text-primary font-medium border-b border-brand-border-light">
+                                  <td className="p-3 text-xs text-brand-text-primary dark:text-gray-200 font-medium border-b border-brand-border-light dark:border-slate-700">
                                     <div className="flex items-center justify-between">
                                       <span>{row.supportName}</span>
                                       <span className="text-brand-action text-[10px] opacity-70 hover:opacity-100 transition-opacity">
@@ -1523,30 +1523,30 @@ export default function Dashboard() {
                                       </span>
                                     </div>
                                   </td>
-                                  <td className="p-3 text-xs text-brand-text-primary text-right font-medium border-b border-brand-border-light">
+                                  <td className="p-3 text-xs text-brand-text-primary dark:text-gray-200 text-right font-medium border-b border-brand-border-light dark:border-slate-700">
                                     {formatCurrency(row.budget)}
                                   </td>
                                   {mode === "execution" ? (
                                     <>
-                                      <td className="p-3 text-xs text-brand-text-primary text-right border-b border-brand-border-light">
+                                      <td className="p-3 text-xs text-brand-text-primary dark:text-gray-200 text-right border-b border-brand-border-light dark:border-slate-700">
                                         {formatCurrency(row.executed)}
                                       </td>
-                                      <td className={`p-3 text-xs text-right font-semibold border-b border-brand-border-light ${
-                                        row.diferencia >= 0 ? 'text-status-success' : 'text-status-error'
+                                      <td className={`p-3 text-xs text-right font-semibold border-b border-brand-border-light dark:border-slate-700 ${
+                                        row.diferencia >= 0 ? 'text-status-success dark:text-green-400' : 'text-status-error dark:text-red-400'
                                       }`}>
                                         {formatCurrency(row.diferencia)}
                                       </td>
                                     </>
                                   ) : (
                                     <>
-                                      <td className="p-3 text-xs text-brand-text-primary text-right border-b border-brand-border-light">
+                                      <td className="p-3 text-xs text-brand-text-primary dark:text-gray-200 text-right border-b border-brand-border-light dark:border-slate-700">
                                         {formatCurrency(row.executed)}
                                       </td>
-                                      <td className="p-3 text-xs text-brand-text-primary text-right border-b border-brand-border-light">
+                                      <td className="p-3 text-xs text-brand-text-primary dark:text-gray-200 text-right border-b border-brand-border-light dark:border-slate-700">
                                         {formatCurrency(row.provisions)}
                                       </td>
-                                      <td className={`p-3 text-xs text-right font-semibold border-b border-brand-border-light ${
-                                        row.diferencia >= 0 ? 'text-status-success' : 'text-status-error'
+                                      <td className={`p-3 text-xs text-right font-semibold border-b border-brand-border-light dark:border-slate-700 ${
+                                        row.diferencia >= 0 ? 'text-status-success dark:text-green-400' : 'text-status-error dark:text-red-400'
                                       }`}>
                                         {formatCurrency(row.diferencia)}
                                       </td>
@@ -1555,34 +1555,34 @@ export default function Dashboard() {
                                 </tr>
                               ))}
                               {/* Fila de subtotal por gerencia */}
-                              <tr className="bg-brand-background/60 font-semibold">
-                                <td colSpan={2} className="p-3 text-xs text-brand-text-primary uppercase border-b-2 border-brand-border">
+                              <tr className="bg-brand-background/60 dark:bg-slate-900/60 font-semibold">
+                                <td colSpan={2} className="p-3 text-xs text-brand-text-primary dark:text-gray-200 uppercase border-b-2 border-brand-border dark:border-slate-600">
                                   Subtotal {group.managementName}
                                 </td>
-                                <td className="p-3 text-xs text-brand-text-primary text-right border-b-2 border-brand-border">
+                                <td className="p-3 text-xs text-brand-text-primary dark:text-gray-200 text-right border-b-2 border-brand-border dark:border-slate-600">
                                   {formatCurrency(group.subtotal.budget)}
                                 </td>
                                 {mode === "execution" ? (
                                   <>
-                                    <td className="p-3 text-xs text-brand-text-primary text-right border-b-2 border-brand-border">
+                                    <td className="p-3 text-xs text-brand-text-primary dark:text-gray-200 text-right border-b-2 border-brand-border dark:border-slate-600">
                                       {formatCurrency(group.subtotal.executed)}
                                     </td>
-                                    <td className={`p-3 text-xs text-right border-b-2 border-brand-border ${
-                                      group.subtotal.diferencia >= 0 ? 'text-status-success' : 'text-status-error'
+                                    <td className={`p-3 text-xs text-right border-b-2 border-brand-border dark:border-slate-600 ${
+                                      group.subtotal.diferencia >= 0 ? 'text-status-success dark:text-green-400' : 'text-status-error dark:text-red-400'
                                     }`}>
                                       {formatCurrency(group.subtotal.diferencia)}
                                     </td>
                                   </>
                                 ) : (
                                   <>
-                                    <td className="p-3 text-xs text-brand-text-primary text-right border-b-2 border-brand-border">
+                                    <td className="p-3 text-xs text-brand-text-primary dark:text-gray-200 text-right border-b-2 border-brand-border dark:border-slate-600">
                                       {formatCurrency(group.subtotal.executed)}
                                     </td>
-                                    <td className="p-3 text-xs text-brand-text-primary text-right border-b-2 border-brand-border">
+                                    <td className="p-3 text-xs text-brand-text-primary dark:text-gray-200 text-right border-b-2 border-brand-border dark:border-slate-600">
                                       {formatCurrency(group.subtotal.provisions)}
                                     </td>
-                                    <td className={`p-3 text-xs text-right border-b-2 border-brand-border ${
-                                      group.subtotal.diferencia >= 0 ? 'text-status-success' : 'text-status-error'
+                                    <td className={`p-3 text-xs text-right border-b-2 border-brand-border dark:border-slate-600 ${
+                                      group.subtotal.diferencia >= 0 ? 'text-status-success dark:text-green-400' : 'text-status-error dark:text-red-400'
                                     }`}>
                                       {formatCurrency(group.subtotal.diferencia)}
                                     </td>
@@ -1597,7 +1597,7 @@ export default function Dashboard() {
                   </div>
                   
                   {/* Footer sticky con total general */}
-                  <div className="sticky bottom-0 bg-table-total border-t-2 border-brand-primary shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+                  <div className="sticky bottom-0 bg-table-total dark:bg-blue-900/30 border-t-2 border-brand-primary shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
                     <table className="w-full table-fixed">
                       <colgroup>
                         <col className="w-[20%]" />
@@ -1609,10 +1609,10 @@ export default function Dashboard() {
                       </colgroup>
                       <tfoot>
                         <tr>
-                          <td colSpan={2} className="p-3 text-xs font-bold text-brand-text-primary uppercase">
+                          <td colSpan={2} className="p-3 text-xs font-bold text-brand-text-primary dark:text-gray-200 uppercase">
                             Total
                           </td>
-                          <td className="p-3 text-xs font-bold text-brand-text-primary text-right">
+                          <td className="p-3 text-xs font-bold text-brand-text-primary dark:text-gray-200 text-right">
                             {new Intl.NumberFormat("es-PE", {
                               style: "currency",
                               currency: "PEN",
@@ -1622,7 +1622,7 @@ export default function Dashboard() {
                           </td>
                           {mode === "execution" ? (
                             <>
-                              <td className="p-3 text-xs font-bold text-brand-text-primary text-right">
+                              <td className="p-3 text-xs font-bold text-brand-text-primary dark:text-gray-200 text-right">
                                 {new Intl.NumberFormat("es-PE", {
                                   style: "currency",
                                   currency: "PEN",
@@ -1631,7 +1631,7 @@ export default function Dashboard() {
                                 }).format(detailData.totals.executed)}
                               </td>
                               <td className={`p-3 text-xs font-bold text-right ${
-                                detailData.totals.diferencia >= 0 ? 'text-status-success' : 'text-status-error'
+                                detailData.totals.diferencia >= 0 ? 'text-status-success dark:text-green-400' : 'text-status-error dark:text-red-400'
                               }`}>
                                 {new Intl.NumberFormat("es-PE", {
                                   style: "currency",
@@ -1643,7 +1643,7 @@ export default function Dashboard() {
                             </>
                           ) : (
                             <>
-                              <td className="p-3 text-xs font-bold text-brand-text-primary text-right">
+                              <td className="p-3 text-xs font-bold text-brand-text-primary dark:text-gray-200 text-right">
                                 {new Intl.NumberFormat("es-PE", {
                                   style: "currency",
                                   currency: "PEN",
@@ -1651,7 +1651,7 @@ export default function Dashboard() {
                                   maximumFractionDigits: 0,
                                 }).format(detailData.totals.executed)}
                               </td>
-                              <td className="p-3 text-xs font-bold text-brand-text-primary text-right">
+                              <td className="p-3 text-xs font-bold text-brand-text-primary dark:text-gray-200 text-right">
                                 {new Intl.NumberFormat("es-PE", {
                                   style: "currency",
                                   currency: "PEN",
@@ -1660,7 +1660,7 @@ export default function Dashboard() {
                                 }).format(detailData.totals.provisions)}
                               </td>
                               <td className={`p-3 text-xs font-bold text-right ${
-                                detailData.totals.diferencia >= 0 ? 'text-status-success' : 'text-status-error'
+                                detailData.totals.diferencia >= 0 ? 'text-status-success dark:text-green-400' : 'text-status-error dark:text-red-400'
                               }`}>
                                 {new Intl.NumberFormat("es-PE", {
                                   style: "currency",

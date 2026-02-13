@@ -1037,46 +1037,146 @@ export async function registerInvoiceRoutes(app: FastifyInstance) {
     };
   });
 
-  // Export CSV (actualizado con columnas nuevas)
+  // Export CSV (con columnas completas y ordenamiento por periodo → paquete → concepto → sustento)
   // Permiso: facturas:listado (o facturas global)
   app.get("/invoices/export/csv", { preHandler: [requireAuth, requirePermission("facturas:listado")] }, async (req, reply) => {
     const { status, docType } = req.query as any;
     const where: any = {};
-    if (status) where.statusCurrent = String(status).toUpperCase();
+    // Soportar múltiples estados separados por coma (ej: "INGRESADO,EN_CONTABILIDAD")
+    if (status) {
+      const statuses = String(status).split(",").map(s => s.trim().toUpperCase()).filter(Boolean);
+      if (statuses.length === 1) {
+        where.statusCurrent = statuses[0];
+      } else if (statuses.length > 1) {
+        where.statusCurrent = { in: statuses };
+      }
+    }
     if (docType) where.docType = String(docType).toUpperCase();
 
     const rows = await prisma.invoice.findMany({
       where,
-      orderBy: [{ createdAt: "asc" }],
       include: {
-        oc: true,
-        statusHistory: { orderBy: { changedAt: "asc" } }
+        oc: {
+          include: {
+            proveedorRef: { select: { razonSocial: true, ruc: true } },
+            solicitanteUser: { select: { name: true, email: true } },
+            support: {
+              include: {
+                expensePackage: { select: { name: true } },
+                expenseConcept: { select: { name: true } }
+              }
+            },
+            budgetPeriodFrom: { select: { year: true, month: true } },
+            budgetPeriodTo: { select: { year: true, month: true } }
+          }
+        },
+        support: {
+          include: {
+            expensePackage: { select: { name: true } },
+            expenseConcept: { select: { name: true } }
+          }
+        },
+        proveedor: { select: { razonSocial: true, ruc: true } },
+        createdByUser: { select: { name: true, email: true } },
+        periods: {
+          include: {
+            period: { select: { year: true, month: true, label: true } }
+          },
+          orderBy: { period: { year: "asc" } }
+        },
+        costCenters: {
+          include: {
+            costCenter: { select: { code: true, name: true } }
+          }
+        }
       }
     });
 
+    // Helpers para extraer datos unificados (con OC o sin OC)
+    const getPeriodoLabel = (r: any): string => {
+      if (!r.periods || r.periods.length === 0) return "";
+      return r.periods
+        .map((p: any) => p.period.label || `${r.periods[0].period.year}-${String(p.period.month).padStart(2, "0")}`)
+        .join("; ");
+    };
+    const getFirstPeriodValue = (r: any): number => {
+      if (!r.periods || r.periods.length === 0) return 0;
+      const p = r.periods[0].period;
+      return p.year * 100 + p.month;
+    };
+    const getPaquete = (r: any): string =>
+      r.oc?.support?.expensePackage?.name || r.support?.expensePackage?.name || "";
+    const getConcepto = (r: any): string =>
+      r.oc?.support?.expenseConcept?.name || r.support?.expenseConcept?.name || "";
+    const getSustento = (r: any): string =>
+      r.oc?.support?.name || r.support?.name || "";
+    const getProveedor = (r: any): string =>
+      r.oc?.proveedorRef?.razonSocial || r.oc?.proveedor || r.proveedor?.razonSocial || "";
+    const getRuc = (r: any): string =>
+      r.oc?.proveedorRef?.ruc || r.oc?.ruc || r.proveedor?.ruc || "";
+    const getCecos = (r: any): string => {
+      if (!r.costCenters || r.costCenters.length === 0) return "";
+      return r.costCenters.map((cc: any) => `${cc.costCenter.code} - ${cc.costCenter.name || ""}`).join("; ");
+    };
+    const getResponsable = (r: any): string =>
+      r.createdByUser?.name || r.createdByUser?.email || r.oc?.solicitanteUser?.name || r.oc?.solicitanteUser?.email || "";
+
+    // Ordenar: periodo → paquete → concepto → sustento
+    rows.sort((a: any, b: any) => {
+      const pA = getFirstPeriodValue(a), pB = getFirstPeriodValue(b);
+      if (pA !== pB) return pA - pB;
+      const pkgA = getPaquete(a).toLowerCase(), pkgB = getPaquete(b).toLowerCase();
+      if (pkgA !== pkgB) return pkgA < pkgB ? -1 : 1;
+      const cA = getConcepto(a).toLowerCase(), cB = getConcepto(b).toLowerCase();
+      if (cA !== cB) return cA < cB ? -1 : 1;
+      const sA = getSustento(a).toLowerCase(), sB = getSustento(b).toLowerCase();
+      if (sA !== sB) return sA < sB ? -1 : 1;
+      return 0;
+    });
+
     const header = [
-      "Numero", "Tipo", "OC", "Proveedor", "Moneda", "MontoSinIGV",
-      "Estado", "IncidenteUltimus", "Detalle"
+      "Periodo", "Paquete", "Concepto", "Sustento",
+      "NumeroFactura", "Tipo", "OC", "Proveedor", "RUC",
+      "Moneda", "MontoSinIGV", "Estado",
+      "CECOs", "Responsable",
+      "MesContable", "TCEstandar", "TCReal",
+      "MontoPEN_TCEstandar", "MontoPEN_TCReal", "DiferenciaTC",
+      "IncidenteUltimus", "Detalle", "FechaCreacion"
     ];
 
     const fmt = (v: any) => (v == null ? "" : String(v).replace(/"/g, '""'));
+    const fmtDec = (v: any) => (v == null ? "" : Number(v).toFixed(2));
     const lines = [
       header.join(","),
-      ...rows.map(r => [
+      ...rows.map((r: any) => [
+        `"${fmt(getPeriodoLabel(r))}"`,
+        `"${fmt(getPaquete(r))}"`,
+        `"${fmt(getConcepto(r))}"`,
+        `"${fmt(getSustento(r))}"`,
         `"${fmt(r.numberNorm)}"`,
         r.docType,
-        `"${fmt(r.oc?.numeroOc)}"`,
-        `"${fmt(r.oc?.proveedor)}"`,
+        `"${fmt(r.oc?.numeroOc || "")}"`,
+        `"${fmt(getProveedor(r))}"`,
+        `"${fmt(getRuc(r))}"`,
         r.currency,
-        r.montoSinIgv ?? "",
+        fmtDec(r.montoSinIgv),
         r.statusCurrent,
+        `"${fmt(getCecos(r))}"`,
+        `"${fmt(getResponsable(r))}"`,
+        `"${fmt(r.mesContable || "")}"`,
+        fmtDec(r.tcEstandar),
+        fmtDec(r.tcReal),
+        fmtDec(r.montoPEN_tcEstandar),
+        fmtDec(r.montoPEN_tcReal),
+        fmtDec(r.diferenciaTC),
         `"${fmt(r.ultimusIncident)}"`,
-        `"${fmt(r.detalle)}"`
+        `"${fmt(r.detalle)}"`,
+        `"${fmt(r.createdAt ? new Date(r.createdAt).toISOString().slice(0, 10) : "")}"`
       ].join(","))
     ];
 
     reply.header("Content-Type", "text/csv; charset=utf-8")
-      .header("Content-Disposition", "attachment; filename=invoices.csv")
-      .send(lines.join("\n"));
+      .header("Content-Disposition", "attachment; filename=facturas.csv")
+      .send("\uFEFF" + lines.join("\n"));
   });
 }

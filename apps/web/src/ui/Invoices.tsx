@@ -80,11 +80,23 @@ export default function Invoices() {
           <option>PAGADO</option>
           <option>RECHAZADO</option>
         </select>
-        <button onClick={()=>{
-          const p = new URLSearchParams();
-          if (flt.status) p.set("status", flt.status);
-          if (flt.docType) p.set("docType", flt.docType);
-          window.open(`http://localhost:3001/invoices/export/csv?${p.toString()}`,"_blank");
+        <button onClick={async ()=>{
+          try {
+            const p = new URLSearchParams();
+            if (flt.status) p.set("status", flt.status);
+            if (flt.docType) p.set("docType", flt.docType);
+            const res = await api.get(`/invoices/export/csv?${p.toString()}`, { responseType: "blob" });
+            const url = window.URL.createObjectURL(new Blob([res.data], { type: "text/csv;charset=utf-8" }));
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "facturas.csv";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+          } catch (err: any) {
+            alert(err?.response?.data?.error || "Error al exportar CSV");
+          }
         }}>Exportar CSV</button>
       </div>
 

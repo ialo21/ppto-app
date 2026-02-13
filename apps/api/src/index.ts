@@ -32,9 +32,12 @@ const app = Fastify({ logger: true });
 // Registrar WebSocket ANTES de otros plugins
 await registerWebSocket(app);
 
-// Configurar encoding UTF-8 para todas las respuestas
+// Configurar encoding UTF-8 para respuestas JSON (no sobrescribir Content-Type si ya fue definido como no-JSON)
 app.addHook('onSend', async (request, reply, payload) => {
-  reply.header('Content-Type', 'application/json; charset=utf-8');
+  const currentCT = reply.getHeader('content-type') as string | undefined;
+  if (!currentCT || currentCT.includes('application/json')) {
+    reply.header('Content-Type', 'application/json; charset=utf-8');
+  }
   return payload;
 });
 

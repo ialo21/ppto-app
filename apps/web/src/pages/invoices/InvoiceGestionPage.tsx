@@ -1616,11 +1616,23 @@ export default function InvoiceGestionPage() {
               </Button>
               <Button
                 variant="secondary"
-                onClick={() => {
-                  const p = new URLSearchParams();
-                  if (filters.selectedEstados.length > 0) p.set("status", filters.selectedEstados.join(","));
-                  if (filters.docType) p.set("docType", filters.docType);
-                  window.open(`http://localhost:3001/invoices/export/csv?${p.toString()}`, "_blank");
+                onClick={async () => {
+                  try {
+                    const p = new URLSearchParams();
+                    if (filters.selectedEstados.length > 0) p.set("status", filters.selectedEstados.join(","));
+                    if (filters.docType) p.set("docType", filters.docType);
+                    const res = await api.get(`/invoices/export/csv?${p.toString()}`, { responseType: "blob" });
+                    const url = window.URL.createObjectURL(new Blob([res.data], { type: "text/csv;charset=utf-8" }));
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = "facturas.csv";
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    window.URL.revokeObjectURL(url);
+                  } catch (err: any) {
+                    toast.error(err?.response?.data?.error || "Error al exportar CSV");
+                  }
                 }}
                 size="sm"
               >

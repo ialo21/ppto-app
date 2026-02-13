@@ -943,9 +943,10 @@ export default function InvoiceGestionPage() {
     }
   }, [hasOC, selectedOC, formMode]);
 
-  // Auto-asignar 100% si solo hay 1 CECO disponible (solo en modo creación)
+  // Auto-asignar 100% si solo hay 1 CECO disponible (en creación o edición)
+  // En modo edit, esto se activa cuando el usuario cambia el sustento y las allocations se limpian
   useEffect(() => {
-    if (availableCostCenters.length === 1 && allocations.length === 0 && formMode === 'create') {
+    if (availableCostCenters.length === 1 && allocations.length === 0 && formMode) {
       setAllocations([{
         costCenterId: availableCostCenters[0].id,
         percentage: 100

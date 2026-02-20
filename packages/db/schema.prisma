@@ -585,6 +585,7 @@ model RecursoTercerizado {
   // Datos de la persona
   nombreCompleto     String           // Nombre completo de la persona tercerizada
   cargo              String           // Cargo que desempeña
+  dni                String?          // DNI (opcional)
   
   // Relación con Gerencia TI (requerido)
   managementId       Int

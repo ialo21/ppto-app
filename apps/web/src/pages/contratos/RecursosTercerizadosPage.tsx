@@ -49,6 +49,7 @@ type RecursoTercerizado = {
   }>;
   status: "ACTIVO" | "CESADO";
   observaciones: string | null;
+  dni: string | null;
 };
 
 type Estadisticas = {
@@ -58,7 +59,7 @@ type Estadisticas = {
   porGerencia: Array<{ managementId: number; managementName: string; cantidad: number }>;
 };
 
-type ViewMode = "gerencia" | "responsable" | "proveedor";
+type ViewMode = "gerencia" | "responsable" | "proveedor" | "vencimiento";
 
 const getStatusColor = (status: string): string => {
   return status === "ACTIVO" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800";
@@ -208,9 +209,9 @@ export default function RecursosTercerizadosPage() {
   });
 
   const [viewMode, setViewMode] = useState<ViewMode>("gerencia");
+  const [displayMode, setDisplayMode] = useState<"agrupado" | "tabla">("agrupado");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [showTable, setShowTable] = useState(false);
 
   const [form, setForm] = useState({
     nombreCompleto: "",
@@ -223,7 +224,8 @@ export default function RecursosTercerizadosPage() {
     fechaFin: "",
     montoMensual: "",
     linkContrato: "",
-    observaciones: ""
+    observaciones: "",
+    dni: ""
   });
 
   const [filters, setFilters] = useState({
@@ -250,7 +252,8 @@ export default function RecursosTercerizadosPage() {
       fechaFin: "",
       montoMensual: "",
       linkContrato: "",
-      observaciones: ""
+      observaciones: "",
+      dni: ""
     });
     setEditingId(null);
     setShowForm(false);
@@ -293,7 +296,8 @@ export default function RecursosTercerizadosPage() {
         fechaFin: form.fechaFin,
         montoMensual: parseFloat(form.montoMensual),
         linkContrato: form.linkContrato.trim() || undefined,
-        observaciones: form.observaciones.trim() || undefined
+        observaciones: form.observaciones.trim() || undefined,
+        dni: form.dni.trim() || undefined
       };
       console.log("Payload a enviar:", payload);
       if (editingId) {
@@ -351,7 +355,8 @@ export default function RecursosTercerizadosPage() {
       fechaFin: recurso.fechaFin.split("T")[0],
       montoMensual: recurso.montoMensual.toString(),
       linkContrato: recurso.linkContrato || "",
-      observaciones: recurso.observaciones || ""
+      observaciones: recurso.observaciones || "",
+      dni: recurso.dni || ""
     });
     setEditingId(recurso.id);
     setShowForm(true);
@@ -385,6 +390,37 @@ export default function RecursosTercerizadosPage() {
 
   const groupedRecursos = useMemo(() => {
     if (!filteredRecursos || filteredRecursos.length === 0) return [];
+
+    if (viewMode === "vencimiento") {
+      const urgencyDefs = [
+        { key: "vencido", label: "Vencido" },
+        { key: "semana", label: "Vence esta semana (≤ 7 días)" },
+        { key: "mes", label: "Próximo mes (≤ 30 días)" },
+        { key: "trimestre", label: "Próximos 3 meses (≤ 90 días)" },
+        { key: "futuro", label: "Más de 90 días" },
+      ];
+      const buckets: Record<string, RecursoTercerizado[]> = { vencido: [], semana: [], mes: [], trimestre: [], futuro: [] };
+      filteredRecursos.forEach(recurso => {
+        const dias = calcularDiasRestantes(recurso.fechaFin);
+        if (isNaN(dias) || dias < 0) buckets.vencido.push(recurso);
+        else if (dias <= 7) buckets.semana.push(recurso);
+        else if (dias <= 30) buckets.mes.push(recurso);
+        else if (dias <= 90) buckets.trimestre.push(recurso);
+        else buckets.futuro.push(recurso);
+      });
+      return urgencyDefs
+        .filter(d => buckets[d.key].length > 0)
+        .map(d => {
+          const sorted = [...buckets[d.key]].sort((a, b) => new Date(a.fechaFin).getTime() - new Date(b.fechaFin).getTime());
+          const activos = sorted.filter(r => r.status === "ACTIVO");
+          return {
+            groupName: d.label,
+            recursos: sorted,
+            subtotal: { activos: activos.length, cesados: sorted.length - activos.length, costoMensual: activos.reduce((sum, r) => sum + Number(r.montoMensual), 0) }
+          };
+        });
+    }
+
     const groups = new Map<string, RecursoTercerizado[]>();
     filteredRecursos.forEach(recurso => {
       const key = viewMode === "gerencia" 
@@ -460,6 +496,10 @@ export default function RecursosTercerizadosPage() {
               <div>
                 <label className="block text-sm font-medium mb-1">Cargo *</label>
                 <InputWithError placeholder="Desarrollador Senior" value={form.cargo} onChange={(e: any) => setForm(f => ({ ...f, cargo: e.target.value }))} error={fieldErrors.cargo} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">DNI</label>
+                <InputWithError placeholder="12345678" value={form.dni} onChange={(e: any) => setForm(f => ({ ...f, dni: e.target.value }))} error={fieldErrors.dni} />
               </div>
               <div className="md:col-span-3">
                 <FilterSelectWithError label="Gerencia TI *" placeholder="Seleccionar gerencia" value={form.managementId} onChange={(value: string) => setForm(f => ({ ...f, managementId: value }))} options={managements?.map((m: any) => ({ value: String(m.id), label: m.name })) || []} error={fieldErrors.managementId} />
@@ -555,36 +595,31 @@ export default function RecursosTercerizadosPage() {
 
       <Card>
         <CardHeader>
-          <h2 className="text-lg font-medium">Vista Agrupada</h2>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex gap-2">
-              <Button size="sm" variant={viewMode === "gerencia" ? "primary" : "secondary"} onClick={() => setViewMode("gerencia")}>
-                Por Gerencia TI
-              </Button>
-              <Button size="sm" variant={viewMode === "responsable" ? "primary" : "secondary"} onClick={() => setViewMode("responsable")}>
-                Por Responsable
-              </Button>
-              <Button size="sm" variant={viewMode === "proveedor" ? "primary" : "secondary"} onClick={() => setViewMode("proveedor")}>
-                Por Proveedor
-              </Button>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="showOnlyActive"
-                checked={showOnlyActive}
-                onChange={(e) => setShowOnlyActive(e.target.checked)}
-                className="w-4 h-4 text-brand-primary bg-white border-brand-border rounded focus:ring-brand-primary focus:ring-2"
-              />
-              <label htmlFor="showOnlyActive" className="text-sm text-brand-text-secondary cursor-pointer">
-                Solo mostrar activos
-              </label>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-medium">Vista</h2>
+            <div className="flex items-center gap-1 p-0.5 bg-brand-background dark:bg-slate-700 rounded-lg border border-brand-border">
+              <button onClick={() => setDisplayMode("agrupado")} className={`px-3 py-1 text-sm rounded-md transition-colors ${displayMode === "agrupado" ? "bg-white dark:bg-slate-600 shadow-sm font-medium text-brand-text-primary" : "text-brand-text-secondary hover:text-brand-text-primary"}`}>Agrupado</button>
+              <button onClick={() => setDisplayMode("tabla")} className={`px-3 py-1 text-sm rounded-md transition-colors ${displayMode === "tabla" ? "bg-white dark:bg-slate-600 shadow-sm font-medium text-brand-text-primary" : "text-brand-text-secondary hover:text-brand-text-primary"}`}>Tabla</button>
             </div>
           </div>
+        </CardHeader>
+        <CardContent>
+          {displayMode === "agrupado" && (
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex gap-2 flex-wrap">
+              <Button size="sm" variant={viewMode === "gerencia" ? "primary" : "secondary"} onClick={() => setViewMode("gerencia")}>Por Gerencia TI</Button>
+              <Button size="sm" variant={viewMode === "responsable" ? "primary" : "secondary"} onClick={() => setViewMode("responsable")}>Por Responsable</Button>
+              <Button size="sm" variant={viewMode === "proveedor" ? "primary" : "secondary"} onClick={() => setViewMode("proveedor")}>Por Proveedor</Button>
+              <Button size="sm" variant={viewMode === "vencimiento" ? "primary" : "secondary"} onClick={() => setViewMode("vencimiento")}>Por Vencimiento</Button>
+            </div>
+            <div className="flex items-center gap-2">
+              <input type="checkbox" id="showOnlyActive" checked={showOnlyActive} onChange={(e) => setShowOnlyActive(e.target.checked)} className="w-4 h-4 text-brand-primary bg-white border-brand-border rounded focus:ring-brand-primary focus:ring-2" />
+              <label htmlFor="showOnlyActive" className="text-sm text-brand-text-secondary cursor-pointer">Solo mostrar activos</label>
+            </div>
+          </div>
+          )}
 
-          {isLoading ? (
+          {displayMode === "agrupado" && (isLoading ? (
             <div className="text-center py-12 text-brand-text-secondary">Cargando...</div>
           ) : groupedRecursos.length === 0 ? (
             <div className="text-center py-12">
@@ -609,9 +644,10 @@ export default function RecursosTercerizadosPage() {
                       <Card key={recurso.id} className="hover:shadow-lg transition-shadow">
                         <CardContent className="p-4">
                           <div className="flex items-start justify-between mb-3">
-                            <div className="flex-1">
+                            <div className="flex-1 min-w-0">
                               <h3 className="text-lg font-bold text-brand-text-primary">{recurso.nombreCompleto}</h3>
                               <p className="text-sm text-brand-text-secondary">{recurso.cargo}</p>
+                              {recurso.dni && <p className="text-xs text-brand-text-disabled mt-0.5">DNI: {recurso.dni}</p>}
                             </div>
                             <div className="flex flex-col items-end gap-1">
                               <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${getStatusColor(recurso.status)}`}>
@@ -637,19 +673,13 @@ export default function RecursosTercerizadosPage() {
                             <p className="text-xs text-brand-text-secondary">Responsable</p>
                             <p className="text-sm text-brand-text-primary">{recurso.responsable.name}</p>
                           </div>
-                          {viewMode === "gerencia" && (
+                          {(viewMode === "gerencia" || viewMode === "vencimiento") && (
                             <div className="mb-2">
                               <p className="text-xs text-brand-text-secondary">Proveedor</p>
-                              <p className="text-sm text-brand-text-primary">{recurso.proveedor.razonSocial}</p>
+                              <p className="text-sm text-brand-text-primary truncate" title={recurso.proveedor.razonSocial}>{recurso.proveedor.razonSocial}</p>
                             </div>
                           )}
-                          {viewMode === "responsable" && (
-                            <div className="mb-2">
-                              <p className="text-xs text-brand-text-secondary">Gerencia TI</p>
-                              <p className="text-sm text-brand-text-primary">{recurso.management.name}</p>
-                            </div>
-                          )}
-                          {viewMode === "proveedor" && (
+                          {(viewMode === "responsable" || viewMode === "proveedor" || viewMode === "vencimiento") && (
                             <div className="mb-2">
                               <p className="text-xs text-brand-text-secondary">Gerencia TI</p>
                               <p className="text-sm text-brand-text-primary">{recurso.management.name}</p>
@@ -679,84 +709,75 @@ export default function RecursosTercerizadosPage() {
                 </div>
               ))}
             </div>
+          ))}
+          {displayMode === "tabla" && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-brand-text-secondary">Buscar</label>
+                  <Input placeholder="Buscar..." value={filters.search} onChange={e => setFilters(f => ({ ...f, search: e.target.value }))} className="h-9 text-sm" />
+                </div>
+                <FilterSelect label="Gerencia TI" placeholder="Todas" value={filters.managementId} onChange={(value) => setFilters(f => ({ ...f, managementId: value }))} options={managements?.map((m: any) => ({ value: String(m.id), label: m.name })) || []} />
+                <FilterSelect label="Responsable" placeholder="Todos" value={filters.responsableId} onChange={(value) => setFilters(f => ({ ...f, responsableId: value }))} options={recursos.map(r => ({ value: String(r.responsableId), label: r.responsable.name })).filter((v, i, a) => a.findIndex(t => t.value === v.value) === i) || []} />
+                <FilterSelect label="Proveedor" placeholder="Todos" value={filters.proveedorId} onChange={(value) => setFilters(f => ({ ...f, proveedorId: value }))} options={recursos.map(r => ({ value: String(r.proveedorId), label: r.proveedor.razonSocial })).filter((v, i, a) => a.findIndex(t => t.value === v.value) === i) || []} />
+                <FilterSelect label="Estado" placeholder="Todos" value={filters.status} onChange={(value) => setFilters(f => ({ ...f, status: value }))} options={[{ value: "ACTIVO", label: "Activo" }, { value: "CESADO", label: "Cesado" }]} searchable={false} />
+              </div>
+              <div className="flex items-center gap-2 mb-4">
+                <input type="checkbox" id="showOnlyActiveTable" checked={showOnlyActive} onChange={(e) => setShowOnlyActive(e.target.checked)} className="w-4 h-4 text-brand-primary bg-white border-brand-border rounded focus:ring-brand-primary focus:ring-2" />
+                <label htmlFor="showOnlyActiveTable" className="text-sm text-brand-text-secondary cursor-pointer">Solo mostrar activos</label>
+              </div>
+              {isLoading ? (
+                <div className="p-12 text-center text-brand-text-secondary">Cargando...</div>
+              ) : filteredRecursos.length === 0 ? (
+                <div className="p-12 text-center text-brand-text-secondary">No se encontraron recursos</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <thead>
+                      <tr>
+                        <Th>Nombre</Th>
+                        <Th>DNI</Th>
+                        <Th>Cargo</Th>
+                        <Th>Gerencia TI</Th>
+                        <Th>Responsable</Th>
+                        <Th>Proveedor</Th>
+                        <Th>Contrato Vigente</Th>
+                        <Th>Monto Mensual</Th>
+                        <Th>Estado</Th>
+                        <Th>Acciones</Th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredRecursos.map((recurso: RecursoTercerizado) => (
+                        <tr key={recurso.id}>
+                          <Td>{recurso.nombreCompleto}</Td>
+                          <Td>{recurso.dni || "—"}</Td>
+                          <Td>{recurso.cargo}</Td>
+                          <Td>{recurso.management.name}</Td>
+                          <Td>{recurso.responsable.name}</Td>
+                          <Td>{recurso.proveedor.razonSocial}</Td>
+                          <Td>{formatDate(recurso.fechaInicio)} → {formatDate(recurso.fechaFin)}</Td>
+                          <Td>PEN {formatNumber(recurso.montoMensual)}</Td>
+                          <Td>
+                            <span className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusColor(recurso.status)}`}>
+                              {recurso.status}
+                            </span>
+                          </Td>
+                          <Td>
+                            <div className="flex gap-2">
+                              <Button size="sm" variant="secondary" onClick={() => handleEdit(recurso)}>Editar</Button>
+                              <Button size="sm" variant="secondary" onClick={() => confirm("¿Eliminar este recurso?") && deleteMutation.mutate(recurso.id)}>Eliminar</Button>
+                            </div>
+                          </Td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-medium">Tabla de Gestión</h2>
-            <Button size="sm" variant="secondary" onClick={() => setShowTable(!showTable)}>
-              {showTable ? "Ocultar" : "Mostrar"}
-            </Button>
-          </div>
-        </CardHeader>
-        {showTable && <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4">
-            <div>
-              <label className="block text-sm font-medium mb-1 text-brand-text-secondary">Buscar</label>
-              <Input
-                placeholder="Buscar..."
-                value={filters.search}
-                onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
-                className="h-9 text-sm"
-              />
-            </div>
-            <FilterSelect label="Gerencia TI" placeholder="Todas" value={filters.managementId} onChange={(value) => setFilters(f => ({ ...f, managementId: value }))} options={managements?.map((m: any) => ({ value: String(m.id), label: m.name })) || []} />
-            <FilterSelect label="Responsable" placeholder="Todos" value={filters.responsableId} onChange={(value) => setFilters(f => ({ ...f, responsableId: value }))} options={recursos.map(r => ({ value: String(r.responsableId), label: r.responsable.name })).filter((v, i, a) => a.findIndex(t => t.value === v.value) === i) || []} />
-            <FilterSelect label="Proveedor" placeholder="Todos" value={filters.proveedorId} onChange={(value) => setFilters(f => ({ ...f, proveedorId: value }))} options={recursos.map(r => ({ value: String(r.proveedorId), label: r.proveedor.razonSocial })).filter((v, i, a) => a.findIndex(t => t.value === v.value) === i) || []} />
-            <FilterSelect label="Estado" placeholder="Todos" value={filters.status} onChange={(value) => setFilters(f => ({ ...f, status: value }))} options={[{ value: "ACTIVO", label: "Activo" }, { value: "CESADO", label: "Cesado" }]} searchable={false} />
-          </div>
-          
-          {isLoading ? (
-            <div className="p-12 text-center text-brand-text-secondary">Cargando...</div>
-          ) : filteredRecursos.length === 0 ? (
-            <div className="p-12 text-center text-brand-text-secondary">No se encontraron recursos</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <thead>
-                  <tr>
-                    <Th>Nombre</Th>
-                    <Th>Cargo</Th>
-                    <Th>Gerencia TI</Th>
-                    <Th>Responsable</Th>
-                    <Th>Proveedor</Th>
-                    <Th>Contrato Vigente</Th>
-                    <Th>Monto Mensual</Th>
-                    <Th>Estado</Th>
-                    <Th>Acciones</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredRecursos.map((recurso: RecursoTercerizado) => (
-                    <tr key={recurso.id}>
-                      <Td>{recurso.nombreCompleto}</Td>
-                      <Td>{recurso.cargo}</Td>
-                      <Td>{recurso.management.name}</Td>
-                      <Td>{recurso.responsable.name}</Td>
-                      <Td>{recurso.proveedor.razonSocial}</Td>
-                      <Td>{formatDate(recurso.fechaInicio)} → {formatDate(recurso.fechaFin)}</Td>
-                      <Td>PEN {formatNumber(recurso.montoMensual)}</Td>
-                      <Td>
-                        <span className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusColor(recurso.status)}`}>
-                          {recurso.status}
-                        </span>
-                      </Td>
-                      <Td>
-                        <div className="flex gap-2">
-                          <Button size="sm" variant="secondary" onClick={() => handleEdit(recurso)}>Editar</Button>
-                          <Button size="sm" variant="secondary" onClick={() => confirm("¿Eliminar este recurso?") && deleteMutation.mutate(recurso.id)}>Eliminar</Button>
-                        </div>
-                      </Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
-            </div>
-          )}
-        </CardContent>}
       </Card>
     </div>
   );

@@ -46,7 +46,8 @@ const createRecursoSchema = z.object({
   }, "Fecha de fin inválida"),
   montoMensual: z.number().nonnegative("Monto mensual debe ser mayor o igual a 0"),
   linkContrato: z.string().trim().optional().nullable(),  // Completamente opcional, sin validación de URL estricta
-  observaciones: z.string().trim().optional()
+  observaciones: z.string().trim().optional(),
+  dni: z.string().trim().optional().nullable()
 });
 
 const updateRecursoSchema = createRecursoSchema.partial();
@@ -361,6 +362,7 @@ export async function registerRecursosTercerizadosRoutes(app: FastifyInstance) {
           montoMensual: data.montoMensual,
           linkContrato: data.linkContrato?.trim() || null,
           observaciones: data.observaciones?.trim() || null,
+          dni: data.dni?.trim() || null,
           status,
           createdBy: (req as any).user?.id || null
         },
@@ -433,6 +435,7 @@ export async function registerRecursosTercerizadosRoutes(app: FastifyInstance) {
     if (data.montoMensual !== undefined) updateData.montoMensual = data.montoMensual;
     if (data.linkContrato !== undefined) updateData.linkContrato = data.linkContrato?.trim() || null;
     if (data.observaciones !== undefined) updateData.observaciones = data.observaciones?.trim() || null;
+    if (data.dni !== undefined) updateData.dni = data.dni?.trim() || null;
 
     // Manejar fechas si se actualizan
     let fechaInicio = recursoExistente.fechaInicio;

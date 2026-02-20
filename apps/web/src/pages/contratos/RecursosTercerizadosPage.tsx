@@ -376,6 +376,7 @@ export default function RecursosTercerizadosPage() {
       result = result.filter((r: RecursoTercerizado) =>
         r.nombreCompleto?.toLowerCase().includes(searchLower) ||
         r.cargo?.toLowerCase().includes(searchLower) ||
+        r.dni?.toLowerCase().includes(searchLower) ||
         r.proveedor?.razonSocial?.toLowerCase().includes(searchLower) ||
         r.management?.name?.toLowerCase().includes(searchLower) ||
         r.responsable?.name?.toLowerCase().includes(searchLower)
@@ -647,7 +648,7 @@ export default function RecursosTercerizadosPage() {
                             <div className="flex-1 min-w-0">
                               <h3 className="text-lg font-bold text-brand-text-primary">{recurso.nombreCompleto}</h3>
                               <p className="text-sm text-brand-text-secondary">{recurso.cargo}</p>
-                              {recurso.dni && <p className="text-xs text-brand-text-disabled mt-0.5">DNI: {recurso.dni}</p>}
+                              {recurso.dni && <p className="text-sm font-semibold text-brand-primary mt-0.5">DNI: {recurso.dni}</p>}
                             </div>
                             <div className="flex flex-col items-end gap-1">
                               <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${getStatusColor(recurso.status)}`}>
@@ -714,7 +715,7 @@ export default function RecursosTercerizadosPage() {
             <>
               <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-3">
                 <div>
-                  <label className="block text-sm font-medium mb-1 text-brand-text-secondary">Buscar</label>
+                  <label className="block text-xs font-medium mb-1 text-brand-text-secondary">Buscar</label>
                   <Input placeholder="Buscar..." value={filters.search} onChange={e => setFilters(f => ({ ...f, search: e.target.value }))} className="h-9 text-sm" />
                 </div>
                 <FilterSelect label="Gerencia TI" placeholder="Todas" value={filters.managementId} onChange={(value) => setFilters(f => ({ ...f, managementId: value }))} options={managements?.map((m: any) => ({ value: String(m.id), label: m.name })) || []} />

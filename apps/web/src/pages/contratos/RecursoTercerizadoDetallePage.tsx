@@ -58,7 +58,13 @@ type RecursoDetalle = {
       importeSinIgv: number;
       fechaRegistro: string;
       estado: string;
+      deliveryLink: string | null;
       support: { id: number; name: string };
+      documents: Array<{
+        document: {
+          driveFileId: string | null;
+        };
+      }>;
     };
   }>;
   ocsRelacionadas?: Array<{
@@ -627,33 +633,66 @@ export default function RecursoTercerizadoDetallePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {ocs.map((item: any) => (
-                    <tr key={item.id}>
-                      <Td>{item.oc.numeroOc || `OC #${item.oc.id}`}</Td>
-                      <Td>{formatDate(item.oc.fechaRegistro)}</Td>
-                      <Td>{item.oc.support.name}</Td>
-                      <Td>{item.oc.moneda} {formatNumber(item.oc.importeSinIgv)}</Td>
-                      <Td>
-                        <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800">
-                          {item.oc.estado}
-                        </span>
-                      </Td>
-                      <Td>
-                        <Button 
-                          size="sm" 
-                          variant="secondary" 
-                          onClick={() => {
-                            if (confirm('¿Desasociar esta OC del recurso?')) {
-                              desasociarOCMutation.mutate(item.oc.id);
-                            }
-                          }}
-                          disabled={desasociarOCMutation.isPending}
-                        >
-                          Desasociar
-                        </Button>
-                      </Td>
-                    </tr>
-                  ))}
+                  {ocs.map((item: any) => {
+                    const isAtendido = item.oc.estado === "ATENDIDO";
+                    const hasDeliveryLink = item.oc.deliveryLink && item.oc.deliveryLink.trim();
+                    
+                    const firstDocument = item.oc.documents && item.oc.documents.length > 0 ? item.oc.documents[0] : null;
+                    const documentLink = firstDocument?.document?.driveFileId 
+                      ? `https://drive.google.com/file/d/${firstDocument.document.driveFileId}/view`
+                      : null;
+                    
+                    const displayLink = isAtendido && hasDeliveryLink ? item.oc.deliveryLink : documentLink;
+                    const hasDisplayLink = !!displayLink;
+                    const isOcLink = isAtendido && hasDeliveryLink;
+                    
+                    return (
+                      <tr key={item.id}>
+                        <Td>{item.oc.numeroOc || `OC #${item.oc.id}`}</Td>
+                        <Td>{formatDate(item.oc.fechaRegistro)}</Td>
+                        <Td>{item.oc.support.name}</Td>
+                        <Td>{item.oc.moneda} {formatNumber(item.oc.importeSinIgv)}</Td>
+                        <Td>
+                          <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800">
+                            {item.oc.estado}
+                          </span>
+                        </Td>
+                        <Td>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant={hasDisplayLink ? "primary" : "secondary"}
+                              onClick={() => displayLink && window.open(displayLink, '_blank', 'noopener,noreferrer')}
+                              disabled={!hasDisplayLink}
+                              className={`flex items-center gap-1 ${isOcLink ? 'bg-green-600 hover:bg-green-700' : ''}`}
+                              title={
+                                isOcLink
+                                  ? "Ver OC entregada" 
+                                  : documentLink 
+                                    ? "Ver cotización" 
+                                    : "No hay documento registrado"
+                              }
+                            >
+                              <ExternalLink size={12} />
+                              {isOcLink ? "Ver OC" : hasDisplayLink ? "Cotiz." : "Sin Doc"}
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="secondary" 
+                              onClick={() => {
+                                if (confirm('¿Desasociar esta OC del recurso?')) {
+                                  desasociarOCMutation.mutate(item.oc.id);
+                                }
+                              }}
+                              disabled={desasociarOCMutation.isPending}
+                            >
+                              Desasociar
+                            </Button>
+                          </div>
+                        </Td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </Table>
             </div>

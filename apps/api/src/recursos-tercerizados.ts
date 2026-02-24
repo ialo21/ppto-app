@@ -201,7 +201,17 @@ export async function registerRecursosTercerizadosRoutes(app: FastifyInstance) {
                   importeSinIgv: true,
                   fechaRegistro: true,
                   estado: true,
-                  support: { select: { id: true, name: true } }
+                  deliveryLink: true,
+                  support: { select: { id: true, name: true } },
+                  documents: {
+                    include: {
+                      document: {
+                        select: {
+                          driveFileId: true
+                        }
+                      }
+                    }
+                  }
                 }
               }
             },

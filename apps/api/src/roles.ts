@@ -330,7 +330,7 @@ export async function registerRoleRoutes(app: FastifyInstance) {
   });
 
   // POST /users - Crear nuevo usuario (sin autenticación Google, para uso como responsable)
-  app.post("/users", { preHandler: [requireAuth, requirePermission("contratos")] }, async (request, reply) => {
+  app.post("/users", { preHandler: [requireAuth, requirePermission("manage_roles")] }, async (request, reply) => {
     const { email, name, active = true } = request.body as { email: string; name?: string; active?: boolean };
     
     if (!email || !email.trim()) {
@@ -448,5 +448,58 @@ export async function registerRoleRoutes(app: FastifyInstance) {
     });
     
     return { success: true, message: active ? "Usuario activado" : "Usuario desactivado" };
+  });
+
+  // DELETE /users/:userId - Eliminar usuario
+  app.delete("/users/:userId", { preHandler: [requireAuth, requirePermission("manage_roles")] }, async (request, reply) => {
+    const { userId } = request.params as { userId: string };
+    
+    const user = await prisma.user.findUnique({
+      where: { id: Number(userId) },
+      include: {
+        userRoles: true,
+        recursosTercerizados: true,
+        invoicesCreated: true,
+        invoicesApproved: true,
+        ocsSolicitante: true
+      }
+    });
+    
+    if (!user) {
+      return reply.code(404).send({ error: "Usuario no encontrado" });
+    }
+    
+    // No permitir eliminar al super admin principal
+    if (user.email === "iago.lopez@interseguro.com.pe") {
+      return reply.code(403).send({ error: "No se puede eliminar al super administrador principal" });
+    }
+    
+    // Verificar si el usuario tiene datos relacionados que impidan su eliminación
+    const relatedData = [];
+    if (user.recursosTercerizados.length > 0) {
+      relatedData.push(`${user.recursosTercerizados.length} recursos tercerizados`);
+    }
+    if (user.invoicesCreated.length > 0) {
+      relatedData.push(`${user.invoicesCreated.length} facturas creadas`);
+    }
+    if (user.invoicesApproved.length > 0) {
+      relatedData.push(`${user.invoicesApproved.length} facturas aprobadas`);
+    }
+    if (user.ocsSolicitante.length > 0) {
+      relatedData.push(`${user.ocsSolicitante.length} órdenes de compra`);
+    }
+    
+    if (relatedData.length > 0) {
+      return reply.code(409).send({ 
+        error: `No se puede eliminar el usuario porque tiene datos relacionados: ${relatedData.join(', ')}. Considere desactivar el usuario en su lugar.` 
+      });
+    }
+    
+    // Eliminar el usuario (los roles se eliminan automáticamente por onDelete: Cascade)
+    await prisma.user.delete({
+      where: { id: user.id }
+    });
+    
+    return { success: true, message: "Usuario eliminado correctamente" };
   });
 }

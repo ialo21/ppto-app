@@ -54,6 +54,8 @@ export default function RolesPage() {
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [showRoleForm, setShowRoleForm] = useState(false);
   const [roleForm, setRoleForm] = useState({ name: "", description: "", permissionIds: [] as number[] });
+  const [showUserForm, setShowUserForm] = useState(false);
+  const [userForm, setUserForm] = useState({ email: "", name: "", active: true });
 
   // Queries
   const rolesQuery = useQuery({
@@ -191,10 +193,68 @@ export default function RolesPage() {
     }
   });
 
+  const createUserMutation = useMutation({
+    mutationFn: async (data: { email: string; name?: string; active?: boolean }) => {
+      return (await api.post("/users", data)).data;
+    },
+    onSuccess: () => {
+      toast.success("Usuario creado exitosamente");
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      resetUserForm();
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || "Error al crear el usuario");
+    }
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: async (userId: number) => {
+      return (await api.delete(`/users/${userId}`)).data;
+    },
+    onSuccess: () => {
+      toast.success("Usuario eliminado exitosamente");
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || "Error al eliminar el usuario");
+    }
+  });
+
+  const toggleUserActiveMutation = useMutation({
+    mutationFn: async ({ userId, active }: { userId: number; active: boolean }) => {
+      return (await api.put(`/users/${userId}/active`, { active })).data;
+    },
+    onSuccess: () => {
+      toast.success("Estado del usuario actualizado");
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || "Error al actualizar el estado");
+    }
+  });
+
   function resetForm() {
     setRoleForm({ name: "", description: "", permissionIds: [] });
     setEditingRole(null);
     setShowRoleForm(false);
+  }
+
+  function resetUserForm() {
+    setUserForm({ email: "", name: "", active: true });
+    setShowUserForm(false);
+  }
+
+  function handleSaveUser() {
+    if (!userForm.email.trim()) {
+      toast.error("El email es obligatorio");
+      return;
+    }
+
+    createUserMutation.mutate({
+      email: userForm.email.trim(),
+      name: userForm.name.trim() || undefined,
+      active: userForm.active
+    });
   }
 
   function handleEditRole(role: Role) {
@@ -256,6 +316,12 @@ export default function RolesPage() {
           <Button onClick={() => setShowRoleForm(true)}>
             <Plus size={18} className="mr-2" />
             Nuevo Rol
+          </Button>
+        )}
+        {selectedTab === "users" && !showUserForm && (
+          <Button onClick={() => setShowUserForm(true)}>
+            <Plus size={18} className="mr-2" />
+            Nuevo Usuario
           </Button>
         )}
       </div>
@@ -522,8 +588,73 @@ export default function RolesPage() {
         </Card>
       )}
 
+      {/* Formulario de Usuario */}
+      {showUserForm && selectedTab === "users" && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Nuevo Usuario</h2>
+              <Button variant="ghost" size="sm" onClick={resetUserForm}>
+                <X size={18} />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Email *
+                  </label>
+                  <Input
+                    type="email"
+                    value={userForm.email}
+                    onChange={(e) => setUserForm(prev => ({ ...prev, email: e.target.value }))}
+                    placeholder="usuario@interseguro.com.pe"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Nombre
+                  </label>
+                  <Input
+                    value={userForm.name}
+                    onChange={(e) => setUserForm(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="Nombre completo del usuario"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={userForm.active}
+                    onChange={(e) => setUserForm(prev => ({ ...prev, active: e.target.checked }))}
+                  />
+                  <span className="font-medium text-gray-700">Usuario activo</span>
+                </label>
+                <p className="text-xs text-gray-500 mt-1 ml-6">
+                  Los usuarios inactivos no podrán acceder al sistema
+                </p>
+              </div>
+
+              <div className="flex gap-2">
+                <Button onClick={handleSaveUser} disabled={createUserMutation.isPending}>
+                  <Check size={18} className="mr-2" />
+                  Crear Usuario
+                </Button>
+                <Button variant="secondary" onClick={resetUserForm}>
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Tabla de Usuarios */}
-      {selectedTab === "users" && (
+      {selectedTab === "users" && !showUserForm && (
         <Card>
           <CardContent>
             {usersQuery.isLoading ? (
@@ -536,6 +667,7 @@ export default function RolesPage() {
                     <Th>Correo</Th>
                     <Th>Estado</Th>
                     <Th>Roles Asignados</Th>
+                    <Th>Asignar Rol</Th>
                     <Th>Acciones</Th>
                   </tr>
                 </thead>
@@ -545,11 +677,21 @@ export default function RolesPage() {
                       <Td className="font-medium">{user.name || "—"}</Td>
                       <Td className="text-sm text-gray-600">{user.email}</Td>
                       <Td>
-                        <span className={`text-xs px-2 py-0.5 rounded ${
-                          user.active ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
-                        }`}>
+                        <button
+                          onClick={() => {
+                            const newStatus = !user.active;
+                            const action = newStatus ? "activar" : "desactivar";
+                            if (confirm(`¿Está seguro de ${action} a ${user.email}?`)) {
+                              toggleUserActiveMutation.mutate({ userId: user.id, active: newStatus });
+                            }
+                          }}
+                          className={`text-xs px-2 py-0.5 rounded cursor-pointer hover:opacity-80 transition-opacity ${
+                            user.active ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
+                          }`}
+                          title={user.active ? "Click para desactivar" : "Click para activar"}
+                        >
                           {user.active ? "Activo" : "Inactivo"}
-                        </span>
+                        </button>
                       </Td>
                       <Td>
                         <div className="flex flex-wrap gap-1">
@@ -598,6 +740,20 @@ export default function RolesPage() {
                               </option>
                             ))}
                         </select>
+                      </Td>
+                      <Td>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (confirm(`¿Está seguro de eliminar al usuario ${user.email}?\n\nEsta acción no se puede deshacer.`)) {
+                              deleteUserMutation.mutate(user.id);
+                            }
+                          }}
+                          disabled={deleteUserMutation.isPending}
+                        >
+                          <Trash2 size={16} className="text-red-600" />
+                        </Button>
                       </Td>
                     </tr>
                   ))}

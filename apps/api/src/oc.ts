@@ -156,7 +156,7 @@ export async function registerOcRoutes(app: FastifyInstance) {
         where,
         orderBy: [{ fechaRegistro: "desc" }, { id: "desc" }],
         include: {
-          support: { select: { id: true, code: true, name: true } },
+          support: { select: { id: true, code: true, name: true, managementId: true } },
           budgetPeriodFrom: { select: { id: true, year: true, month: true, label: true } },
           budgetPeriodTo: { select: { id: true, year: true, month: true, label: true } },
           articulo: { select: { id: true, code: true, name: true } },

@@ -262,19 +262,6 @@ export async function registerOcRoutes(app: FastifyInstance) {
           issues: [{ path: ["recursoTercId"], message: "El proveedor de la OC no coincide con el del recurso tercerizado" }]
         });
       }
-
-      // Validar que el support de la OC pertenezca a la misma gerencia del recurso
-      const support = await prisma.support.findUnique({
-        where: { id: data.supportId },
-        select: { managementId: true }
-      });
-
-      if (support && support.managementId !== recurso.managementId) {
-        return reply.code(422).send({
-          error: "VALIDATION_ERROR",
-          issues: [{ path: ["recursoTercId"], message: "El sustento debe pertenecer a la misma gerencia del recurso tercerizado" }]
-        });
-      }
     }
 
     // Determinar CECOs a validar (nuevo array o legacy cecoId único)
@@ -449,20 +436,6 @@ export async function registerOcRoutes(app: FastifyInstance) {
         return reply.code(422).send({
           error: "VALIDATION_ERROR",
           issues: [{ path: ["recursoTercId"], message: "El proveedor de la OC no coincide con el del recurso tercerizado" }]
-        });
-      }
-
-      // Validar gerencia (usar el supportId actual si no se está actualizando)
-      const finalSupportId = data.supportId !== undefined ? data.supportId : existing.supportId;
-      const support = await prisma.support.findUnique({
-        where: { id: finalSupportId },
-        select: { managementId: true }
-      });
-
-      if (support && support.managementId !== recurso.managementId) {
-        return reply.code(422).send({
-          error: "VALIDATION_ERROR",
-          issues: [{ path: ["recursoTercId"], message: "El sustento debe pertenecer a la misma gerencia del recurso tercerizado" }]
         });
       }
     }

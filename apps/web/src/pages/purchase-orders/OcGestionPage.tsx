@@ -352,7 +352,8 @@ export default function OcGestionPage() {
   });
 
   const [esRecursoTercerizado, setEsRecursoTercerizado] = useState(false);
-
+  const [showPrefillSelector, setShowPrefillSelector] = useState(false);
+  const [selectedPrefillOc, setSelectedPrefillOc] = useState<string>("");
 
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" | null }>({
     key: "id",
@@ -424,6 +425,57 @@ export default function OcGestionPage() {
     setShowForm(false);
     setFieldErrors({});
     setEsRecursoTercerizado(false);
+  };
+
+  const handlePrefillFromOc = (ocId: string) => {
+    if (!ocId || !ocs) return;
+    
+    const selectedOc = ocs.find((oc: any) => oc.id === Number(ocId));
+    if (!selectedOc) return;
+
+    const costCenterIds = selectedOc.costCenters?.map((cc: any) => cc.costCenterId) || [];
+
+    setForm({
+      budgetPeriodFromId: selectedOc.budgetPeriodFromId ? String(selectedOc.budgetPeriodFromId) : "",
+      budgetPeriodToId: selectedOc.budgetPeriodToId ? String(selectedOc.budgetPeriodToId) : "",
+      incidenteOc: selectedOc.incidenteOc || "",
+      solicitudOc: selectedOc.solicitudOc || "",
+      fechaRegistro: new Date().toISOString().split("T")[0],
+      supportId: selectedOc.supportId ? String(selectedOc.supportId) : "",
+      periodoEnFechasText: selectedOc.periodoEnFechasText || "",
+      descripcion: selectedOc.descripcion || "",
+      solicitanteUserId: selectedOc.solicitanteUserId || null,
+      proveedorId: selectedOc.proveedorId || null,
+      proveedor: selectedOc.proveedor || "",
+      ruc: selectedOc.ruc || "",
+      moneda: selectedOc.moneda || "PEN",
+      importeSinIgv: selectedOc.importeSinIgv ? String(selectedOc.importeSinIgv) : "",
+      estado: "PENDIENTE",
+      numeroOc: "",
+      comentario: "",
+      articuloId: selectedOc.articuloId ? String(selectedOc.articuloId) : "",
+      cecoId: "",
+      costCenterIds: costCenterIds,
+      linkCotizacion: selectedOc.linkCotizacion || "",
+      deliveryLink: "",
+      recursoTercId: null
+    });
+
+    setEditingId(null);
+    setEsRecursoTercerizado(false);
+    setShowPrefillSelector(false);
+    setSelectedPrefillOc("");
+    setFieldErrors({});
+    setShowForm(true);
+    
+    toast.success("Formulario prellenado con datos de OC anterior", {
+      duration: 5000,
+      description: "Recuerda actualizar: descripción, monto, número OC y documentos"
+    });
+
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
   };
 
   // Validación frontend
@@ -904,51 +956,115 @@ export default function OcGestionPage() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-semibold">Gestión de Órdenes de Compra</h1>
           <p className="text-sm text-slate-600 mt-1">Registro y administración de OCs</p>
         </div>
-        <Button onClick={() => {
-          if (showForm) {
-            // Cancelar: cerrar formulario y limpiar estado
-            resetForm();
-          } else {
-            // Nueva OC: asegurar estado limpio antes de abrir
-            setEditingId(null);
-            setFieldErrors({});
-            setForm({
-              budgetPeriodFromId: "",
-              budgetPeriodToId: "",
-              incidenteOc: "",
-              solicitudOc: "",
-              fechaRegistro: new Date().toISOString().split("T")[0],
-              supportId: "",
-              periodoEnFechasText: "",
-              descripcion: "",
-              solicitanteUserId: null,
-              proveedorId: null,
-              proveedor: "",
-              ruc: "",
-              moneda: "PEN",
-              importeSinIgv: "",
-              estado: "PENDIENTE",
-              numeroOc: "",
-              comentario: "",
-              articuloId: "",
-              cecoId: "",
-              costCenterIds: [],
-              linkCotizacion: "",
-              deliveryLink: "",
-              recursoTercId: null
-            });
-            setEsRecursoTercerizado(false);
-            setShowForm(true);
-          }
-        }}>
-          {showForm ? "Cancelar" : "Nueva OC"}
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => setShowPrefillSelector(!showPrefillSelector)}
+            className="flex items-center gap-2"
+          >
+            <Copy size={16} />
+            {showPrefillSelector ? "Ocultar" : "Copiar de OC existente"}
+          </Button>
+          <Button onClick={() => {
+            if (showForm) {
+              setShowForm(false);
+              setEditingId(null);
+              setFieldErrors({});
+            } else {
+              setForm({
+                budgetPeriodFromId: "",
+                budgetPeriodToId: "",
+                incidenteOc: "",
+                solicitudOc: "",
+                fechaRegistro: new Date().toISOString().split("T")[0],
+                supportId: "",
+                periodoEnFechasText: "",
+                descripcion: "",
+                solicitanteUserId: null,
+                proveedorId: null,
+                proveedor: "",
+                ruc: "",
+                moneda: "PEN",
+                importeSinIgv: "",
+                estado: "PENDIENTE",
+                numeroOc: "",
+                comentario: "",
+                articuloId: "",
+                cecoId: "",
+                costCenterIds: [],
+                linkCotizacion: "",
+                deliveryLink: "",
+                recursoTercId: null
+              });
+              setEsRecursoTercerizado(false);
+              setShowForm(true);
+            }
+          }}>
+            {showForm ? "Cancelar" : "Nueva OC"}
+          </Button>
+        </div>
       </div>
+
+      {showPrefillSelector && ocs && ocs.length > 0 && (
+        <Card className="mb-4 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+          <CardContent className="py-4">
+            <div className="space-y-3">
+              <div className="flex items-start gap-2">
+                <Copy className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" size={20} />
+                <div>
+                  <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-1">
+                    Copiar datos de una OC existente
+                  </h3>
+                  <p className="text-xs text-blue-700 dark:text-blue-300">
+                    Selecciona una OC existente para copiar sus datos al formulario. 
+                    <span className="font-semibold"> ¡Recuerda actualizar: descripción, monto, número OC y documentos!</span>
+                  </p>
+                </div>
+              </div>
+              <div className="grid md:grid-cols-2 gap-3">
+                <FilterSelect
+                  label="Seleccionar OC existente"
+                  placeholder="Elegir OC para copiar datos..."
+                  value={selectedPrefillOc}
+                  onChange={(value: string) => setSelectedPrefillOc(value)}
+                  options={ocs
+                    .slice(0, 30)
+                    .map((oc: any) => ({
+                      value: String(oc.id),
+                      label: `${oc.numeroOc || `OC-${oc.id}`} - ${oc.support?.name || 'Sin sustento'} - ${oc.moneda} ${oc.importeSinIgv} - ${oc.estado}`,
+                      searchText: `${oc.numeroOc || ''} ${oc.support?.name || ''} ${oc.descripcion || ''} ${oc.proveedorRef?.razonSocial || oc.proveedor || ''} ${oc.estado}`
+                    }))}
+                  className="dark:bg-slate-800 dark:border-slate-600"
+                />
+                <div className="flex items-end">
+                  <Button
+                    onClick={() => handlePrefillFromOc(selectedPrefillOc)}
+                    disabled={!selectedPrefillOc}
+                    className="w-full"
+                  >
+                    Copiar datos de esta OC
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {showPrefillSelector && (!ocs || ocs.length === 0) && (
+        <Card className="mb-4 bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+          <CardContent className="py-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              No hay OCs disponibles para copiar datos.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Formulario de registro/edición */}
       {showForm && (

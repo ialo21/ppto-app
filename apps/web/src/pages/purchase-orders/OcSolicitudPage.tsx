@@ -109,6 +109,16 @@ export default function OcSolicitudPage() {
     queryFn: async () => (await api.get("/recursos-tercerizados", { params: { status: "ACTIVO" } })).data
   });
 
+  const { data: userOcs } = useQuery({
+    queryKey: ["ocs", "user", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      const response = await api.get("/ocs");
+      return response.data.filter((oc: any) => oc.solicitanteUserId === user.id);
+    },
+    enabled: !!user?.id
+  });
+
   const [form, setForm] = useState({
     budgetPeriodFromId: "",
     budgetPeriodToId: "",
@@ -127,11 +137,45 @@ export default function OcSolicitudPage() {
   });
 
   const [esRecursoTercerizado, setEsRecursoTercerizado] = useState(false);
+  const [showPrefillSelector, setShowPrefillSelector] = useState(false);
+  const [selectedPrefillOc, setSelectedPrefillOc] = useState<string>("");
 
   // Hook para manejar archivos pendientes (se suben después de crear la OC)
   const { pendingFiles, setPendingFiles, uploadPendingFiles, hasPendingFiles } = useOcPendingFiles();
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const handlePrefillFromOc = (ocId: string) => {
+    if (!ocId || !userOcs) return;
+    
+    const selectedOc = userOcs.find((oc: any) => oc.id === Number(ocId));
+    if (!selectedOc) return;
+
+    setForm({
+      budgetPeriodFromId: selectedOc.budgetPeriodFromId ? String(selectedOc.budgetPeriodFromId) : "",
+      budgetPeriodToId: selectedOc.budgetPeriodToId ? String(selectedOc.budgetPeriodToId) : "",
+      managementId: selectedOc.support?.managementId ? String(selectedOc.support.managementId) : "",
+      supportId: selectedOc.supportId ? String(selectedOc.supportId) : "",
+      descripcion: selectedOc.descripcion || "",
+      proveedorId: selectedOc.proveedorId || null,
+      proveedorNombre: selectedOc.proveedorRef?.razonSocial || "",
+      proveedorRuc: selectedOc.proveedorRef?.ruc || "",
+      moneda: selectedOc.moneda || "PEN",
+      importeSinIgv: selectedOc.importeSinIgv ? String(selectedOc.importeSinIgv) : "",
+      costCenterIds: selectedOc.costCenters?.map((cc: any) => cc.costCenterId) || [],
+      recursoTercId: null
+    });
+
+    setEsRecursoTercerizado(false);
+    setShowPrefillSelector(false);
+    setSelectedPrefillOc("");
+    setFieldErrors({});
+    
+    toast.success("Formulario prellenado. Recuerda actualizar los campos necesarios.", {
+      duration: 5000,
+      description: "Revisa especialmente: descripción, monto y documentos"
+    });
+  };
 
   const filteredSupports = useMemo(() => {
     if (!supports) return [];
@@ -920,7 +964,71 @@ export default function OcSolicitudPage() {
             Completa el formulario paso a paso para solicitar una nueva orden de compra
           </p>
         </div>
+        <Button
+          variant="secondary"
+          onClick={() => setShowPrefillSelector(!showPrefillSelector)}
+          className="flex items-center gap-2"
+        >
+          <FileText size={16} />
+          {showPrefillSelector ? "Ocultar" : "Prellenar con OC anterior"}
+        </Button>
       </div>
+
+      {showPrefillSelector && userOcs && userOcs.length > 0 && (
+        <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+          <CardContent className="py-4">
+            <div className="space-y-3">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" size={20} />
+                <div>
+                  <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-1">
+                    Prellenar formulario con una OC anterior
+                  </h3>
+                  <p className="text-xs text-blue-700 dark:text-blue-300">
+                    Selecciona una de tus OCs anteriores para copiar sus datos. 
+                    <span className="font-semibold"> ¡Importante: Recuerda actualizar la descripción, monto y documentos adjuntos!</span>
+                  </p>
+                </div>
+              </div>
+              <div className="grid md:grid-cols-2 gap-3">
+                <FilterSelect
+                  label="Seleccionar OC anterior"
+                  placeholder="Elegir OC para copiar datos..."
+                  value={selectedPrefillOc}
+                  onChange={(value: string) => setSelectedPrefillOc(value)}
+                  options={userOcs
+                    .slice(0, 20)
+                    .map((oc: any) => ({
+                      value: String(oc.id),
+                      label: `${oc.numeroOc || `OC-${oc.id}`} - ${oc.support?.name || 'Sin sustento'} - ${oc.moneda} ${oc.importeSinIgv}`,
+                      searchText: `${oc.numeroOc || ''} ${oc.support?.name || ''} ${oc.descripcion || ''} ${oc.proveedorRef?.razonSocial || ''}`
+                    }))}
+                  className="dark:bg-slate-800 dark:border-slate-600"
+                />
+                <div className="flex items-end">
+                  <Button
+                    onClick={() => handlePrefillFromOc(selectedPrefillOc)}
+                    disabled={!selectedPrefillOc}
+                    className="w-full"
+                  >
+                    Copiar datos de esta OC
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {showPrefillSelector && (!userOcs || userOcs.length === 0) && (
+        <Card className="bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+          <CardContent className="py-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              No tienes OCs anteriores para prellenar el formulario.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
